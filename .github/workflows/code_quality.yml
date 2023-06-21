@@ -1,0 +1,39 @@
+# This workflow will install Python dependencies, run black and lint with a single version of Python
+name: black/mypy
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    strategy:
+      matrix:
+        python-version: ["3.8"]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mypy 
+        pip install black
+        pip install pytest 
+        cd RMK_support
+        pip install .
+
+    - name: Run mypy
+      run: |
+        mypy ./RMK_support
+        
+    - name: Run black
+      run: |
+        black ./RMK_support --check

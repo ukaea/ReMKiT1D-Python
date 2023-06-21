@@ -1,0 +1,13 @@
+.vscode
+__pycache__
+*config.json
+*.h5
+*loc.ipynb
+.ipynb_checkpoints
+*.out
+*.err
+*.pkl
+*.pdf
+*.gif
+*.zip
+/docs/build
