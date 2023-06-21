@@ -1,7 +1,7 @@
 # ReMKiT1D Python support
-[![tests](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/pytest_action.yml)
-[![black/mypy](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/code_quality.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/code_quality.yml)
-[![codecov](https://codecov.io/gh/SMijin/ReMKiT1D-Python-Support/branch/mijin_dev/graph/badge.svg?token=YP67CXRPFQ)](https://codecov.io/gh/SMijin/ReMKiT1D-Python-Support)
+[![tests](https://github.com/ukaea/ReMKiT1D-Python-Support/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/pytest_action.yml)
+[![black/mypy](https://github.com/ukaea/ReMKiT1D-Python-Support/actions/workflows/code_quality.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/code_quality.yml)
+[![codecov](https://codecov.io/gh/ukaea/ReMKiT1D-Python/branch/master/graph/badge.svg?token=HL5WMWDJIL)](https://codecov.io/gh/ukaea/ReMKiT1D-Python)
 
 Contact: stefan.mijin@ukaea.uk
 
