@@ -37,7 +37,7 @@ pip install RMK_support
 Alternatively, it can be installed from this repository by running
 
 ```
-pip install ./RMK_support
+pip install .
 ```
 from the repository root. 
 
