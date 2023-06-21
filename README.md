@@ -1,17 +1,18 @@
 # ReMKiT1D Python support
-[![tests](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/pytest_action.yml)
-[![black/mypy](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml/badge.svg)](https://github.com/SMijin/ReMKiT1D-Python-Support/actions/workflows/code_quality.yml)
+[![tests](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml)
+[![black/mypy](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml)
 [![codecov](https://codecov.io/gh/ukaea/ReMKiT1D-Python/branch/master/graph/badge.svg?token=HL5WMWDJIL)](https://codecov.io/gh/ukaea/ReMKiT1D-Python)
+[![Documentation Status](https://readthedocs.org/projects/remkit1d-python/badge/?version=latest)](https://remkit1d-python.readthedocs.io/en/latest/?badge=latest)
 
 Contact: stefan.mijin@ukaea.uk
 
 ## Overview
 
-RMK_support is a collection of tools designed to configure and analyze ReMKiT1D runs. [ReMKiT1D](ADD REPO LINK) is a framework for building multi-fluid models in 1D with reaction and kinetic electron support, aimed primarily at simulating the tokamak Scrape-Off Layer. 
+RMK_support is a collection of tools designed to configure and analyze ReMKiT1D runs. [ReMKiT1D](https://github.com/ukaea/ReMKiT1D) is a framework for building multi-fluid models in 1D with reaction and kinetic electron support, aimed primarily at simulating the tokamak Scrape-Off Layer. 
 
 ReMKiT1D runs use JSON files to configure the models and methods used by the code, and RMK_support provides convenient Python routines for the generation of these config files, while also providing features that enable analysis of data using obtained from ReMKiT1D runs.
 
-For a high level overview of the framework and the Python interface see the [code paper](ADD LINK).
+For a high level overview of the framework and the Python interface see the code paper (available soon).
 
 ## Prerequisites 
 
@@ -46,7 +47,7 @@ The package files are in the RMK_support folder, together with the tests, which 
 
 The examples folder contains both general examples and tutorials for problems relevant in SOL physics, as well as a number of verification tests, some of which have been reported on in the code paper. 
 
-The data folder contains some atomic data used by some of the examples, in particular the spontaneous emission rates for hydrogen obtained from NIST (see the ReMKiT1D_crm_example notebook). This folder should contain the amjuel.tex file from the EIRENE AMJUEL database in order to run some of the examples! This file is not distributed with the repository.
+The data folder contains some atomic data used by some of the examples, in particular the spontaneous emission rates for hydrogen obtained from NIST (see the [CRM example](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_crm_example.ipynb) notebook). This folder should contain the amjuel.tex file from the EIRENE AMJUEL database in order to run some of the examples! This file is not distributed with the repository.
 
 ## High-level workflow
 
@@ -70,17 +71,17 @@ The above steps are shown in the figure below, with some of the interdependencie
 
 ### 2. Data analysis and visualization 
 
-The secondary feature of ReMKiT1Dpy support modules is data analysis and visualization, powered by variable data being stored in an xarray dataset and visualization tools built on holoviews and panel. Examples of loading simulation data and using holoviews/panel for visualization are in multiple notebooks. 
+The secondary feature of RMK_support modules is data analysis and visualization, powered by variable data being stored in an xarray dataset and visualization tools built on holoviews and panel. Examples of loading simulation data and using holoviews/panel for visualization are in multiple notebooks. 
 
-Further development is required to streamline data analysis, including improvements to the included interactive dashboard. 
+Further development is planned to streamline data analysis, including improvements to the included interactive dashboard. 
 
 ## Documentation, examples and tutorials
 
 For a high level explanation of both the framework and the interface the user is referred to the ReMKiT1D code paper, where the code design is explained and an example workflow with this Python package is explained. 
 
-The examples/tutorials in the examples folder supplement the code paper, in particular the ReMKiT1D_advection_test.ipynb and ReMKiT1D_custom_fluid.ipynb notebooks, which are documented in detail. 
+The examples/tutorials in the examples folder supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) and [custom fluid](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_custom_fluid.ipynb) notebooks, which are documented in detail. 
 
-Further code documentation is available [here](ADD PAGES LINK)
+Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/).
 
 ## Licence
 
