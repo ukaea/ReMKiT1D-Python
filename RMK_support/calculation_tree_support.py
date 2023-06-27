@@ -172,6 +172,7 @@ class Node:
                 else:
                     newNode.constant = -1.0
                 topNode = Node("none")
+                topNode.additiveMode = True
                 topNode.children = [copy.deepcopy(self), newNode]
                 return topNode
         if isinstance(rhs, int) or isinstance(rhs, float):

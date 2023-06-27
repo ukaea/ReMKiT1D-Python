@@ -95,7 +95,7 @@ def test_sub():
 
     nodes, parents, children = ct.flattenTree(c)
 
-    assert len(nodes) == 4
+    assert len(nodes) == 3
     assert nodes[0].constant == -2.0
 
 
