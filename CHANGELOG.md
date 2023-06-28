@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.0.1, 2023-06-28
+## v1.0.2, 2023-06-28
 
 - Minor calculation tree improvements and bug fixes
 
@@ -12,6 +12,10 @@
 
 - Fixed subtraction bug in calculation tree
 - Fixed bug in calculation tree where constants were modified by addition/multiplication even if the node had a unary transform
+
+## v1.0.1, 2023-06-27
+
+- Removed release - see v1.0.2
 
 ## v1.0.0, 2023-06-21
 
