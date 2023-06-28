@@ -1,12 +1,17 @@
 # CHANGELOG
 
-## v1.0.1, 2023-06-27
+## v1.0.1, 2023-06-28
 
-- Minor bugfixes 
+- Minor calculation tree improvements and bug fixes
+
+### New Features
+
+- Added negation operator and right subtraction for calculation trees
 
 ### Bug Fixes
 
 - Fixed subtraction bug in calculation tree
+- Fixed bug in calculation tree where constants were modified by addition/multiplication even if the node had a unary transform
 
 ## v1.0.0, 2023-06-21
 

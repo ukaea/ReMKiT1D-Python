@@ -136,7 +136,88 @@ def test_unary_call():
     assert nodes[0].unaryTransform.dict()["unaryTransform"] == "fun"
     assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
 
+def test_neg():
+    a = ct.Node("a")
 
+
+    b = -a
+    b = -b
+
+    nodes, parents, children = ct.flattenTree(b)
+
+    assert len(nodes) == 1
+    assert nodes[0].constant == 1.0
+
+
+def test_unaryTransformation_mul():
+
+    a = ct.Node("a")
+    fun = ct.UnaryTransform("fun")
+
+    b = fun(a)*2
+    c = 2*fun(a)
+
+    nodes, parents, children = ct.flattenTree(b)
+
+    assert len(nodes) == 2
+
+    assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[0].constant == 2.0
+
+    nodes, parents, children = ct.flattenTree(c)
+
+    assert len(nodes) == 2
+
+    assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[0].constant == 2.0
+
+def test_unaryTransformation_add():
+
+    a = ct.Node("a")
+    a.additiveMode = True
+    fun = ct.UnaryTransform("fun")
+
+    b = fun(a)+2
+    c = 2+fun(a)
+
+    nodes, parents, children = ct.flattenTree(b)
+
+    assert len(nodes) == 2
+
+    assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[0].constant == 2.0
+
+    nodes, parents, children = ct.flattenTree(c)
+
+    assert len(nodes) == 2
+
+    assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[0].constant == 2.0
+
+def test_unaryTransformation_sun():
+
+    a = ct.Node("a")
+    a.additiveMode = True
+    fun = ct.UnaryTransform("fun")
+
+    b = fun(a)-2
+    c = 2-fun(a)
+
+    nodes, parents, children = ct.flattenTree(b)
+
+    assert len(nodes) == 2
+
+    assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[0].constant == -2.0
+
+    nodes, parents, children = ct.flattenTree(c)
+
+    assert len(nodes) == 3
+
+    assert nodes[2].unaryTransform.dict()["unaryTransform"] == "fun"
+    assert nodes[1].constant == -1.0
+    assert nodes[0].constant == 2.0
+    
 def test_funs():
     funs = [
         ct.log,
