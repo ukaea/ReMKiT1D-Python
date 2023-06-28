@@ -63,7 +63,7 @@ class Node:
             newNode.additiveMode = True
             newNode.children = [copy.deepcopy(self), copy.deepcopy(rhs)]
         if isinstance(rhs, int) or isinstance(rhs, float):
-            if self.additiveMode:
+            if self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant + float(rhs)
@@ -79,7 +79,7 @@ class Node:
 
     def __radd__(self, lhs):
         if isinstance(lhs, int) or isinstance(lhs, float):
-            if self.additiveMode:
+            if self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant + float(lhs)
@@ -97,7 +97,7 @@ class Node:
             newNode = Node("none")
             newNode.children = [copy.deepcopy(self), copy.deepcopy(rhs)]
         if isinstance(rhs, int) or isinstance(rhs, float):
-            if not self.additiveMode:
+            if not self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant * float(rhs)
@@ -112,7 +112,7 @@ class Node:
 
     def __rmul__(self, lhs):
         if isinstance(lhs, int) or isinstance(lhs, float):
-            if not self.additiveMode:
+            if not self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant * float(lhs)
@@ -141,7 +141,7 @@ class Node:
                 topNode.children = [copy.deepcopy(self), newNode]
                 return topNode
         if isinstance(rhs, int) or isinstance(rhs, float):
-            if not self.additiveMode:
+            if not self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant / float(rhs)
@@ -176,7 +176,7 @@ class Node:
                 topNode.children = [copy.deepcopy(self), newNode]
                 return topNode
         if isinstance(rhs, int) or isinstance(rhs, float):
-            if self.additiveMode:
+            if self.additiveMode and self.unaryTransform is None:
                 newNode = copy.deepcopy(self)
                 if newNode.constant is not None:
                     newNode.constant = newNode.constant - float(rhs)
@@ -189,6 +189,24 @@ class Node:
                 newNode.constant = -float(rhs)
                 newNode.children = [self]
                 return newNode
+
+    def __neg__(self):
+        if not self.additiveMode and self.unaryTransform is None:
+            newNode = copy.deepcopy(self)
+            if newNode.constant is not None:
+                newNode.constant = -newNode.constant
+            else:
+                newNode.constant = -1.0
+            return newNode
+        else:
+            newNode = Node("none")
+            newNode.constant = -1.0
+            newNode.children = [self]
+            return newNode
+
+    def __rsub__(self, lhs):
+        if isinstance(lhs, int) or isinstance(lhs, float):
+            return lhs + (-self)
 
     def __pow__(self, rhs):
         if isinstance(rhs, int):
