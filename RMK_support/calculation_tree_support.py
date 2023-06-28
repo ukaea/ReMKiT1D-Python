@@ -203,7 +203,7 @@ class Node:
             newNode.constant = -1.0
             newNode.children = [self]
             return newNode
-        
+
     def __rsub__(self, lhs):
         if isinstance(lhs, int) or isinstance(lhs, float):
             return lhs + (-self)
