@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v1.0.3, 2023-07-27
+
+- Minor bug fixes and code cleanup
+
+### Bug Fixes
+
+- Fixed divide-by-zero issue in common_models.py
+
 ## v1.0.2, 2023-06-28
 
 - Minor calculation tree improvements and bug fixes

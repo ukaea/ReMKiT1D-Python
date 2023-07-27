@@ -157,9 +157,9 @@ def generatorSKThesisKin(**kwargs) -> RKWrapper:
     elCondConst = 125*(1+433*sqrt2*ionZ/360)/(32*delta)
 
     #Taken from config after initialization
-    qNorm = 0.30049520576485995E+8
+    qNorm = skNorms["heatFlux"]
 
-    normalizationConst = rk.normalization["eVTemperature"]**3.5/(lengthNorm*qNorm)
+    normalizationConst = tempNorm**3.5/(lengthNorm*qNorm)
     kappaDeriv = sc.simpleDerivation(-elCondConst*nConstGradT*normalizationConst, [2.5,-1.0])
     rk.addCustomDerivation("kappa", kappaDeriv)
 

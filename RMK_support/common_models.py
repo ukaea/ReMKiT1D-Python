@@ -2511,12 +2511,10 @@ def dvEnergyTerm(
 
     vProfile = [1 / (v**2) for v in vGrid]
 
-    drag = vGrid**2 * dv
-    vSum = [
-        0 for i in range(len(drag))
-    ]  # vGrid**2 if exact energy source is required, 0 if exactly no particle source is required (either way the error is negligible)
-    vSum[:-1] = vGrid[1:] ** 2 - vGrid[:-1] ** 2
-    drag = drag / vSum
+    drag = dv*np.ones(len(vGrid))
+    vSum = np.zeros(len(drag))  # ones if exact energy source is required, 0 if exactly no particle source is required (either way the error is negligible)
+    vSum[:-1] = vGrid[:-1]**2/( vGrid[1:] ** 2 - vGrid[:-1] ** 2)
+    drag = drag * vSum
     normConst = sc.CustomNormConst(multConst=multConst)
 
     newTerm = sc.GeneralMatrixTerm(
