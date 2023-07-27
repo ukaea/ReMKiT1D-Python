@@ -2,7 +2,7 @@ from setuptools import setup, find_packages  # type: ignore
 
 setup(
     name="RMK_support",
-    version="1.0.2",
+    version="1.0.3",
     packages=["RMK_support"],
     install_requires=[
         "numpy",
