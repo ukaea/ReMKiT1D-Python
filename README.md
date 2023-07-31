@@ -12,7 +12,7 @@ RMK_support is a collection of tools designed to configure and analyze ReMKiT1D 
 
 ReMKiT1D runs use JSON files to configure the models and methods used by the code, and RMK_support provides convenient Python routines for the generation of these config files, while also providing features that enable analysis of data using obtained from ReMKiT1D runs.
 
-For a high level overview of the framework and the Python interface see the code paper (available soon).
+For a high level overview of the framework and the Python interface see the [code paper](https://arxiv.org/abs/2307.15458).
 
 ## Prerequisites 
 
