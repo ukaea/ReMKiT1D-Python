@@ -749,7 +749,7 @@ class RKWrapper:
         io.writeDictToJSON(self.dict(), filepath=self.jsonFilepath)
 
     def addTermDiagnosisForVars(self, names: List[str]) -> None:
-        """Add all terms that evolve given variables as diagnostic variables
+        """Add all terms that evolve given fluid variables as diagnostic variables
 
         Args:
             name (List[str]): Names of variables whose evolution terms should be added
@@ -761,6 +761,23 @@ class RKWrapper:
             for pair in terms:
                 model, term = pair
                 self.addVar(model + term, isDerived=True)
+                self.addManipulator(
+                    model + term, sc.termEvaluatorManipulator([pair], model + term)
+                )
+
+    def addTermDiagnosisForDistVars(self, names: List[str]) -> None:
+        """Add all terms that evolve given distribution variables as diagnostic variables
+
+        Args:
+            name (List[str]): Names of variables whose evolution terms should be added
+        """
+
+        for name in names:
+            terms = self.getTermsThatEvolveVar(name)
+
+            for pair in terms:
+                model, term = pair
+                self.addVar(model + term, isDerived=True, isDistribution=True)
                 self.addManipulator(
                     model + term, sc.termEvaluatorManipulator([pair], model + term)
                 )
