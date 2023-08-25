@@ -2491,7 +2491,11 @@ def addLBCModel(
 
 
 def dvEnergyTerm(
-    distFunName: str, varData: sc.VarData, wrapper: RKWrapper, multConst: float = -1.0, k: int = 0
+    distFunName: str,
+    varData: sc.VarData,
+    wrapper: RKWrapper,
+    multConst: float = -1.0,
+    k: int = 0,
 ) -> sc.GeneralMatrixTerm:
     """Return velocity space drag-like heating/cooling term
 
@@ -2513,10 +2517,10 @@ def dvEnergyTerm(
     vProfile = [1 / (v**2) for v in vGrid]
 
     drag = dv * np.ones(len(vGrid))
-    vSum = vGrid**k*np.zeros(
+    vSum = vGrid**k * np.zeros(
         len(drag)
     )  # ones if exact energy source is required, 0 if exactly no particle source is required (either way the error is negligible)
-    vSum[:-1] = vGrid[:-1] ** (2+k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
+    vSum[:-1] = vGrid[:-1] ** (2 + k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
     drag = drag * vSum
     normConst = sc.CustomNormConst(multConst=multConst)
 

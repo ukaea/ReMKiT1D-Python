@@ -89,11 +89,11 @@ def addLogVars(rk: RKWrapper, densName: str, tempName: str):
         "log" + densName,
         isDerived=True,
         derivationRule=sc.derivationRule("lognDeriv", [densName]),
-        isCommunicated=True
+        isCommunicated=True,
     )
     rk.addVar(
         "log" + tempName,
         isDerived=True,
         derivationRule=sc.derivationRule("logTDeriv", [tempName]),
-        isCommunicated=True
+        isCommunicated=True,
     )
