@@ -2491,7 +2491,7 @@ def addLBCModel(
 
 
 def dvEnergyTerm(
-    distFunName: str, varData: sc.VarData, wrapper: RKWrapper, multConst: float = -1.0
+    distFunName: str, varData: sc.VarData, wrapper: RKWrapper, multConst: float = -1.0, k: int = 0
 ) -> sc.GeneralMatrixTerm:
     """Return velocity space drag-like heating/cooling term
 
@@ -2501,6 +2501,7 @@ def dvEnergyTerm(
                               assuming velocity is normalized to thermal velocity)
         wrapper (RKWrapper): Wrapper used to retrieve velocity grid info
         multConst (float, optional): Multiplicative constant for the normalization. Defaults to -1.0, which assumes that a positive rate is heating
+        k (int ,optional): Optional power for the drag coefficient (effectively multiplies by v**k). If not 0 varData should include the electron density divided by the k-th moment of f_0 (in the moment derivation sense). Defaults to 0.
     Returns:
         sc.GeneralMatrixTerm: Term object ready to be added into a model
     """
@@ -2512,10 +2513,10 @@ def dvEnergyTerm(
     vProfile = [1 / (v**2) for v in vGrid]
 
     drag = dv * np.ones(len(vGrid))
-    vSum = np.zeros(
+    vSum = vGrid**k*np.zeros(
         len(drag)
     )  # ones if exact energy source is required, 0 if exactly no particle source is required (either way the error is negligible)
-    vSum[:-1] = vGrid[:-1] ** 2 / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
+    vSum[:-1] = vGrid[:-1] ** (2+k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
     drag = drag * vSum
     normConst = sc.CustomNormConst(multConst=multConst)
 

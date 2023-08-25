@@ -44,7 +44,7 @@ class ReMKiT1DDashboard:
 
         return curve
 
-    def __load_fluid__(self, dataname, val, mode, removeTitle=False, **kwargs):
+    def __load_fluid__(self, dataname, val, mode, logy=False, removeTitle=False, **kwargs):
         assert self.__data__[dataname].coords.dims == (
             "time",
             "x",
@@ -59,6 +59,7 @@ class ReMKiT1DDashboard:
                     title=titlePrefix
                     + f"x = {self.__dualGrid__[val]:.2f} "
                     + self.__data__.coords["x"].units,
+                    logy=logy
                 )
             else:
                 curve = hv.Curve(self.__data__[dataname][:, val], label=dataname).opts(
@@ -66,6 +67,7 @@ class ReMKiT1DDashboard:
                     title=titlePrefix
                     + f'x = {self.__data__.coords["x"].values[val]:.2f} '
                     + self.__data__.coords["x"].units,
+                    logy=logy
                 )
         if mode == "Fixed time":
             if dataname[-5:] == "_dual":
@@ -80,6 +82,7 @@ class ReMKiT1DDashboard:
                     title=titlePrefix
                     + f't = {self.__data__.coords["time"].values[val]:.2f} '
                     + self.__data__.coords["time"].units,
+                    logy=logy
                 )
             else:
                 curve = hv.Curve(self.__data__[dataname][val, :], label=dataname).opts(
@@ -87,11 +90,12 @@ class ReMKiT1DDashboard:
                     title=titlePrefix
                     + f't = {self.__data__.coords["time"].values[val]:.2f} '
                     + self.__data__.coords["time"].units,
+                    logy=logy
                 )
 
         return curve
 
-    def fluid2Comparison(self):
+    def fluid2Comparison(self,logY=False):
         opt = pn.widgets.RadioButtonGroup(options=["Fixed position", "Fixed time"])
         variable = pn.widgets.Select(options=self.__fluidNames__)
         val = pn.widgets.IntSlider(
@@ -136,12 +140,12 @@ class ReMKiT1DDashboard:
                         '## <span style="color:black"> Right </span>',
                         opt2,
                         variable2,
-                        val2,
+                        val2
                     )
                 ),
             ),
-            dmap.opts(framewise=True),
-            dmap2.opts(framewise=True),
+            dmap.opts(framewise=True,logy=logY),
+            dmap2.opts(framewise=True,logy=logY),
         )
         return app
 
