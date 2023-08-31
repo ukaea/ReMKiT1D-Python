@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.1.0, 2023-06-21
+## v1.1.0, 2023-08-31
 
 - Support for features in ReMKiT1D v1.1.0
 
@@ -16,10 +16,13 @@
 
 - Generalized dvEnergyTerm
 - Added automated distribution variable diagnostic manipulator function to wrapper
+- Added n-dimensional linear interpolation derivation to simple_containers
+- Log scale option for standard dashboard
 
 ### Bug Fixes
 
-- N/A
+- Fixed a bug in io when no "time" variable is present in the wrapper
+- Fixed communication in amjuel support routines when adding logs of variables
 
 ## v1.0.3, 2023-07-27
 
