@@ -1027,7 +1027,7 @@ def nDInterpolationDerivation(grids: List[np.ndarray],data: np.ndarray, gridName
     }
 
     for i,name in enumerate(usedNames):
-        deriv["grids"][name]=grids[i].tolist()
+        cast(Dict[str, object],deriv["grids"])[name]=grids[i].tolist()
 
     return deriv
 
