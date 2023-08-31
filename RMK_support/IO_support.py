@@ -77,7 +77,8 @@ def loadFromHDF5(
         xr.Dataset: Output dataset
     """
     loadDataset = baseVarCont.dataset
-    loadDataset = loadDataset.drop("time")
+    if "time" in list(baseVarCont.dataset.data_vars.keys()):
+        loadDataset = loadDataset.drop("time")
     loadDataset = loadDataset.expand_dims({"time": len(filepaths)})
     buffer = {}
 

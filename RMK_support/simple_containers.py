@@ -988,6 +988,48 @@ def rangeFilterDerivation(
 
     return deriv
 
+def nDInterpolationDerivation(grids: List[np.ndarray],data: np.ndarray, gridNames: Union[List[str],None]=None) -> dict:
+    """Returns a derivation object that will perform n-dimensional linear interpolation on passed data. The number of entries in the grid list must be the dimensionality of the data ndarray, and each individual entry must have the same size as the corresponding dimension of the data. The optional grid names are only used in the construction of the JSON format for ReMKiT1D. 
+
+    Args:
+        grids (List[np.ndarray]): Values of each of the grids associated with individual data dimensions
+        data (np.ndarray): Data to interpolate over
+        gridNames (Union[List[str],None], optional): Optional grid names. Defaults to None, resulting in numbered grids.
+
+
+    Returns:
+        dict: Derivation property dictionary
+    """
+
+    assert len(grids) == len(np.shape(data)), "grids must have the same length as the dimensionality of the passed data"
+
+    dataShape = np.shape(data)
+
+    if gridNames is not None:
+        assert len(grids) == len(gridNames), "gridNames must have the same length as the passed grid list"
+        usedNames = gridNames
+    else:
+        usedNames = ["grid"+str(i) for i in range(len(grids))]
+        
+    for i,grid in enumerate(grids):
+        assert len(grid) == dataShape[i], usedNames[i]+" does not conform to the corresponding dimension of interpolation data"
+
+    deriv = {
+        "type":"nDLinInterpDerivation",
+        "data":{
+            "dims": list(dataShape),
+            "values": data.flatten(order="F").tolist()
+        },
+        "grids":
+            {
+                "names":usedNames
+            }
+    }
+
+    for i,name in enumerate(usedNames):
+        deriv["grids"][name]=grids[i].tolist()
+
+    return deriv
 
 def groupEvaluatorManipulator(
     modelTag: str, evalTermGroup: int, resultVarName: str, priority=4
