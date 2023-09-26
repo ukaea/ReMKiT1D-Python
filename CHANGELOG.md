@@ -18,6 +18,7 @@
 - Added automated distribution variable diagnostic manipulator function to wrapper
 - Added n-dimensional linear interpolation derivation to simple_containers
 - Log scale option for standard dashboard
+- Support for non-default electron species ID in ModelboundCRMData
 
 ### Bug Fixes
 
