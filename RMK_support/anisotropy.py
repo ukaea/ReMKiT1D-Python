@@ -1,14 +1,12 @@
 #%%
-import numpy as np
 import sys
 
 sys.path.append('../')
 from RMK_support import Node, atan
 
-def phi(X):
+def phi(X:Node) -> Node:
     return atan(X**0.5)*X**-0.5
-
-def K_LMN(X,LMN:str) -> float:
+def K_LMN(X:Node,LMN:str) -> Node:
     match LMN:
         case "200": 
             return X**-1*(-1 + (1 + X)*phi(X))
@@ -29,9 +27,9 @@ def K_LMN(X,LMN:str) -> float:
         case "006":
             return 0.5*X**-3*(8 + 9/(1 + X) - 2/(1 + X)**2 - 15*phi(X))
         case other:
-            return None
+            raise ValueError("Unknown K_LMN case")
 
-def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float):
+def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float) -> Node:
     TsParNode = Node(TsPar)
     TsPerpNode = Node(TsPerp)
     TrParNode = Node(TrPar)
@@ -39,35 +37,26 @@ def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float):
 
     return (TrPerpNode + massRatio*TsPerpNode)*(TrParNode + massRatio*TsParNode)
 
-def X(alphasr):
+def X(alphasr:Node) -> Node:
     return alphasr - 1
 
-def psi(alphasr,X):
+def psi(alphasr:Node,X:Node) -> Node:
     return alphasr()**2*(K_LMN(X,"004") - K_LMN(X,"202")) + 0.5*alphasr()*(K_LMN(X,"200") - K_LMN(X,"002"))
 
-def xi(X):
+def xi(X:Node) -> Node:
     return 4*K_LMN(X,"220") - 2*K_LMN(X,"202") - K_LMN(X,"200") + K_LMN(X,"002")
 
-def cPar():
-    return None
+def cPerp(nuss:Node,nusr:Node,alphass:Node,X:Node) -> Node:
+    return -4*nuss*(6*alphass*K_LMN(X,"202") + 0.5*xi(X)) + 4*alphass*nusr*(-32*K_LMN(X,"222") + 4*K_LMN(X,"204") + 10*K_LMN(X,"202") - 2*K_LMN(X,"004") - K_LMN(X,"002"))
 
-def cPerp():
-    return None
+def cPar(nuss:Node,nusr:Node,alphass:Node,X:Node) -> Node:
+    return 2*nuss*psi(alphass,X) + 4*alphass**2*nusr*(-8*3**-1*alphass*K_LMN(X,"204") + 2*3**-1*alphass*K_LMN(X,"006") + 4*K_LMN(X,"202") - (1 - alphass*3**-1)*K_LMN(X,"004") - 0.5*K_LMN(X,"002"))
 
-def dPar():
-    return None
+def ePerp(nuss:Node,nusr:Node,alphass:Node,X:Node) -> Node:
+    return 12*nuss*xi(X) + 12*nusr*(16*alphass*K_LMN(X,"222") - 4*alphass*K_LMN(X,"204") - 2*(2*alphass - 1)*K_LMN(X,"202") + 2*alphass*K_LMN(X,"004") - K_LMN(X,"002"))
 
-def ePar():
-    return None
-
-def ePerp():
-    return None
-
-def kPar():
-    return None
-
-def kPerp():
-    return None
+def ePar(nuss:Node,nusr:Node,alphass:Node,X:Node) -> Node:
+    return -12*nuss*psi(alphass,X) + 4*nusr*alphass*(4*alphass**2*K_LMN(X,"204") - 2*alphass**2*K_LMN(X,"006") - 6*alphass*K_LMN(X,"202") + 4*alphass*K_LMN(X,"004") - 1.5*K_LMN(X,"002"))
         
 
 # %%
