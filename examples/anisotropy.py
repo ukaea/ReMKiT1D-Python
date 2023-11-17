@@ -126,3 +126,28 @@ def kPar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bo
     return 0
 
 # %%
+def nuee(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
+    neNode = Node(ne)
+    TeParNode = Node(ne)
+    TePerpNode = Node(TePerp)
+    logLeeNode = Node(logLee)
+
+    return 0.5*np.pi**0.5*neNode*constants["elCharge"]*logLeeNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TeParNode)**0.5*TePerpNode)**-1
+
+def nuii(ni:str,TiPar:str,TiPerp:str,logLii:str,constants:dict) -> Node:
+    neNode = Node(ni)
+    TiParNode = Node(ni)
+    TiPerpNode = Node(TiPerp)
+    logLiiNode = Node(logLii)
+
+    return 0.5*np.pi**0.5*niNode*constants["elCharge"]*logLiiNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TiParNode)**0.5*TiPerpNode)**-1
+
+def nuei(nuee:Node,ne:str,ni:str) -> Node:
+    neNode = Node(ne)
+    niNode = Node(ni)
+
+    return 2**0.5*niNode*neNode**-1*nuee
+
+def nuie(nuee:Node,constants:dict) -> Node:
+    return 2**0.5*constants["elMass"]*constants["ionMass"]*nuee
+
