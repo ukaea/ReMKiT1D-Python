@@ -2,8 +2,9 @@
 import sys
 
 sys.path.append('../')
-from RMK_support import Node, atan, treeDerivation
+from RMK_support import Node, atan
 
+#%%
 def phi(X:Node) -> Node:
     """Function used when evaulating integrals of type in Chodura and Pohl 1971
 
@@ -14,6 +15,7 @@ def phi(X:Node) -> Node:
         Node: output of phi function
     """
     return atan(X**0.5)*X**-0.5
+
 def K_LMN(alpha:Node,LMN:str) -> Node:
     """Calculates integral of form found in Chodura and Pohl 1971
 
@@ -128,26 +130,25 @@ def kPar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bo
 # %%
 def nuee(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
     neNode = Node(ne)
-    TeParNode = Node(ne)
+    TeParNode = Node(TePar)
     TePerpNode = Node(TePerp)
     logLeeNode = Node(logLee)
 
     return 0.5*np.pi**0.5*neNode*constants["elCharge"]*logLeeNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TeParNode)**0.5*TePerpNode)**-1
 
 def nuii(ni:str,TiPar:str,TiPerp:str,logLii:str,constants:dict) -> Node:
-    neNode = Node(ni)
-    TiParNode = Node(ni)
+    niNode = Node(ni)
+    TiParNode = Node(TiPar)
     TiPerpNode = Node(TiPerp)
     logLiiNode = Node(logLii)
 
     return 0.5*np.pi**0.5*niNode*constants["elCharge"]*logLiiNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TiParNode)**0.5*TiPerpNode)**-1
 
-def nuei(nuee:Node,ne:str,ni:str) -> Node:
+def nuei(ne:str,ni:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
     neNode = Node(ne)
     niNode = Node(ni)
 
-    return 2**0.5*niNode*neNode**-1*nuee
+    return 2**0.5*niNode*neNode**-1*nuee(ne,TePar,TePerp,logLee,constants)
 
-def nuie(nuee:Node,constants:dict) -> Node:
-    return 2**0.5*constants["elMass"]*constants["ionMass"]*nuee
-
+def nuie(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
+    return 2**0.5*constants["elMass"]*constants["ionMass"]*nuee(ne,TePar,TePerp,logLee,constants)
