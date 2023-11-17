@@ -115,14 +115,14 @@ def ePar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bo
     return -12*psi(alphai)*nuii - 12*nuie*alphae*K_LMN(X(alphae),"002")
 
 def kPerp(nuei:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
-    # NOT FINISHED DO I INCLUDE NUii?
+    # NOT FINISHED NEED TO ADD DPAR
     if isEl:
         return -4*nuei*(2*psi(alphai) - alphae**2*(6*K_LMN(X(alphae),"202") - K_LMN(X(alphae),"002")))
     else:
         return 0
     
 def kPar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
-    # NOT FINISHED DO I INCLUDE NUii?
+    # NOT FINISHED NEED TO ADD DPAR
     if isEl:
         return -4*nuei*(-4*psi(alphai) + alphae*(2*alphae*K_LMN(X(alphae),"004") + K_LMN(X(alphae),"002")))
     return 0
