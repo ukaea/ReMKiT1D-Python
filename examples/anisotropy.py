@@ -5,7 +5,7 @@ sys.path.append('../')
 from RMK_support import Node, atan
 
 #%%
-def phi(X:Node) -> Node:
+def phi(X):
     """Function used when evaulating integrals of type in Chodura and Pohl 1971
 
     Args:
@@ -16,7 +16,7 @@ def phi(X:Node) -> Node:
     """
     return atan(X**0.5)*X**-0.5
 
-def K_LMN(alpha:Node,LMN:str) -> Node:
+def K_LMN(alpha,LMN:str):
     """Calculates integral of form found in Chodura and Pohl 1971
 
     Args:
@@ -51,7 +51,7 @@ def K_LMN(alpha:Node,LMN:str) -> Node:
         case other:
             raise ValueError("Unknown K_LMN case")
 
-def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float) -> Node:
+def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float):
     """Calculates anisotropy coefficient for species s and r
 
     Args:
@@ -71,7 +71,10 @@ def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float) -> Node:
 
     return (TrPerpNode + massRatio*TsPerpNode)*(TrParNode + massRatio*TsParNode)
 
-def X(alpha:Node) -> Node:
+def betasr(Ts:str,Tr:str,invMs:float,invMr:float):
+    return invMs*invMr*(invMs*Node(Tr) + invMr*Node(Ts))**-1 #TODO documentation
+
+def X(alpha):
     """Calculates term X used in integrals found in Chodura and Pohl 1971
 
     Args:
@@ -82,73 +85,73 @@ def X(alpha:Node) -> Node:
     """
     return alpha - 1
 
-def psi(alpha:Node) -> Node:
+def psi(alpha):
     return alpha**2*(K_LMN(X(alpha),"004") - K_LMN(X(alpha),"202")) + 0.5*alpha()*(K_LMN(X(alpha),"200") - K_LMN(X(alpha),"002"))
 
-def xi(alpha:Node) -> Node:
+def xi(alpha):
     return 4*K_LMN(X(alpha),"220") - 2*K_LMN(X(alpha),"202") - K_LMN(X(alpha),"200") + K_LMN(X(alpha),"002")
 
-def cPerp(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def cPerp(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     if isEl:
         return -4*nuee*(6*alphae*K_LMN(X(alphae),"202") + 0.5*xi(X)) + 4*alphae*nuei*(-32*K_LMN(X(alphae),"222") + 4*K_LMN(X(alphae),"204") + 10*K_LMN(X(alphae),"202") - 2*K_LMN(X(alphae),"004") - K_LMN(X(alphae),"002"))
     return -4*nuii*(6*alphai*K_LMN(X(alphai),"202") + psi(alphai)) - 4*nuie*(K_LMN(X(alphae),"200") + alphae*K_LMN(X(alphae),"002"))
 
-def cPar(nuee:Node,nuei:Node,nuii:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def cPar(nuee,nuei,nuii,alphae,alphai,isEl:bool):
     if isEl:
         return 2*nuee*psi(alphai) + 4*alphae**2*nuei*(-8*3**-1*alphae*K_LMN(X(alphae),"204") + 2*3**-1*alphae*K_LMN(X(alphae),"006") + 4*K_LMN(X(alphae),"202") - (1 - alphae*3**-1)*K_LMN(X(alphae),"004") - 0.5*K_LMN(X(alphae),"002"))
     return 2*psi(alphai)*nuii
 
-def dPar(us:str,ur:str) -> Node:
+def dPar(us:str,ur:str):
     usNode = Node(us)
     urNode = Node(ur)
 
     return urNode - usNode
 
-def ePerp(nuee:Node,nuei:Node,nuii:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def ePerp(nuee,nuei,nuii,alphae,alphai,isEl:bool):
     if isEl:
         return 12*nuee*xi(X(alphae)) + 12*nuei*(16*alphae*K_LMN(X(alphae),"222") - 4*alphae*K_LMN(X(alphae),"204") - 2*(2*alphae - 1)*K_LMN(X(alphae),"202") + 2*alphae*K_LMN(X(alphae),"004") - K_LMN(X(alphae),"002"))
     return 12*xi(X(alphai))*nuii
 
-def ePar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def ePar(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     if isEl:
         return -12*nuee*psi(alphai) + 4*nuei*alphae*(4*alphae**2*K_LMN(X(alphae),"204") - 2*alphae**2*K_LMN(X(alphae),"006") - 6*alphae*K_LMN(X(alphae),"202") + 4*alphae*K_LMN(X(alphae),"004") - 1.5*K_LMN(X(alphae),"002"))
     return -12*psi(alphai)*nuii - 12*nuie*alphae*K_LMN(X(alphae),"002")
 
-def kPerp(nuei:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def kPerp(nuei,alphae,alphai,isEl:bool):
     # NOT FINISHED NEED TO ADD DPAR
     if isEl:
         return -4*nuei*(2*psi(alphai) - alphae**2*(6*K_LMN(X(alphae),"202") - K_LMN(X(alphae),"002")))
     else:
         return 0
     
-def kPar(nuee:Node,nuei:Node,nuii:Node,nuie:Node,alphae:Node,alphai:Node,isEl:bool) -> Node:
+def kPar(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     # NOT FINISHED NEED TO ADD DPAR
     if isEl:
         return -4*nuei*(-4*psi(alphai) + alphae*(2*alphae*K_LMN(X(alphae),"004") + K_LMN(X(alphae),"002")))
     return 0
 
 # %%
-def nuee(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
+def nuee(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict):
     neNode = Node(ne)
     TeParNode = Node(TePar)
     TePerpNode = Node(TePerp)
     logLeeNode = Node(logLee)
 
-    return 0.5*np.pi**0.5*neNode*constants["elCharge"]*logLeeNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TeParNode)**0.5*TePerpNode)**-1
+    return 0.5*np.pi**0.5*neNode*constants["elCharge"]*logLeeNode*(4*np.pi*constants["epsilon0"])**-2*((constants["elMass"]*TeParNode)**0.5*TePerpNode)**-1
 
-def nuii(ni:str,TiPar:str,TiPerp:str,logLii:str,constants:dict) -> Node:
+def nuii(ni:str,TiPar:str,TiPerp:str,logLii:str,constants:dict):
     niNode = Node(ni)
     TiParNode = Node(TiPar)
     TiPerpNode = Node(TiPerp)
     logLiiNode = Node(logLii)
 
-    return 0.5*np.pi**0.5*niNode*constants["elCharge"]*logLiiNode*(4*np.pi*constants["epsilon0"])**-1*((constants["elMass"]*TiParNode)**0.5*TiPerpNode)**-1
+    return 0.5*np.pi**0.5*niNode*constants["elCharge"]*logLiiNode*(4*np.pi*constants["epsilon0"])**-2*((constants["elMass"]*TiParNode)**0.5*TiPerpNode)**-1
 
-def nuei(ne:str,ni:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
+def nuei(ne:str,ni:str,TePar:str,TePerp:str,logLee:str,constants:dict):
     neNode = Node(ne)
     niNode = Node(ni)
 
     return 2**0.5*niNode*neNode**-1*nuee(ne,TePar,TePerp,logLee,constants)
 
-def nuie(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict) -> Node:
+def nuie(ne:str,TePar:str,TePerp:str,logLee:str,constants:dict):
     return 2**0.5*constants["elMass"]*constants["ionMass"]*nuee(ne,TePar,TePerp,logLee,constants)
