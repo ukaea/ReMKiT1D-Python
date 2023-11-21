@@ -39,7 +39,7 @@ def test_crm_mb_data():
             "t2": {"fixedEnergyIndex": 2},
             "d2": {"fixedEnergyIndex": 3},
         },
-        "electronStateID":0
+        "electronStateID": 0,
     }
 
     assert mbData.getTransitionIndicesAndEnergies("t") == ([1, 2], [1, 2])

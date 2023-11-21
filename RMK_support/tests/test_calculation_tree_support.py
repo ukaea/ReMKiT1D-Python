@@ -379,3 +379,14 @@ def test_calc_deriv():
             },
         },
     }
+
+
+def testAddLeafVars():
+    a = ct.Node("a")
+    b = ct.Node("b")
+
+    c = a + a * b
+
+    leafVars = ct.getLeafVars(c)
+
+    assert leafVars == ["a", "b"]

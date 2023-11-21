@@ -9,7 +9,10 @@ class ModelboundCRMData:
     """Property container of modelbound CRM data"""
 
     def __init__(
-        self, fixedTransitionEnergies=np.array([]), energyResolution: float = 1e-16 , elState: int = 0
+        self,
+        fixedTransitionEnergies=np.array([]),
+        energyResolution: float = 1e-16,
+        elState: int = 0,
     ) -> None:
         """ModelboundCRMData constructor
 
@@ -96,7 +99,7 @@ class ModelboundCRMData:
             "transitionTags": self.__transitionTags__,
             "inelasticGridData": self.__inelGridData__,
             "transitions": {},
-            "electronStateID": self.__elStateID__
+            "electronStateID": self.__elStateID__,
         }
 
         mbData["transitions"].update(self.__transitionProperties__)

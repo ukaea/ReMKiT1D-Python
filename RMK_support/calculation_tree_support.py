@@ -316,6 +316,19 @@ def flattenTree(node: Node):
     return container, parents, children
 
 
+def addLeafVar(self: Node, nodeCounter, parentsCounter, container):
+    if self.leafVar != "none" and self.leafVar not in container:
+        container.append(self.leafVar)
+
+
+def getLeafVars(node: Node):
+    nodeIter = NodeIterator()
+    container: List[str] = []
+    nodeIter.traverse(node, addLeafVar, 0, -1, container)
+
+    return container
+
+
 def treeDerivation(rootNode: Node) -> dict:
     """Return derivation which performs its calculation based on
 
