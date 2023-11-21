@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## v1.1.0, 2023-08-31
+## v1.1.0, 2023-11-21
 
 - Support for features in ReMKiT1D v1.1.0
+- Calculation tree improvements
+- Common model additions
 
 ### Breaking Changes
 
@@ -19,6 +21,10 @@
 - Added n-dimensional linear interpolation derivation to simple_containers
 - Log scale option for standard dashboard
 - Support for non-default electron species ID in ModelboundCRMData
+- Added leaf finding feature for calculation trees
+- Added base fluid models per species to common_models (these add the standard continuity, momentum, and energy equations)
+- Added model allowing for quick construction of calculation tree terms
+- Added example notebook for the dvEnergyTerm and the calculation tree model terms
 
 ### Bug Fixes
 

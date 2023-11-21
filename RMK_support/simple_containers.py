@@ -1170,7 +1170,7 @@ def staggeredGradStencil() -> dict:
 def boundaryStencilDiv(
     fluxJacVar: str, lowerBoundVar: Union[None, str] = None, isLeft=False
 ) -> dict:
-    """Boundary stencil for divergence terms with extrapolation and lower jacobian bound
+    """Boundary stencil for divergence terms with extrapolation and lower jacobian bound. Effectively gives the missing boundary div(fluxJacVar * implicitVar) component, handling bounds and extrapolation.
 
     Args:
         fluxJacVar (str): Name of flux jacobian
