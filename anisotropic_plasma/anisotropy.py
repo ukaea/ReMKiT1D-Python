@@ -1,5 +1,6 @@
 #%%
 import sys
+import numpy as np
 
 sys.path.append('../')
 from RMK_support import Node, atan
@@ -14,13 +15,26 @@ def phi(X):
     Returns:
         Node: output of phi function
     """
-    return atan(X**0.5)*X**-0.5
+    if isinstance(X,Node):
+        return atan(X**0.5)*X**-0.5
+    return np.arctan(X**0.5)*X**-0.5
+
+def X(alpha):
+    """Calculates term X used in integrals found in Chodura and Pohl 1971
+
+    Args:
+        alpha (Node): anisotropy coefficient
+
+    Returns:
+        Node: X
+    """
+    return alpha - 1
 
 def K_LMN(alpha,LMN:str):
     """Calculates integral of form found in Chodura and Pohl 1971
 
     Args:
-        X (Node): Related to the anisotropy coefficient through (X = alphasr - 1)
+        X (Node): Related to the anisotropy coefficient through (X = alpha - 1)
         LMN (str): String that states which integral is being calculated
 
     Raises:
@@ -33,7 +47,7 @@ def K_LMN(alpha,LMN:str):
         case "200": 
             return X(alpha)**-1*(-1 + (1 + X(alpha))*phi(X(alpha)))
         case "002":
-            return X(alpha)**-1*(1 - phi(X(alpha)))
+            return X(alpha)**-1*2*(1 - phi(X(alpha)))
         case "220":
             return 0.125*X(alpha)**-2*(3 + X(alpha) + (1 + X(alpha))*(X(alpha) - 3)*phi(X(alpha)))
         case "202":
@@ -74,31 +88,20 @@ def alphasr(TsPar:str,TsPerp:str,TrPar:str,TrPerp:str,massRatio:float):
 def betasr(Ts:str,Tr:str,invMs:float,invMr:float):
     return invMs*invMr*(invMs*Node(Tr) + invMr*Node(Ts))**-1 #TODO documentation
 
-def X(alpha):
-    """Calculates term X used in integrals found in Chodura and Pohl 1971
-
-    Args:
-        alpha (Node): anisotropy coefficient
-
-    Returns:
-        Node: X
-    """
-    return alpha - 1
-
 def psi(alpha):
-    return alpha**2*(K_LMN(X(alpha),"004") - K_LMN(X(alpha),"202")) + 0.5*alpha()*(K_LMN(X(alpha),"200") - K_LMN(X(alpha),"002"))
+    return alpha**2*(K_LMN(alpha,"004") - K_LMN(alpha,"202")) + 0.5*alpha*(K_LMN(alpha,"200") - K_LMN(alpha,"002"))
 
 def xi(alpha):
-    return 4*K_LMN(X(alpha),"220") - 2*K_LMN(X(alpha),"202") - K_LMN(X(alpha),"200") + K_LMN(X(alpha),"002")
+    return 4*K_LMN(alpha,"220") - 2*K_LMN(alpha,"202") - K_LMN(alpha,"200") + K_LMN(alpha,"002")
 
 def cPerp(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     if isEl:
-        return -4*nuee*(6*alphae*K_LMN(X(alphae),"202") + 0.5*xi(X)) + 4*alphae*nuei*(-32*K_LMN(X(alphae),"222") + 4*K_LMN(X(alphae),"204") + 10*K_LMN(X(alphae),"202") - 2*K_LMN(X(alphae),"004") - K_LMN(X(alphae),"002"))
-    return -4*nuii*(6*alphai*K_LMN(X(alphai),"202") + psi(alphai)) - 4*nuie*(K_LMN(X(alphae),"200") + alphae*K_LMN(X(alphae),"002"))
+        return -4*nuee*(6*alphae*K_LMN(alphae,"202") + 0.5*xi(alphae)) + 4*alphae*nuei*(-32*K_LMN(alphae,"222") + 4*K_LMN(alphae,"204") + 10*K_LMN(alphae,"202") - 2*K_LMN(alphae,"004") - K_LMN(alphae,"002"))
+    return -4*nuii*(6*alphai*K_LMN(alphai,"202") + 0.5*xi(alphai)) - 4*nuie*(2*K_LMN(alphae,"200") + alphae*K_LMN(alphae,"002"))
 
 def cPar(nuee,nuei,nuii,alphae,alphai,isEl:bool):
     if isEl:
-        return 2*nuee*psi(alphai) + 4*alphae**2*nuei*(-8*3**-1*alphae*K_LMN(X(alphae),"204") + 2*3**-1*alphae*K_LMN(X(alphae),"006") + 4*K_LMN(X(alphae),"202") - (1 - alphae*3**-1)*K_LMN(X(alphae),"004") - 0.5*K_LMN(X(alphae),"002"))
+        return 2*nuee*psi(alphai) + 4*alphae**2*nuei*(-8*3**-1*alphae*K_LMN(alphae,"204") + 2*3**-1*alphae*K_LMN(alphae,"006") + 4*K_LMN(alphae,"202") - (1 - alphae*3**-1)*K_LMN(alphae,"004") - 0.5*K_LMN(alphae,"002"))
     return 2*psi(alphai)*nuii
 
 def dPar(us:str,ur:str):
@@ -109,25 +112,25 @@ def dPar(us:str,ur:str):
 
 def ePerp(nuee,nuei,nuii,alphae,alphai,isEl:bool):
     if isEl:
-        return 12*nuee*xi(X(alphae)) + 12*nuei*(16*alphae*K_LMN(X(alphae),"222") - 4*alphae*K_LMN(X(alphae),"204") - 2*(2*alphae - 1)*K_LMN(X(alphae),"202") + 2*alphae*K_LMN(X(alphae),"004") - K_LMN(X(alphae),"002"))
-    return 12*xi(X(alphai))*nuii
+        return 12*nuee*xi(alphae) + 12*nuei*(16*alphae*K_LMN(alphae,"222") - 4*alphae*K_LMN(alphae,"204") - 2*(2*alphae - 1)*K_LMN(alphae,"202") + 2*alphae*K_LMN(alphae,"004") - K_LMN(alphae,"002"))
+    return 12*xi(alphai)*nuii
 
 def ePar(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     if isEl:
-        return -12*nuee*psi(alphai) + 4*nuei*alphae*(4*alphae**2*K_LMN(X(alphae),"204") - 2*alphae**2*K_LMN(X(alphae),"006") - 6*alphae*K_LMN(X(alphae),"202") + 4*alphae*K_LMN(X(alphae),"004") - 1.5*K_LMN(X(alphae),"002"))
-    return -12*psi(alphai)*nuii - 12*nuie*alphae*K_LMN(X(alphae),"002")
+        return -12*nuee*psi(alphae) + 4*nuei*alphae*(4*alphae**2*K_LMN(alphae,"204") - 2*alphae**2*K_LMN(alphae,"006") - 6*alphae*K_LMN(alphae,"202") + 4*alphae*K_LMN(alphae,"004") - 1.5*K_LMN(alphae,"002"))
+    return -12*psi(alphai)*nuii - 12*nuie*alphae*K_LMN(alphae,"002")
 
 def kPerp(nuei,alphae,alphai,isEl:bool):
     # NOT FINISHED NEED TO ADD DPAR
     if isEl:
-        return -4*nuei*(2*psi(alphai) - alphae**2*(6*K_LMN(X(alphae),"202") - K_LMN(X(alphae),"002")))
+        return -4*nuei*(2*psi(alphai) - alphae**2*(6*K_LMN(alphae,"202") - K_LMN(alphae,"002")))
     else:
         return 0
     
 def kPar(nuee,nuei,nuii,nuie,alphae,alphai,isEl:bool):
     # NOT FINISHED NEED TO ADD DPAR
     if isEl:
-        return -4*nuei*(-4*psi(alphai) + alphae*(2*alphae*K_LMN(X(alphae),"004") + K_LMN(X(alphae),"002")))
+        return -4*nuei*(-4*psi(alphai) + alphae*(2*alphae*K_LMN(alphae,"004") + K_LMN(alphae,"002")))
     return 0
 
 # %%
