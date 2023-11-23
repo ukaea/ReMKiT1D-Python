@@ -1,5 +1,7 @@
 from typing import Union, List, Dict, cast, Tuple
+from .variable_container import VariableContainer
 import numpy as np
+import warnings
 
 
 class Species:
@@ -131,6 +133,57 @@ class VarData:
         self.__reqMBRowPowers___ = reqMBRowPowers
         self.__reqMBColVars___ = reqMBColVars
         self.__reqMBColPowers___ = reqMBColPowers
+
+    def checkRowColVars(
+        self, varCont: VariableContainer, rowVarOnDual=False, colVarOnDual=False
+    ):
+        """Check whether required variables exist in the variable container and are on the correct grids
+
+        Args:
+            varCont (VariableContainer): Variable container used to check
+            rowVarOnDual (bool, optional): True if the row variables should be on the dual grid. Defaults to False.
+            colVarOnDual (bool, optional): True if the column variables should be on the dual grid. Defaults to False.
+        """
+
+        for var in self.__reqRowVars___:
+            assert var in varCont.dataset.data_vars.keys(), (
+                "Required row variable " + var + " not found in used variable container"
+            )
+
+            if not varCont.dataset.data_vars[var].attrs["isScalar"]:
+                if (
+                    varCont.dataset.data_vars[var].attrs["isOnDualGrid"]
+                    is not rowVarOnDual
+                ):
+                    warnings.warn(
+                        "Variable "
+                        + var
+                        + " appears in required row variables for evolved variable on "
+                        + "dual"
+                        if rowVarOnDual
+                        else "regular" + " grid but doesn't live on that grid"
+                    )
+
+        for var in self.__reqColVars___:
+            assert var in varCont.dataset.data_vars.keys(), (
+                "Required column variable "
+                + var
+                + " not found in used variable container"
+            )
+
+            assert not varCont.dataset.data_vars[var].attrs["isScalar"], (
+                "Error: Required column variable " + var + " is a scalar"
+            )
+
+            if varCont.dataset.data_vars[var].attrs["isOnDualGrid"] is not colVarOnDual:
+                warnings.warn(
+                    "Variable "
+                    + var
+                    + " appears in required column variables for implicit variable on "
+                    + "dual"
+                    if colVarOnDual
+                    else "regular" + " grid but doesn't live on that grid"
+                )
 
     def dict(self):
         """Returns dictionary form of VarData to be used in json output
@@ -297,6 +350,31 @@ class GeneralMatrixTerm:
         self.__fixedMatrix__ = fixedMatrix
         self.__copyTermName__ = copyTermName
 
+    def checkTerm(self, varCont: VariableContainer):
+        """Perform consistency check on term
+
+        Args:
+            varCont (VariableContainer): Variable container to be used with this term
+        """
+
+        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
+            "Evolved variable "
+            + self.__evolvedVar__
+            + " not registered in used variable container"
+        )
+
+        rowVarOnDual = varCont.dataset[self.__evolvedVar__].attrs["isOnDualGrid"]
+
+        assert self.__implicitVar__ in varCont.dataset.data_vars.keys(), (
+            "Implicit variable "
+            + self.__evolvedVar__
+            + " not registered in used variable container"
+        )
+
+        colVarOnDual = varCont.dataset[self.__implicitVar__].attrs["isOnDualGrid"]
+
+        self.__varData__.checkRowColVars(varCont, rowVarOnDual, colVarOnDual)
+
     def dict(self):
         """Returns dictionary form of GeneralMatrixTerm to be used in json output
 
@@ -351,6 +429,17 @@ class CustomModel:
 
     def setModelboundData(self, mbData: dict):
         self.__modelboundData__ = mbData
+
+    def checkTerms(self, varCont: VariableContainer):
+        """Check terms in this model for consistency
+
+        Args:
+            varCont (VariableContainer): Variable container to be used in this check
+        """
+        print("Checking terms in model " + self.__modelTag__ + ":")
+        for i, term in enumerate(self.__terms__):
+            print("   Checking term " + self.__termTags__[i])
+            term.checkTerm(varCont)
 
     def dict(self):
         """Returns dictionary form of CustomModel to be used in json output

@@ -896,7 +896,7 @@ def addExAdvectionModel(
     """
     newModel = advectionEx(modelTag, distFunName, eFieldName, wrapper, dualDistFun)
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def eeCollIsotropic(
@@ -998,7 +998,7 @@ def addEECollIsotropic(
 
     newModel = eeCollIsotropic(modelTag, distFunName, elTempVar, elDensVar, wrapper)
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def eiCollIsotropic(
@@ -1147,7 +1147,7 @@ def addEICollIsotropic(
         wrapper,
     )
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def stationaryIonEIColl(
@@ -1787,7 +1787,7 @@ def addStationaryIonEIColl(
         wrapper,
     )
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def addFlowingIonEIColl(
@@ -1832,7 +1832,7 @@ def addFlowingIonEIColl(
         ionFluxVar,
     )
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def eeCollHigherL(
@@ -2219,7 +2219,7 @@ def addEECollHigherL(
         evolvedHarmonics,
         dualDistFun,
     )
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def ampereMaxwellKineticElTerm(
@@ -2487,7 +2487,7 @@ def addLBCModel(
         evolvedHarmonics,
     )
 
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)
 
 
 def dvEnergyTerm(
@@ -2964,4 +2964,4 @@ def addNodeMatrixTermModel(
         newModel.addTerm("nodeTerm_" + str(i), newTerm)
 
     newModel.setModelboundData(mbData.dict())
-    wrapper.addModel(newModel.dict())
+    wrapper.addModel(newModel)

@@ -5,6 +5,7 @@
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
 - Common model additions
+- QoL features
 
 ### Breaking Changes
 
@@ -25,6 +26,7 @@
 - Added base fluid models per species to common_models (these add the standard continuity, momentum, and energy equations)
 - Added model allowing for quick construction of calculation tree terms
 - Added example notebook for the dvEnergyTerm and the calculation tree model terms
+- Models can now be added to wrappers by passing the CustomModel object instead of its dictionary representation. This will trigger checks on the model (currently only checking whether the evolved and implicit variables are registered and whether the required row/column variables live on the same grids as the evolved/implicit variables)
 
 ### Bug Fixes
 

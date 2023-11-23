@@ -527,14 +527,24 @@ class RKWrapper:
         """
         return self.__species__[name]
 
-    def addModel(self, properties: dict) -> None:
+    def addModel(self, properties: Union[dict, sc.CustomModel]) -> None:
         """Add model to wrapper
 
         Args:
-            properties (dict): Model properies dictionary. Should have a single key pointing to all properties, with the key being the model tag.
+            properties (Union[dict,CustomModel]): Model properties dictionary or the model itself. If dictionary should have a single key pointing to all properties, with the key being the model tag. Dictionary option kept for backwards compatibility, use the model itself to include checks
         """
-        cast(List[str], self.__modelData__["tags"]).append(list(properties.keys())[0])
-        self.__modelData__.update(properties)
+
+        if isinstance(properties, dict):
+            propertiesDict = properties
+
+        if isinstance(properties, sc.CustomModel):
+            properties.checkTerms(self.varCont)
+            propertiesDict = properties.dict()
+
+        cast(List[str], self.__modelData__["tags"]).append(
+            list(propertiesDict.keys())[0]
+        )
+        self.__modelData__.update(propertiesDict)
 
     def addManipulator(self, tag: str, properties: dict) -> None:
         """Add a manipulator object to wrapper
