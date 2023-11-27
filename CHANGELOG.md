@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v1.1.0, 2023-11-27
+- Implemented degrees of freedom option in implicitTemperatures
+
+### New Features
+- It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
+
 ## v1.1.0, 2023-11-21
 
 - Support for features in ReMKiT1D v1.1.0
