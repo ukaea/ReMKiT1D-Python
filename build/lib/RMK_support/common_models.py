@@ -526,6 +526,7 @@ def implicitTemperatures(
     speciesDensitiesDual: Union[List[str], None] = None,
     evolvedXU2Cells: Union[List[int], None] = None,
     ignoreKineticContribution=False,
+    degreesOfFreedom: int=3,
 ) -> sc.CustomModel:
     """Generate implicit temperature derivation terms for each species
 
@@ -538,6 +539,7 @@ def implicitTemperatures(
         speciesDensitiesDual (Union[List[str],None], optional): Names of species densities on dual grid (use when fluxes are staggered). Defaults to None.
         evolvedXU2Cells (Union[List[int],None], optional): Optional list of evolved X cells in kinetic energy term. Defaults to None, evolving all cells.
         ignoreKineticContribution (bool, optional): Ignores all kinetic contributions to the temperature. Defaults to False.
+        degreesOfFreedom (int): Number of translational degrees of freedom going into temperature definition. Defaults to 3
     Returns:
         sc.CustomModel: CustomModel object ready for insertion into JSON config file
     """
@@ -562,7 +564,7 @@ def implicitTemperatures(
     amu = 1.6605390666e-27  # atomic mass unit
 
     normConstI = sc.CustomNormConst(multConst=-1.0)
-    normConstW = sc.CustomNormConst(multConst=2 / 3)
+    normConstW = sc.CustomNormConst(multConst=2 / degreesOfFreedom)
 
     for i, temp in enumerate(speciesTemperatures):
         speciesMass = amu * species[i].atomicA
