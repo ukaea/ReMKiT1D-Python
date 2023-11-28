@@ -641,6 +641,7 @@ def test_implicit_temperature():
         }
     }
 
+
 def test_implicit_temperature_non_default_degrees_of_freedom():
     elCharge = 1.60218e-19
     amu = 1.6605390666e-27  # atomic mass unit
@@ -655,11 +656,12 @@ def test_implicit_temperature_non_default_degrees_of_freedom():
         ["Te", "Tion"],
         species,
         ["ne_dual", "nion_dual"],
-        degreesOfFreedom=2
+        degreesOfFreedom=2,
     )
 
     assert newModel.dict()["temp"]["wTermTe"]["customNormConst"]["multConst"] == 1
     assert newModel.dict()["temp"]["wTermTion"]["customNormConst"]["multConst"] == 1
+
 
 def test_kinAdvX():
     grid = Grid(

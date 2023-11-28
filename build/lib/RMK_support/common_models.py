@@ -525,7 +525,7 @@ def implicitTemperatures(
     species: List[sc.Species],
     speciesDensitiesDual: Union[List[str], None] = None,
     evolvedXU2Cells: Union[List[int], None] = None,
-    ignoreKineticContribution=False,
+    ignoreKineticContribution = False,
     degreesOfFreedom: int = 3,
 ) -> sc.CustomModel:
     """Generate implicit temperature derivation terms for each species
