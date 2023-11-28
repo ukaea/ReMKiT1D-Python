@@ -1,5 +1,9 @@
-from typing import Union, List, cast, Dict
+# %%
+from typing import Union, List, cast, Dict, Callable
 import copy
+from itertools import accumulate
+import numpy as np
+from scipy import special  # type: ignore
 
 
 class Node:
@@ -69,7 +73,6 @@ class Node:
                     newNode.constant = newNode.constant + float(rhs)
                 else:
                     newNode.constant = float(rhs)
-                newNode
             else:
                 newNode = Node("none")
                 newNode.additiveMode = True
@@ -128,7 +131,7 @@ class Node:
         if isinstance(rhs, Node):
             if rhs.unaryTransform is not None:
                 newNode = Node("none")
-                newNode.unaryTransform = UnaryTransform("ipow", intParams=[-1])
+                newNode.unaryTransform = powUnary(-1)
                 newNode.children = [copy.deepcopy(rhs)]
 
                 topNode = Node("none")
@@ -136,7 +139,7 @@ class Node:
                 return topNode
             else:
                 newNode = copy.deepcopy(rhs)
-                newNode.unaryTransform = UnaryTransform("ipow", intParams=[-1])
+                newNode.unaryTransform = powUnary(-1)
                 topNode = Node("none")
                 topNode.children = [copy.deepcopy(self), newNode]
                 return topNode
@@ -212,24 +215,64 @@ class Node:
         if isinstance(rhs, int):
             if self.unaryTransform is not None:
                 newNode = Node("none")
-                newNode.unaryTransform = UnaryTransform("ipow", intParams=[rhs])
+                newNode.unaryTransform = powUnary(rhs)
                 newNode.children = [copy.deepcopy(self)]
                 return newNode
             else:
                 newNode = copy.deepcopy(self)
-                newNode.unaryTransform = UnaryTransform("ipow", intParams=[rhs])
+                newNode.unaryTransform = powUnary(rhs)
                 return newNode
         if isinstance(rhs, float):
             if self.unaryTransform is not None:
                 newNode = Node("none")
-                newNode.unaryTransform = UnaryTransform("rpow", realParams=[rhs])
+                newNode.unaryTransform = powUnary(rhs)
                 newNode.children = [copy.deepcopy(self)]
 
                 return newNode
             else:
                 newNode = copy.deepcopy(self)
-                newNode.unaryTransform = UnaryTransform("rpow", realParams=[rhs])
+                newNode.unaryTransform = powUnary(rhs)
                 return newNode
+
+    def evaluate(self, varDict: Dict[str, np.ndarray]) -> np.ndarray:
+        const = 1 if self.constant is None else self.constant
+        if self.additiveMode:
+            const = 0 if self.constant is None else self.constant
+
+        if self.leafVar != "none":
+            childrenResult = varDict[self.leafVar].copy()
+
+            if self.additiveMode:
+                childrenResult += const
+            else:
+                childrenResult *= const
+        else:
+            if self.additiveMode:
+                childrenResult = (
+                    list(
+                        accumulate(
+                            [child.evaluate(varDict) for child in self.children],
+                            (lambda x, y: x + y),
+                        )
+                    )[-1]
+                    + const
+                )
+
+            else:
+                childrenResult = (
+                    list(
+                        accumulate(
+                            [child.evaluate(varDict) for child in self.children],
+                            (lambda x, y: x * y),
+                        )
+                    )[-1]
+                    * const
+                )
+
+        if self.unaryTransform is None:
+            return childrenResult
+
+        return self.unaryTransform.evaluate(childrenResult)
 
 
 class UnaryTransform:
@@ -241,11 +284,35 @@ class UnaryTransform:
         realParams: List[float] = [],
         intParams: List[int] = [],
         logicalParams: List[bool] = [],
+        unaryCallable: Union[
+            Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray], None
+        ] = None,
     ) -> None:
         self.__tag__ = tag
         self.__realParams__ = realParams
         self.__intParams__ = intParams
         self.__logicalParams__ = logicalParams
+        self.__unaryCallable__ = unaryCallable
+
+    def evaluate(self, array: np.ndarray) -> np.ndarray:
+        """Evaluate the unary transform on given array if the callable is defined, otherwise throw error
+
+        Args:
+            array (np.ndarray): Array to transform
+
+        Returns:
+            np.ndarray: Result of applying the unary transformation on a numpy array
+        """
+
+        assert self.__unaryCallable__ is not None, (
+            "Unary transform "
+            + self.__tag__
+            + " does not have a callable defined and cannot be evaluated"
+        )
+
+        return self.__unaryCallable__(
+            self.__realParams__, self.__intParams__, self.__logicalParams__, array
+        )
 
     def dict(self) -> dict:
         """Return unary transformation properties as ReMKiT1D dictionary
@@ -358,145 +425,196 @@ def treeDerivation(rootNode: Node) -> dict:
     return treeDict
 
 
+def powUnary(power: Union[int, float]) -> UnaryTransform:
+    if isinstance(power, int):
+        func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+            lambda floats, ints, bools, arg: arg ** ints[0]
+        )
+        transform = UnaryTransform("ipow", intParams=[power], unaryCallable=func)
+    else:
+        func = lambda floats, ints, bools, arg: arg ** floats[0]
+        transform = UnaryTransform("rpow", realParams=[power], unaryCallable=func)
+    return transform
+
+
 def log(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.log(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("log")
+        newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("log")
+        newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
         return newNode
 
 
 def exp(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.exp(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("exp")
+        newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("exp")
+        newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
         return newNode
 
 
 def sin(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.sin(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("sin")
+        newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("sin")
+        newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
         return newNode
 
 
 def cos(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.cos(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("cos")
+        newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("cos")
+        newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
         return newNode
 
 
 def abs(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.abs(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("abs")
+        newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("abs")
+        newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
         return newNode
 
 
 def sign(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.sign(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("sign")
+        newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("sign")
+        newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
         return newNode
 
 
 def tan(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.tan(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("tan")
+        newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("tan")
+        newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
         return newNode
 
 
 def atan(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.arctan(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("atan")
+        newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("atan")
+        newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
         return newNode
 
 
 def asin(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.arcsin(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("asin")
+        newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("asin")
+        newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
         return newNode
 
 
 def acos(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: np.arccos(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("acos")
+        newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("acos")
+        newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
         return newNode
 
 
 def erf(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: special.erf(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("erf")
+        newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("erf")
+        newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
         return newNode
 
 
 def erfc(node: Node) -> Node:
+    func: Callable[
+        [List[float], List[int], List[bool], np.ndarray], np.ndarray
+    ] = lambda floats, ints, bools, arg: special.erfc(arg)
     if node.unaryTransform is not None:
         newNode = Node("none")
-        newNode.unaryTransform = UnaryTransform("erfc")
+        newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
     else:
         newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("erfc")
+        newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)
         return newNode
+
+
+# %%
