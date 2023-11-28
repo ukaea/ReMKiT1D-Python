@@ -1,13 +1,8 @@
 # CHANGELOG
 
-## v1.1.0, 2023-11-27
+## v1.1.0, 2023-11-28
+
 - Implemented degrees of freedom option in implicitTemperatures
-
-### New Features
-- It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
-
-## v1.1.0, 2023-11-21
-
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
 - Common model additions
@@ -33,6 +28,7 @@
 - Added model allowing for quick construction of calculation tree terms
 - Added example notebook for the dvEnergyTerm and the calculation tree model terms
 - Models can now be added to wrappers by passing the CustomModel object instead of its dictionary representation. This will trigger checks on the model (currently only checking whether the evolved and implicit variables are registered and whether the required row/column variables live on the same grids as the evolved/implicit variables)
+- It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
 
 ### Bug Fixes
 
