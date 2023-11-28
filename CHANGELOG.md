@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.1.0, 2023-11-21
+## v1.1.0, 2023-11-28
 
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
@@ -28,6 +28,7 @@
 - Added example notebook for the dvEnergyTerm and the calculation tree model terms
 - Models can now be added to wrappers by passing the CustomModel object instead of its dictionary representation. This will trigger checks on the model (currently only checking whether the evolved and implicit variables are registered and whether the required row/column variables live on the same grids as the evolved/implicit variables)
 - Calculation trees can now be evaluated by passing a dictionary with keys as the leaf variable names and numpy arrays as entries. User-defined UnaryTransformations need to have a Callable component in order to be used in evaluation of calculation trees
+- It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
 
 ### Bug Fixes
 
