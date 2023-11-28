@@ -27,6 +27,7 @@
 - Added model allowing for quick construction of calculation tree terms
 - Added example notebook for the dvEnergyTerm and the calculation tree model terms
 - Models can now be added to wrappers by passing the CustomModel object instead of its dictionary representation. This will trigger checks on the model (currently only checking whether the evolved and implicit variables are registered and whether the required row/column variables live on the same grids as the evolved/implicit variables)
+- Calculation trees can now be evaluated by passing a dictionary with keys as the leaf variable names and numpy arrays as entries. User-defined UnaryTransformations need to have a Callable component in order to be used in evaluation of calculation trees
 
 ### Bug Fixes
 
