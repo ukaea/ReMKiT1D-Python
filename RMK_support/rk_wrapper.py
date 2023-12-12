@@ -299,11 +299,20 @@ class RKWrapper:
             self.addVarToComm(name, isDistribution, isScalar, hostScalarProcess)
 
         if derivOptions is not None:
-            assert isDerived, "Passing derivOptions to addVar requires the variable to be derived"
-            assert derivationRule is not None, "Passing derivOptions to addVar requires derivationRule"
-            assert "ruleName" in cast(Dict[str, str], derivationRule).keys(), "ruleName must be a key in passed derivationRule"
+            assert (
+                isDerived
+            ), "Passing derivOptions to addVar requires the variable to be derived"
+            assert (
+                derivationRule is not None
+            ), "Passing derivOptions to addVar requires derivationRule"
+            assert (
+                "ruleName" in cast(Dict[str, str], derivationRule).keys()
+            ), "ruleName must be a key in passed derivationRule"
 
-            self.addCustomDerivation(cast(Dict[str, str], derivationRule)["ruleName"], cast(Dict[str, str], derivOptions))
+            self.addCustomDerivation(
+                cast(Dict[str, str], derivationRule)["ruleName"],
+                cast(Dict[str, str], derivOptions),
+            )
 
     def addVarAndDual(
         self,
@@ -379,11 +388,20 @@ class RKWrapper:
                 self.addVarToComm(secondaryVar, isDistribution)
 
         if derivOptions is not None:
-            assert isDerived, "Passing derivOptions to addVar requires the variable to be derived"
-            assert derivationRule is not None, "Passing derivOptions to addVar requires derivationRule"
-            assert "ruleName" in cast(Dict[str, str], derivationRule).keys(), "ruleName must be a key in passed derivationRule"
+            assert (
+                isDerived
+            ), "Passing derivOptions to addVar requires the variable to be derived"
+            assert (
+                derivationRule is not None
+            ), "Passing derivOptions to addVar requires derivationRule"
+            assert (
+                "ruleName" in cast(Dict[str, str], derivationRule).keys()
+            ), "ruleName must be a key in passed derivationRule"
 
-            self.addCustomDerivation(cast(Dict[str, str], derivationRule)["ruleName"], cast(Dict[str, str], derivOptions))
+            self.addCustomDerivation(
+                cast(Dict[str, str], derivationRule)["ruleName"],
+                cast(Dict[str, str], derivOptions),
+            )
 
     def setMPIData(self, numProcsX: int, numProcsH=1, haloWidth=1) -> None:
         """Set general MPI data
