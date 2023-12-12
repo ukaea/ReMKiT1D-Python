@@ -149,6 +149,18 @@ def test_add_var(grid):
 
     assert rk.varCont.dict() == VariableContainer(grid).dict()
 
+def test_add_var_auto_derivation(grid):
+    rk = RKWrapper()
+
+    rk.grid = grid
+
+    rk.addVar("a", isDerived=True, derivationRule = {"ruleName": "deriv1"}, derivOptions = {"options": 2})
+
+    assert rk.customDerivs == {
+        "tags": ["deriv1"],
+        "deriv1": {"options": 2},
+    }
+
 
 def test_add_dist_var(grid):
     rk = RKWrapper()

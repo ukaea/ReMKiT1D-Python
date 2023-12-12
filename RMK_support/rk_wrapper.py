@@ -252,6 +252,7 @@ class RKWrapper:
         outputVar=True,
         isCommunicated=False,
         hostScalarProcess=0,
+        derivOptions: Union[None, dict] = None,
     ) -> None:
         """Add variable to the wrapper variable container
 
@@ -269,6 +270,7 @@ class RKWrapper:
             outputVar (bool, optional): True if the variable should be added to the code output. Defaults to True.
             isCommunicated (bool, optional): True if the variable should be communicated. Defaults to False.
             hostScalarProcess (int, optional): Host process in case of a communicated scalar variable. Defaults to 0.
+            derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
         """
 
         if self.__varCont__ is None:
@@ -296,6 +298,13 @@ class RKWrapper:
         if isCommunicated:
             self.addVarToComm(name, isDistribution, isScalar, hostScalarProcess)
 
+        if derivOptions is not None:
+            assert isDerived, "Passing derivOptions to addVar requires the variable to be derived"
+            assert derivationRule is not None, "Passing derivOptions to addVar requires derivationRule"
+            assert "ruleName" in cast(Dict[str, str], derivationRule).keys(), "ruleName must be a key in passed derivationRule"
+
+            self.addCustomDerivation(cast(Dict[str, str], derivationRule)["ruleName"], cast(Dict[str, str], derivOptions))
+
     def addVarAndDual(
         self,
         varName: str,
@@ -311,6 +320,7 @@ class RKWrapper:
         outputVar=True,
         isCommunicated=False,
         communicateSecondary=True,
+        derivOptions: Union[None, dict] = None,
     ) -> None:
         """Add variable and its dual
 
@@ -328,6 +338,7 @@ class RKWrapper:
             outputVar (bool, optional): Set to true if both variable and dual should be added to code output. Defaults to True.
             isCommunicated (bool, optional): Set to true if primary variable should be communicated. Defaults to False.
             communicateSecondary (bool, optional): Set to true if secondary variable should be communicated (only if primary is communicated). Defaults to True.
+            derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
         """
 
         if self.__varCont__ is None:
@@ -366,6 +377,13 @@ class RKWrapper:
             self.addVarToComm(primaryVar, isDistribution)
             if communicateSecondary:
                 self.addVarToComm(secondaryVar, isDistribution)
+
+        if derivOptions is not None:
+            assert isDerived, "Passing derivOptions to addVar requires the variable to be derived"
+            assert derivationRule is not None, "Passing derivOptions to addVar requires derivationRule"
+            assert "ruleName" in cast(Dict[str, str], derivationRule).keys(), "ruleName must be a key in passed derivationRule"
+
+            self.addCustomDerivation(cast(Dict[str, str], derivationRule)["ruleName"], cast(Dict[str, str], derivOptions))
 
     def setMPIData(self, numProcsX: int, numProcsH=1, haloWidth=1) -> None:
         """Set general MPI data
