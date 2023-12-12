@@ -155,10 +155,12 @@ def test_add_var_auto_derivation(grid):
     rk.grid = grid
 
     rk.addVar("a", isDerived=True, derivationRule = {"ruleName": "deriv1"}, derivOptions = {"options": 2})
+    rk.addVarAndDual("b", isDerived=True, derivationRule = {"ruleName": "deriv2"}, derivOptions = {"options": 3})
 
     assert rk.customDerivs == {
-        "tags": ["deriv1"],
+        "tags": ["deriv1","deriv2"],
         "deriv1": {"options": 2},
+        "deriv2": {"options": 3}
     }
 
 
