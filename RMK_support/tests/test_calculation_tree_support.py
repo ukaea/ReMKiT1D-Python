@@ -99,10 +99,11 @@ def test_div(varDict):
 
     assert all(c.evaluate(varDict) == -np.ones(3) / 8)
 
+
 # NOTE unsure if this test is sufficient yet
 def test_rtruediv(varDict):
     a = ct.Node("a")
-    b = 5/a
+    b = 5 / a
 
     nodes, parents, children = ct.flattenTree(b)
 
@@ -110,6 +111,7 @@ def test_rtruediv(varDict):
     assert nodes[0].constant == 0.2
 
     assert all(b.evaluate(varDict))
+
 
 def test_sub(varDict):
     a = ct.Node("a")
