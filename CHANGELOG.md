@@ -1,11 +1,12 @@
 # CHANGELOG
 
-## v1.1.0, 2023-11-28
+## v1.1.0, 2023-12-15
 
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
 - Common model additions
 - QoL features
+- \_\_rtruediv\_\_ implemented for nodes
 - Bug fixes
 
 ### Breaking Changes
@@ -31,6 +32,7 @@
 - Calculation trees can now be evaluated by passing a dictionary with keys as the leaf variable names and numpy arrays as entries. User-defined UnaryTransformations need to have a Callable component in order to be used in evaluation of calculation trees
 - It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
 - Can now pass the derivOptions to the variable as it is declared such that it can automatically add the custom derivation used in the variable's derivation rule.
+- Added \_\_rtruediv\_\_ operator for node calculations.
 
 ### Bug Fixes
 

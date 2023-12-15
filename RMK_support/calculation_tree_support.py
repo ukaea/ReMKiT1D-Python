@@ -157,6 +157,20 @@ class Node:
                 newNode.children = [copy.deepcopy(self)]
                 return newNode
 
+    def __rtruediv__(self,lhs):
+        if isinstance(lhs, int) or isinstance(lhs, float):
+            if not self.additiveMode and self.unaryTransform is None:
+                newNode = copy.deepcopy(self)
+                if newNode.constant is not None:
+                    newNode.constant = newNode.constant / float(lhs)
+                else:
+                    newNode.constant = 1 / float(lhs)
+            else:
+                newNode = Node("none")
+                newNode.constant = 1 / float(lhs)
+                newNode.children = [copy.deepcopy(self)]
+        return newNode
+
     def __sub__(self, rhs):
         if isinstance(rhs, Node):
             if rhs.additiveMode:
