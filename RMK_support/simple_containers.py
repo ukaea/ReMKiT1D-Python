@@ -555,9 +555,10 @@ def additiveDerivation(
     assert len(derivTags) == len(
         derivIndices
     ), "derivTags and derivIndices in additiveDerivation must be of same size"
-    assert len(derivTags) == len(
-        linCoeffs
-    ), "derivTags and linCoeffs in additiveDerivation must be of same size"
+    if len(linCoeffs) != 0:
+        assert len(derivTags) == len(
+            linCoeffs
+        ), "derivTags and linCoeffs in additiveDerivation must be of same size"
 
     deriv = {
         "type": "additiveDerivation",
