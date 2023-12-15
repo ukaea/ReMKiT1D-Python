@@ -6,6 +6,7 @@
 - Calculation tree improvements
 - Common model additions
 - QoL features
+- Bug fixes
 
 ### Breaking Changes
 
@@ -35,6 +36,7 @@
 
 - Fixed a bug in io when no "time" variable is present in the wrapper
 - Fixed communication in amjuel support routines when adding logs of variables
+- Fixed bug asserting that len(derivTags) == len(linCoeffs) even if no linCoeffs provided in additiveDerivation
 
 ## v1.0.3, 2023-07-27
 
