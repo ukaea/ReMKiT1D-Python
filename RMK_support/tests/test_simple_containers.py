@@ -185,3 +185,19 @@ def test_integration_step():
             "internallyUpdateModelData": True,
         },
     }
+
+
+def test_additive_derivartion():
+    deriv1 = sc.additiveDerivation(["deriv1"],1,[[1]])
+
+    assert deriv1 == {
+        'deriv1': {'derivationIndices': [1]},
+        'derivationTags': ['deriv1'],
+        'linearCoefficients': [],
+        'resultPower': 1,
+        'type': 'additiveDerivation',
+    }
+
+    with pytest.raises(AssertionError) as excinfo:  
+        sc.additiveDerivation(["deriv2"],1,[[1]],[3.14,1e-5])
+    assert str(excinfo.value) == "derivTags and linCoeffs in additiveDerivation must be of same size"
