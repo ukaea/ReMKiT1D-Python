@@ -164,7 +164,7 @@ class Node:
                 newNode.constant = 1 / float(lhs)
                 newNode.unaryTransform = powUnary(-1)
                 newNode.children = [copy.deepcopy(self)]
-                
+
                 return newNode
             else:
                 newNode = copy.deepcopy(self)
@@ -174,7 +174,7 @@ class Node:
                 topNode.children = [newNode]
                 topNode.constant = float(lhs)
                 return topNode
-            
+
     def __sub__(self, rhs):
         if isinstance(rhs, Node):
             if rhs.additiveMode:

@@ -114,9 +114,8 @@ def test_rtruediv(varDict):
     assert len(nodesd) == 2
     assert nodesd[0].constant == 1
 
-    assert all(c.evaluate(varDict) == 5*np.ones(3))
-    assert all(d.evaluate(varDict) == -0.5*np.ones(3))
-
+    assert all(c.evaluate(varDict) == 5 * np.ones(3))
+    assert all(d.evaluate(varDict) == -0.5 * np.ones(3))
 
 
 def test_sub(varDict):
