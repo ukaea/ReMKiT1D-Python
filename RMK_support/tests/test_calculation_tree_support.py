@@ -109,10 +109,10 @@ def test_rtruediv(varDict):
     nodesc, _, _ = ct.flattenTree(c)
     nodesd, _, _ = ct.flattenTree(d)
 
-    assert len(nodesc) == 1
+    assert len(nodesc) == 2
     assert nodesc[0].constant == 5
-    assert len(nodesd) == 1
-    assert nodesd[0].constant == -0.5
+    assert len(nodesd) == 2
+    assert nodesd[0].constant == 1
 
     assert all(c.evaluate(varDict) == 5*np.ones(3))
     assert all(d.evaluate(varDict) == -0.5*np.ones(3))
