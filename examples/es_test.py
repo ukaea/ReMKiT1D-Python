@@ -83,7 +83,7 @@ def esTestGenerator(**kwargs) -> RKWrapper:
     rk.setStandardTextbookOptions([0])
 
     rk.addSpecies("e", 0)
-    rk.addSpecies("D+", -1, atomicA=2.014, charge=1.0)
+    rk.addSpecies("D+", -1, atomicA=2.014, charge=ionZ)
 
     # ### Braginskii flux derivation objects
 
@@ -210,7 +210,7 @@ def esTestGenerator(**kwargs) -> RKWrapper:
 
     if kwargs.get("includeDiagnosticVars",False):
 
-        rk.addTermDiagnosisForVars(["f"])
+        rk.addTermDiagnosisForDistVars(["f"])
 
     Nt = kwargs.get("Nt",300)
     rk.setFixedNumTimesteps(Nt)
