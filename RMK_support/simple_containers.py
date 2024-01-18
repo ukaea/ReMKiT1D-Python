@@ -1349,7 +1349,7 @@ def upwindedDiv(fluxJacVar: str) -> dict:
 def diffusionStencil(
     ruleName: str, reqVarNames: List[str], doNotInterpolate=False
 ) -> dict:
-    """Return diffusion stencil in x
+    """Return diffusion stencil in x which assumes that both the implicit and evolved variables live on the regular grid.
 
     Args:
         ruleName (str): Name of derivation used to calculate the diffusion coefficent
