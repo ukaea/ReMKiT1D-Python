@@ -67,7 +67,7 @@ def test_wrapper_init(grid):
         "outputMode": "fixedNumSteps",
         "fixedSaveInterval": 1,
         "minimumSaveInterval": 0.1,
-        "restart": {"save": False, "load": False, "frequency": 1},
+        "restart": {"save": False, "load": False, "frequency": 1, "resetTime": False},
         "loadInitValsFromHDF5": False,
         "initValFilename": "ReMKiT1DVarInput",
     }
@@ -273,9 +273,14 @@ def test_timeloop_options():
     assert rk.timeloopData["outputMode"] == "minimumSaveInterval"
     assert rk.timeloopData["minimumSaveInterval"] == 10.0
 
-    rk.setRestartOptions(True, True, 100)
+    rk.setRestartOptions(True, True, 100, True)
 
-    assert rk.timeloopData["restart"] == {"save": True, "load": True, "frequency": 100}
+    assert rk.timeloopData["restart"] == {
+        "save": True,
+        "load": True,
+        "frequency": 100,
+        "resetTime": True,
+    }
 
     rk.setHDF5FileInitialData(["var", "var2"], filename="hdf5file")
 

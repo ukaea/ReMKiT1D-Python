@@ -95,6 +95,7 @@ class RKWrapper:
                 "save": False,  # If true, restart data will be saved
                 "load": False,  # If true, restart data will be loaded at the start of the loop. Will throw error if loadInitValsFromHDF5 is also true
                 "frequency": 1,  # Restart save frequency - saving every n steps
+                "resetTime": False,  # If true, the value of the time variable, if present, will be reset to 0 on loading from restart
             },
             "loadInitValsFromHDF5": False,  # True if variables should be loaded from a complete HDF5 file based on the input vars list in the HDF5 options.
             "initValFilename": "ReMKiT1DVarInput",  # Name of the input hdf5 file
