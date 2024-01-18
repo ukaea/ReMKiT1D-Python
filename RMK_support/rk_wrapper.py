@@ -691,13 +691,16 @@ class RKWrapper:
         self.__timeloopData__["outputMode"] = "minimumSaveInterval"
         self.__timeloopData__["minimumSaveInterval"] = minimumInterval
 
-    def setRestartOptions(self, save=False, load=False, frequency=1) -> None:
+    def setRestartOptions(
+        self, save=False, load=False, frequency=1, resetTime=False
+    ) -> None:
         """Set restart options in timeloop object
 
         Args:
             save (bool, optional): Set to true if the code should save restart data. Defaults to False.
             load (bool, optional): Set to true if the code should initialize from restart data. Defaults to False.
             frequency (int, optional): Frequency at which restart data is saved in timesteps. Defaults to 1.
+            resetTime (bool, optional): Set to true if the code should reset the time variable on restart. Defaults to False.
         """
 
         cast(Dict[str, object], self.__timeloopData__["restart"])["save"] = save
@@ -705,6 +708,9 @@ class RKWrapper:
         cast(Dict[str, object], self.__timeloopData__["restart"])[
             "frequency"
         ] = frequency
+        cast(Dict[str, object], self.__timeloopData__["restart"])[
+            "resetTime"
+        ] = resetTime
 
     def setHDF5FileInitialData(
         self,
