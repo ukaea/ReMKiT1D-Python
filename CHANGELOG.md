@@ -33,6 +33,7 @@
 - It is now possible to specify the number of degrees of freedom that an implicit temperature derivation has. This can be useful when a species has temperature anisotropy.
 - Can now pass the derivOptions to the variable as it is declared such that it can automatically add the custom derivation used in the variable's derivation rule.
 - Added \_\_rtruediv\_\_ operator for node calculations.
+- Added option to support resetting the time variable on restart.
 
 ### Bug Fixes
 
