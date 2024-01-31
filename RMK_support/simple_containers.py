@@ -307,24 +307,25 @@ class GeneralMatrixTerm:
         fixedMatrix=False,
         copyTermName: Union[str, None] = None,
     ) -> None:
-        """GeneralMatrixTerm option container constructor
+        """GeneralMatrixTerm option container constructor. 
+
+        General matrix terms are of the form :math:`LHS=M_{ij}u_j` where the indices correspond to the evolved (row) and implicit (column) variables, and u is the implixit variable. The matrix M has the following form: :math:`M_{ij} = c*X_i*H_i*V_i*T_i*R_i*S_{ij}*C_j`, where this constructor sets the individual components.
 
         Args:
             evolvedVar (str): Name of evolved implicit variable
             implicitVar (str, optional): Name of column implicit variable. Defaults to evolvedVar value.
-            spatialProfile (List[float], optional): Spatial profile (should conform to grid size if supplied). Defaults to [].
-            harmonicProfile (List[float], optional): Harmonic profile (should conform to grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
-            velocityProfile (List[float], optional): Velocity profile (should conform to grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
-            evaluatedTermGroup (int, optional): Group in parent model to be optionally evaluated as additional row variable. Defaults to 0.
+            spatialProfile (List[float], optional): Spatial profile - X in the above formula (should conform to x-grid size if supplied). Defaults to [].
+            harmonicProfile (List[float], optional): Harmonic profile - H in the above formula (should conform to h-grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
+            velocityProfile (List[float], optional): Velocity profile - V in the above formula (should conform to v-grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
+            evaluatedTermGroup (int, optional): Term group in parent model to be optionally evaluated as additional row variable (multiplying R in the above formula). Defaults to 0.
             implicitGroups (list, optional): Implicit term groups of parent model to which this term belongs to. Defaults to [1].
             generalGroups (list, optional): General term groups of parent model to which this term belongs to. Defaults to [1].
-            customNormConst (Union[CustomNormConst,float,int], optional): Custom normalization constant options. Defaults to CustomNormConst(), if a float/int is passed will use that as the normalization constant.
-            timeSignalData (TimeSignalData, optional): Time dependence options. Defaults to TimeSignalData().
-            varData (VarData, optional): Required row and column variable data. Defaults to VarData().
-            stencilData (dict, optional): Stencil data options. Defaults to {}, but should be supplied.
+            customNormConst (Union[CustomNormConst,float,int], optional): Custom normalization constant options - corresponds to the constant c in the above formula. Defaults to CustomNormConst(), if a float/int is passed will use that as the normalization constant.
+            timeSignalData (TimeSignalData, optional): Time dependence options - responsible for non-trivial components of the T in the above formula. Defaults to TimeSignalData().
+            varData (VarData, optional): Required row and column variable data - corresponding to R and C in the above formula. Defaults to VarData().
+            stencilData (dict, optional): Stencil data options - sets S in the above formula. See routines ending in Stencil in simple_containers.py. Defaults to {}, but should be supplied.
             skipPattern (bool, optional): Set to true if the matrix pattern should be skipped during PETSc preallocation (useful when the same pattern has been added already). Defaults to False.
-            skipPattern (bool, optional): Set to true to calculate matrix values only once. Defaults to False.
-            copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. Defaults to None.
+            copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape. Defaults to None.
         """
 
         if len(implicitVar) == 0:
@@ -367,7 +368,7 @@ class GeneralMatrixTerm:
 
         assert self.__implicitVar__ in varCont.dataset.data_vars.keys(), (
             "Implicit variable "
-            + self.__evolvedVar__
+            + self.__implicitVar__
             + " not registered in used variable container"
         )
 

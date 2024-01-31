@@ -336,12 +336,12 @@ class RKWrapper:
 
         Args:
             varName (str): Name of variable on regular grid
-            data (Union[numpy.ndarray,None], optional): Optional numpy array representing variable data. Defaults to None, which initializes data to 0.
-            isDerived (bool, optional): True if both the primary variable is derived. Defaults to False.
+            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
+            isDerived (bool, optional): True if both the primary and secondary variable are derived. In that case the primary is calculated using the derivation rule, and the secondary is interpolated. Defaults to False.
             derivationRule (Union[None,dict], optional): Derivation rule for primary derived variable. Defaults to None.
             isDistribution (bool, optional): True if variable is a distribution. Defaults to False.
             isStationary (bool, optional): True if primary variable is stationary. Defaults to False.
-            primaryOnDualGrid (bool, optional): True if the primary variable is on the dual grid. Defaults to False.
+            primaryOnDualGrid (bool, optional): True if the primary variable is on the dual grid. The interpolated variable is then on the regular grid. Defaults to False.
             units (str, optional): Units for both primary and secondary. Defaults to 'normalized units'.
             priority (int, optional): Variable priority for both primary and secondary. Defaults to 0 (highest priority).
             dualSuffix (str, optional): Suffix for the variable on the dual grid. Defaults to "_dual".

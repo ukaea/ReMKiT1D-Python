@@ -217,7 +217,8 @@ def staggeredAdvection(
 
     Args:
         modelTag (str): Model tag
-        fluxVar (str): Name of flux variable - always on dual grid
+        advectedVar (str): Name of advected (evolved) variable.
+        fluxVar (str): Name of flux variable - always on dual grid. Not used when staggeredAdvectedVar is True.
         advectionSpeed (Union[str,None], optional): Name of advection speed variable - on regular grid - only required if there is outflow. Defaults to None.
         staggeredAdvectionSpeed (Union[str,None], optional): Name of advection speed variable - on dual grid - required if staggeredAdvectedVar=True. Defaults to None.
         lowerBoundVar (Union[str,None], optional): Name of outflow lower bound variable, can be None, which defaults to a fixed lower bound of zero. Defaults to None.

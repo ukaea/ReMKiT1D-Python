@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.1.0, 2023-12-15
+## v1.1.0, 2024-01-31
 
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
@@ -8,6 +8,7 @@
 - QoL features
 - \_\_rtruediv\_\_ implemented for nodes
 - Bug fixes
+- Documentation improvements
 
 ### Breaking Changes
 
@@ -40,6 +41,7 @@
 - Fixed a bug in io when no "time" variable is present in the wrapper
 - Fixed communication in amjuel support routines when adding logs of variables
 - Fixed bug asserting that len(derivTags) == len(linCoeffs) even if no linCoeffs provided in additiveDerivation
+- Fixed a bug where addModel did not show a correct error message when the implicit variable wasn't found for a matrix term
 
 ## v1.0.3, 2023-07-27
 
