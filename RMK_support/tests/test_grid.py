@@ -92,7 +92,7 @@ def test_json_dump(xGrid, vGrid):
     assert grid.__repr__() == json.dumps(expectedOutput, indent=4, sort_keys=True)
 
 
-def test_velocity_moment_scalar(xGrid, vGrid):
+def test_velocity_moment_single_harmonic(xGrid, vGrid):
     grid = Grid(xGrid=xGrid, vGrid=vGrid, interpretVGridAsWidths=True, lMax=1)
 
     testArray = np.ones((len(xGrid), len(vGrid)))
@@ -119,4 +119,17 @@ def test_velocity_moment_dist(xGrid, vGrid):
 
     assert all(
         abs(expectedResult - grid.velocityMoment(testArray, 0, 2)) < 1e-15 * sumGrid
+    )
+
+def test_velocity_moment_velocity_vector(xGrid, vGrid):
+    grid = Grid(xGrid=xGrid, vGrid=vGrid, interpretVGridAsWidths=True, lMax=1)
+
+    testArray = np.ones(len(vGrid))
+
+    sumGrid = 4 * np.pi * sum(vGrid * grid.vGrid**2)
+
+    expectedResult = sumGrid * np.ones(1)
+
+    assert all(
+        abs(expectedResult - grid.velocityMoment(testArray, 0)) < 1e-15 * sumGrid
     )
