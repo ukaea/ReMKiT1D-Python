@@ -173,16 +173,36 @@ class RKWrapper:
     def hdf5Filepath(self):
         return self.__optionsHDF5__["filepath"]
 
-    def modelTags(self):
+    def modelTags(self) -> List[str]:
+        """Return the list of models registered in this wrapper
+
+        Returns:
+            List[str]: List of models
+        """
         return self.__modelData__["tags"]
 
     def setNormDensity(self, dens: float):
+        """Set the normalization density
+
+        Args:
+            dens (float): Normalization density in math:`m^{-3}`
+        """
         self.__normalization__["density"] = dens
 
     def setNormTemperature(self, temp: float):
+        """Set the normalization temperature
+
+        Args:
+            temp (float): Normalization temperature in eV
+        """
         self.__normalization__["eVTemperature"] = temp
 
     def setNormRefZ(self, refZ: float):
+        """Set the reference ion charge used in normalization
+
+        Args:
+            refZ (float): Reference ion charge
+        """
         self.__normalization__["referenceIonZ"] = refZ
 
     def addVarToComm(
@@ -259,7 +279,7 @@ class RKWrapper:
 
         Args:
             name (str): Variable names
-            data (Union[numpy.ndarray,None], optional): Optional numpy array representing variable data. Defaults to None, which initializes data to 0.
+            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
             isDerived (bool, optional): True if the variable is treated as derived by ReMKiT1D. Defaults to False.
             isDistribution (bool, optional): True for distribution-like variables. Defaults to False.
             units (str, optional): Variable units. Defaults to 'normalized units'.
@@ -439,7 +459,7 @@ class RKWrapper:
             kspSolverType (str, optional): Type of KSP solver used. Defaults to "bcgs".
             hyprePC (str, optional): Type of Hypre preconditioner used. Defaults to "euclid".
             cliOpts (str, optional): Optional command line PETSc options. Defaults to "".
-            objGroups (int, optional): Number of PETSc object groups to create. Defaults to 1.
+            objGroups (int, optional): Number of PETSc object groups to create. This is useful when different integrators need to be associated with different models/terms. Defaults to 1.
         """
 
         self.__optionsPETSc__["active"] = active
@@ -515,7 +535,7 @@ class RKWrapper:
         """Add a collection of custom derivations
 
         Args:
-            derivCollection (dict): Dictionary with derivation tags as keys and derivation options as velues
+            derivCollection (dict): Dictionary with derivation tags as keys and derivation options as values
         """
 
         for key in derivCollection.keys():
@@ -794,6 +814,8 @@ class RKWrapper:
         return cast(List[str], self.__optionsHDF5__["outputVars"])
 
     def writeConfigFile(self) -> None:
+        """Generate a config file based on the current state of the wrapper
+        """
         try:
             os.remove(self.jsonFilepath)
         except FileNotFoundError:
