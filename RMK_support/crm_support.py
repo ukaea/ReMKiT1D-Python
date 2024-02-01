@@ -123,9 +123,11 @@ class ModelboundCRMData:
         ]
 
         transitionEnergyIndices = [
-            self.transitionProperties[tag]["fixedEnergyIndex"]
-            if "fixedEnergyIndex" in self.transitionProperties[tag].keys()
-            else 0
+            (
+                self.transitionProperties[tag]["fixedEnergyIndex"]
+                if "fixedEnergyIndex" in self.transitionProperties[tag].keys()
+                else 0
+            )
             for tag in [self.transitionTags[ind - 1] for ind in transitionIndices]
         ]
 
@@ -703,9 +705,7 @@ def addHSpontaneousEmissionToCRMData(
 
     for endState in range(1, maxEndState + 1):
         for startState in range(endState + 1, maxStartState + 1):
-            transitionEnergy = (
-                13.6 * (1 / endState**2 - 1 / startState**2) / energyNorm
-            )
+            transitionEnergy = 13.6 * (1 / endState**2 - 1 / startState**2) / energyNorm
             assert (
                 startState,
                 endState,

@@ -614,9 +614,9 @@ def multiplicativeDerivation(
         "innerDerivIndices": innerDerivationIndices,
         "innerDerivPower": innerDerivationPower,
         "outerDerivation": "none" if outerDerivation is None else outerDerivation,
-        "outerDerivIndices": []
-        if outerDerivationIndices is None
-        else outerDerivationIndices,
+        "outerDerivIndices": (
+            [] if outerDerivationIndices is None else outerDerivationIndices
+        ),
         "outerDerivPower": outerDerivationPower,
         "innerDerivFuncName": "none" if funcName is None else funcName,
     }
@@ -864,9 +864,9 @@ def ddvDerivation(
                     ind
                 ]
             if vifAtZero is not None:
-                cast(Dict[str, object], deriv["vifAtZero"])[
-                    "h=" + str(harmonic)
-                ] = vifAtZero[ind]
+                cast(Dict[str, object], deriv["vifAtZero"])["h=" + str(harmonic)] = (
+                    vifAtZero[ind]
+                )
 
     return deriv
 
@@ -908,9 +908,9 @@ def d2dv2Derivation(
                     ind
                 ]
             if vidfdvAtZero is not None:
-                cast(Dict[str, object], deriv["vidfdvAtZero"])[
-                    "h=" + str(harmonic)
-                ] = vidfdvAtZero[ind]
+                cast(Dict[str, object], deriv["vidfdvAtZero"])["h=" + str(harmonic)] = (
+                    vidfdvAtZero[ind]
+                )
 
     return deriv
 
@@ -1833,15 +1833,19 @@ class IntegrationStep:
         self.__evolvedModels__.append(modelTag)
 
         self.__evolvedModelProperties__[modelTag] = {
-            "groupIndices": self.__defaultEvaluateGroups__
-            if evaluateGroups is None
-            else evaluateGroups,
-            "internallyUpdatedGroups": self.__defaultUpdateGroups__
-            if updateGroups is None
-            else updateGroups,
-            "internallyUpdateModelData": self.__defaultUpdateModelData__
-            if updateModelData is None
-            else updateModelData,
+            "groupIndices": (
+                self.__defaultEvaluateGroups__
+                if evaluateGroups is None
+                else evaluateGroups
+            ),
+            "internallyUpdatedGroups": (
+                self.__defaultUpdateGroups__ if updateGroups is None else updateGroups
+            ),
+            "internallyUpdateModelData": (
+                self.__defaultUpdateModelData__
+                if updateModelData is None
+                else updateModelData
+            ),
         }
 
     def dict(self) -> dict:

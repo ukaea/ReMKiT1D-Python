@@ -1037,9 +1037,7 @@ def eiCollIsotropic(
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
 
     ionSpecies = wrapper.getSpecies(ionSpeciesName)
-    gamma0norm = (
-        gamma0norm * ionSpecies.charge**2 * elMass / (ionSpecies.atomicA * amu)
-    )
+    gamma0norm = gamma0norm * ionSpecies.charge**2 * elMass / (ionSpecies.atomicA * amu)
 
     mbData = sc.VarlikeModelboundData()
     mbData.addVariable(

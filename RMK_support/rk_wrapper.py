@@ -513,9 +513,9 @@ class RKWrapper:
         self.__standardTextook__["temperatureDerivSpeciesIDs"] = tempDerivSpeciesIDs
         self.__standardTextook__["electronPolytropicCoeff"] = ePolyCoeff
         self.__standardTextook__["ionPolytropicCoeff"] = ionPolyCoeff
-        self.__standardTextook__[
-            "electronSheathGammaIonSpeciesID"
-        ] = electronSheathGammaIonSpeciesID
+        self.__standardTextook__["electronSheathGammaIonSpeciesID"] = (
+            electronSheathGammaIonSpeciesID
+        )
 
     def addCustomDerivation(self, derivName: str, derivOptions: dict) -> None:
         """Add a custom derivation object

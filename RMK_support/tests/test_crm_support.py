@@ -48,9 +48,7 @@ def test_crm_mb_data():
 def test_add_janev_transitions():
     mbData = crm.ModelboundCRMData()
 
-    crm.addJanevTransitionsToCRMData(
-        mbData, 2, 10, "f", "T", lowestCellEnergy=0.05**2
-    )
+    crm.addJanevTransitionsToCRMData(mbData, 2, 10, "f", "T", lowestCellEnergy=0.05**2)
 
     transitionEnergies = np.array(
         [
