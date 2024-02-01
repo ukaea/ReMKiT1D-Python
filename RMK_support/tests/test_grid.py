@@ -121,6 +121,7 @@ def test_velocity_moment_dist(xGrid, vGrid):
         abs(expectedResult - grid.velocityMoment(testArray, 0, 2)) < 1e-15 * sumGrid
     )
 
+
 def test_velocity_moment_velocity_vector(xGrid, vGrid):
     grid = Grid(xGrid=xGrid, vGrid=vGrid, interpretVGridAsWidths=True, lMax=1)
 

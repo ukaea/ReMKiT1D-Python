@@ -235,18 +235,23 @@ class Grid:
         """Return velocity moment of distribution function (x,h,v), single harmonic variable (x,v), or velocity space vector (v)
 
         Args:
-            distFun (np.ndarray): Distribution or single harmonic variable values. The 
+            distFun (np.ndarray): Distribution or single harmonic variable values. The
             momentOrder (int): Moment order
             momentHarmonic (int, optional): Harmonic index (Fortran 1 indexing) to take moment of in case of distribution variable. Defaults to 1.
 
         Returns:
             np.ndarray: Moment represented as a contracted array
         """
-        assert len(np.shape(distFun)) < 4,"Unsupported dimensionality of distFun in velocityMoment"
-        assert np.shape(distFun)[-1] == self.numV(), "The velocity dimension of distFun does not conform to size of velocity grid" 
+        assert (
+            len(np.shape(distFun)) < 4
+        ), "Unsupported dimensionality of distFun in velocityMoment"
+        assert (
+            np.shape(distFun)[-1] == self.numV()
+        ), "The velocity dimension of distFun does not conform to size of velocity grid"
         if len(np.shape(distFun)) == 3:
-
-            assert momentHarmonic <= self.numH(), "momentHarmonic out of bounds in velocityMoment"
+            assert (
+                momentHarmonic <= self.numH()
+            ), "momentHarmonic out of bounds in velocityMoment"
             moment = (
                 4
                 * np.pi

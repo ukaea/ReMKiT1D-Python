@@ -307,7 +307,7 @@ class GeneralMatrixTerm:
         fixedMatrix=False,
         copyTermName: Union[str, None] = None,
     ) -> None:
-        """GeneralMatrixTerm option container constructor. 
+        """GeneralMatrixTerm option container constructor.
 
         General matrix terms are of the form :math:`LHS=M_{ij}u_j` where the indices correspond to the evolved (row) and implicit (column) variables, and u is the implixit variable. The matrix M has the following form: :math:`M_{ij} = c*X_i*H_i*V_i*T_i*R_i*S_{ij}*C_j`, where this constructor sets the individual components.
 

@@ -179,7 +179,7 @@ class RKWrapper:
         Returns:
             List[str]: List of models
         """
-        return self.__modelData__["tags"]
+        return cast(List[str], self.__modelData__["tags"])
 
     def setNormDensity(self, dens: float):
         """Set the normalization density
@@ -814,8 +814,7 @@ class RKWrapper:
         return cast(List[str], self.__optionsHDF5__["outputVars"])
 
     def writeConfigFile(self) -> None:
-        """Generate a config file based on the current state of the wrapper
-        """
+        """Generate a config file based on the current state of the wrapper"""
         try:
             os.remove(self.jsonFilepath)
         except FileNotFoundError:

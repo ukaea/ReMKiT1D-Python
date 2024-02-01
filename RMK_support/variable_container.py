@@ -42,7 +42,10 @@ class VariableContainer:
             derivationRule (Union[None,dict], optional) Optional derivation rule for derived variables. Defaults to None.
         """
 
-        assert name not in ["x","h","v"], name+" is not an allowed variable name as it is associated with one of the coordinate dimensions"
+        assert name not in ["x", "h", "v"], (
+            name
+            + " is not an allowed variable name as it is associated with one of the coordinate dimensions"
+        )
         dims: Union[List[str], None] = ["x"]
         dataShape = [len(self.dataset.coords["x"])]
         if isDistribution:
