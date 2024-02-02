@@ -9,6 +9,12 @@ import param  # type: ignore
 
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):
+        """Constructor for a dashboard object
+
+        Args:
+            data (xr.Dataset): Data loaded into the dashboard to be visualized
+            gridObj (Grid): Grid object used to set axis ticks and labels.
+        """
         self.__data__ = data
         self.__fluidNames__ = list(
             data.filter_by_attrs(isDistribution=False, isScalar=False).data_vars.keys()
@@ -98,6 +104,11 @@ class ReMKiT1DDashboard:
         return curve
 
     def fluid2Comparison(self, logY=False):
+        """Open up a dashboard view with side-by-side plots of two fluid quantites. These can be plotted at fixed positions as functions of time, or vice versa.
+
+        Args:
+            logY (bool, optional): Set the y axes on both plots to a logarithimic axis. Defaults to False.
+        """
         opt = pn.widgets.RadioButtonGroup(options=["Fixed position", "Fixed time"])
         variable = pn.widgets.Select(options=self.__fluidNames__)
         val = pn.widgets.IntSlider(
@@ -152,6 +163,8 @@ class ReMKiT1DDashboard:
         return app
 
     def distDynMap(self):
+        """Open up a distribution function explorer dashboard. Allows for exploring different distribution function variables in velocity space, with the remaining coordinate values selectable."""
+
         class DistExplorer(param.Parameterized):
             variable = param.ObjectSelector(
                 default=self.__distNames__[0], objects=self.__distNames__
@@ -218,7 +231,18 @@ class ReMKiT1DDashboard:
         app = pn.Row(explorer.param, explorer.view)
         return app
 
-    def fluidMultiComparison(self, dataNames: List[str], fixedPosition=False):
+    def fluidMultiComparison(
+        self, dataNames: List[str], fixedPosition=False
+    ) -> hv.HoloMap:
+        """Generate a holoviews map comparing multiple different fluid variables on the same plot. By default compares data profiles at fixed points in time.
+
+        Args:
+            dataNames (List[str]): List of fluid variables names to be compared.
+            fixedPosition (bool, optional): If True will plot variables as functions of time with the HoloMap slider controlling the x position. Defaults to False.
+
+        Returns:
+            hv.HoloMap: Interactive HoloMap object containing the comparison plots
+        """
         if fixedPosition:
             curveDict = {
                 x: hv.Overlay(

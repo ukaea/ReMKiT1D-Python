@@ -20,12 +20,14 @@ class Grid:
         """Grid constructor
 
         Args:
-            xGrid (numpy.ndarray): x coordinates of each spatial grid cell or their widths
-            vGrid (numpy.ndarray): v coordinates of each velocity grid cell or their widths. Defaults to a single cell (effectively no v-grid)
-            lMax (int): Maximum l harmonic number. Defaults to 0.
+            xGrid (numpy.ndarray): x coordinates of each spatial grid cell centre or their widths. If using widths set interpretXGridAsWidths to True.
+            vGrid (numpy.ndarray, optional): v coordinates of each velocity grid cell centres or their widths.  If using widths set interpretVGridAsWidths to True. Defaults to a single cell (effectively no v-grid)
+            lMax (int, optional): Maximum l harmonic number. Defaults to 0.
             mMax (int, optional): Maximum m harmonic number. Defaults to 0.
             interpretXGridAsWidths (bool, optional): If True interprets xGrid as cell widths. Defaults to False.
             interpretVGridAsWidths (bool, optional): If True interprets vGrid as cell widths. Defaults to False.
+            isPeriodic (bool, optional): If True the x grid is set to be periodic. This means that the right boundary of the rightmost cell is the left boundary of the leftmost cell. Defaults to False.
+            isLenghtInMeters (bool, optional): If True will instruct ReMKiT1D to use the built-in normalization to deduce the normalized coordinates of the spatial grid. CAUTION: This can lead to issues if the default normalization is not used in the rest of the simulation. Defaults to False.
         """
 
         # Assertions
@@ -153,13 +155,28 @@ class Grid:
 
         self.__xJacobian__ = values
 
-    def numX(self):
+    def numX(self) -> int:
+        """Get number of spatial cells in grid
+
+        Returns:
+            int: Number of spatial cells
+        """
         return len(self.__xGrid__)
 
-    def numV(self):
+    def numV(self) -> int:
+        """Get number of velocity cells in grid
+
+        Returns:
+            int: Number of velocity magnitude cells in grid
+        """
         return len(self.__vGrid__)
 
-    def numH(self):
+    def numH(self) -> int:
+        """Get total number of harmonics
+
+        Returns:
+            int: Total number of harmonics including all used l and m harmonics
+        """
         return len(self.__lGrid__)
 
     def getH(self, lNum: int, mNum=0, im=False) -> int:
@@ -215,19 +232,26 @@ class Grid:
     def velocityMoment(
         self, distFun: np.ndarray, momentOrder: int, momentHarmonic=1
     ) -> np.ndarray:
-        """Return velocity moment of distribution function or single harmonic variable
+        """Return velocity moment of distribution function (x,h,v), single harmonic variable (x,v), or velocity space vector (v)
 
         Args:
-            distFun (np.ndarray): Distribution or single harmonic variable values
+            distFun (np.ndarray): Distribution or single harmonic variable values.
             momentOrder (int): Moment order
             momentHarmonic (int, optional): Harmonic index (Fortran 1 indexing) to take moment of in case of distribution variable. Defaults to 1.
 
         Returns:
             np.ndarray: Moment represented as a contracted array
         """
-
-        moment = np.zeros(np.shape(distFun)[0])
+        assert (
+            len(np.shape(distFun)) < 4
+        ), "Unsupported dimensionality of distFun in velocityMoment"
+        assert (
+            np.shape(distFun)[-1] == self.numV()
+        ), "The velocity dimension of distFun does not conform to size of velocity grid"
         if len(np.shape(distFun)) == 3:
+            assert (
+                momentHarmonic <= self.numH()
+            ), "momentHarmonic out of bounds in velocityMoment"
             moment = (
                 4
                 * np.pi

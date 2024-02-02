@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.1.0, 2024-01-31
+## v1.1.0, 2024-02-01
 
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
@@ -35,6 +35,7 @@
 - Can now pass the derivOptions to the variable as it is declared such that it can automatically add the custom derivation used in the variable's derivation rule.
 - Added \_\_rtruediv\_\_ operator for node calculations.
 - Added option to support resetting the time variable on restart.
+- velocityMoment on Grid now handles 1D vectors of the length of the velocity grid and has better assertions
 
 ### Bug Fixes
 

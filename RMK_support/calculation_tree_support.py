@@ -456,9 +456,9 @@ def powUnary(power: Union[int, float]) -> UnaryTransform:
 
 
 def log(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.log(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.log(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
@@ -471,9 +471,9 @@ def log(node: Node) -> Node:
 
 
 def exp(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.exp(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.exp(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
@@ -486,9 +486,9 @@ def exp(node: Node) -> Node:
 
 
 def sin(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.sin(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.sin(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
@@ -501,9 +501,9 @@ def sin(node: Node) -> Node:
 
 
 def cos(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.cos(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.cos(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
@@ -516,9 +516,9 @@ def cos(node: Node) -> Node:
 
 
 def abs(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.abs(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.abs(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
@@ -531,9 +531,9 @@ def abs(node: Node) -> Node:
 
 
 def sign(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.sign(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.sign(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
@@ -546,9 +546,9 @@ def sign(node: Node) -> Node:
 
 
 def tan(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.tan(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.tan(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
@@ -561,9 +561,9 @@ def tan(node: Node) -> Node:
 
 
 def atan(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.arctan(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.arctan(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
@@ -576,9 +576,9 @@ def atan(node: Node) -> Node:
 
 
 def asin(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.arcsin(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.arcsin(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
@@ -591,9 +591,9 @@ def asin(node: Node) -> Node:
 
 
 def acos(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: np.arccos(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.arccos(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
@@ -606,9 +606,9 @@ def acos(node: Node) -> Node:
 
 
 def erf(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: special.erf(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: special.erf(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
@@ -621,9 +621,9 @@ def erf(node: Node) -> Node:
 
 
 def erfc(node: Node) -> Node:
-    func: Callable[
-        [List[float], List[int], List[bool], np.ndarray], np.ndarray
-    ] = lambda floats, ints, bools, arg: special.erfc(arg)
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: special.erfc(arg)
+    )
     if node.unaryTransform is not None:
         newNode = Node("none")
         newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)

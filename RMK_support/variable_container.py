@@ -41,6 +41,11 @@ class VariableContainer:
             priority (int, optional): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
             derivationRule (Union[None,dict], optional) Optional derivation rule for derived variables. Defaults to None.
         """
+
+        assert name not in ["x", "h", "v"], (
+            name
+            + " is not an allowed variable name as it is associated with one of the coordinate dimensions"
+        )
         dims: Union[List[str], None] = ["x"]
         dataShape = [len(self.dataset.coords["x"])]
         if isDistribution:
