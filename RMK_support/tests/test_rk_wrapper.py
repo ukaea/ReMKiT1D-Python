@@ -3,6 +3,7 @@ import pytest
 from RMK_support import RKWrapper, VariableContainer, Grid
 from RMK_support.simple_containers import Species
 import RMK_support.init_templates as it
+import warnings
 
 
 @pytest.fixture
@@ -361,3 +362,20 @@ def test_add_models_and_maniplators(grid):
             "priority": 4,
         },
     }
+
+
+def test_add_diagnosis_terms_warning():
+
+    rk = RKWrapper()
+
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForVars called when variable n has no terms that evolve it",
+    ):
+        rk.addTermDiagnosisForVars(["n"])
+
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForDistVars called when variable n has no terms that evolve it",
+    ):
+        rk.addTermDiagnosisForDistVars(["n"])
