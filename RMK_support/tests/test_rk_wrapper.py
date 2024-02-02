@@ -3,6 +3,7 @@ import pytest
 from RMK_support import RKWrapper, VariableContainer, Grid
 from RMK_support.simple_containers import Species
 import RMK_support.init_templates as it
+import warnings
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ def test_wrapper_init(grid):
         "outputMode": "fixedNumSteps",
         "fixedSaveInterval": 1,
         "minimumSaveInterval": 0.1,
-        "restart": {"save": False, "load": False, "frequency": 1},
+        "restart": {"save": False, "load": False, "frequency": 1, "resetTime": False},
         "loadInitValsFromHDF5": False,
         "initValFilename": "ReMKiT1DVarInput",
     }
@@ -148,6 +149,31 @@ def test_add_var(grid):
     rk.varCont = VariableContainer(grid)
 
     assert rk.varCont.dict() == VariableContainer(grid).dict()
+
+
+def test_add_var_auto_derivation(grid):
+    rk = RKWrapper()
+
+    rk.grid = grid
+
+    rk.addVar(
+        "a",
+        isDerived=True,
+        derivationRule={"ruleName": "deriv1"},
+        derivOptions={"options": 2},
+    )
+    rk.addVarAndDual(
+        "b",
+        isDerived=True,
+        derivationRule={"ruleName": "deriv2"},
+        derivOptions={"options": 3},
+    )
+
+    assert rk.customDerivs == {
+        "tags": ["deriv1", "deriv2"],
+        "deriv1": {"options": 2},
+        "deriv2": {"options": 3},
+    }
 
 
 def test_add_dist_var(grid):
@@ -248,9 +274,14 @@ def test_timeloop_options():
     assert rk.timeloopData["outputMode"] == "minimumSaveInterval"
     assert rk.timeloopData["minimumSaveInterval"] == 10.0
 
-    rk.setRestartOptions(True, True, 100)
+    rk.setRestartOptions(True, True, 100, True)
 
-    assert rk.timeloopData["restart"] == {"save": True, "load": True, "frequency": 100}
+    assert rk.timeloopData["restart"] == {
+        "save": True,
+        "load": True,
+        "frequency": 100,
+        "resetTime": True,
+    }
 
     rk.setHDF5FileInitialData(["var", "var2"], filename="hdf5file")
 
@@ -331,3 +362,20 @@ def test_add_models_and_maniplators(grid):
             "priority": 4,
         },
     }
+
+
+def test_add_diagnosis_terms_warning():
+
+    rk = RKWrapper()
+
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForVars called when variable n has no terms that evolve it",
+    ):
+        rk.addTermDiagnosisForVars(["n"])
+
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForDistVars called when variable n has no terms that evolve it",
+    ):
+        rk.addTermDiagnosisForDistVars(["n"])

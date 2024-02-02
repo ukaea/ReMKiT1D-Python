@@ -1,5 +1,7 @@
 from typing import Union, List, Dict, cast, Tuple
+from .variable_container import VariableContainer
 import numpy as np
+import warnings
 
 
 class Species:
@@ -132,6 +134,57 @@ class VarData:
         self.__reqMBColVars___ = reqMBColVars
         self.__reqMBColPowers___ = reqMBColPowers
 
+    def checkRowColVars(
+        self, varCont: VariableContainer, rowVarOnDual=False, colVarOnDual=False
+    ):
+        """Check whether required variables exist in the variable container and are on the correct grids
+
+        Args:
+            varCont (VariableContainer): Variable container used to check
+            rowVarOnDual (bool, optional): True if the row variables should be on the dual grid. Defaults to False.
+            colVarOnDual (bool, optional): True if the column variables should be on the dual grid. Defaults to False.
+        """
+
+        for var in self.__reqRowVars___:
+            assert var in varCont.dataset.data_vars.keys(), (
+                "Required row variable " + var + " not found in used variable container"
+            )
+
+            if not varCont.dataset.data_vars[var].attrs["isScalar"]:
+                if (
+                    varCont.dataset.data_vars[var].attrs["isOnDualGrid"]
+                    is not rowVarOnDual
+                ):
+                    warnings.warn(
+                        "Variable "
+                        + var
+                        + " appears in required row variables for evolved variable on "
+                        + "dual"
+                        if rowVarOnDual
+                        else "regular" + " grid but doesn't live on that grid"
+                    )
+
+        for var in self.__reqColVars___:
+            assert var in varCont.dataset.data_vars.keys(), (
+                "Required column variable "
+                + var
+                + " not found in used variable container"
+            )
+
+            assert not varCont.dataset.data_vars[var].attrs["isScalar"], (
+                "Error: Required column variable " + var + " is a scalar"
+            )
+
+            if varCont.dataset.data_vars[var].attrs["isOnDualGrid"] is not colVarOnDual:
+                warnings.warn(
+                    "Variable "
+                    + var
+                    + " appears in required column variables for implicit variable on "
+                    + "dual"
+                    if colVarOnDual
+                    else "regular" + " grid but doesn't live on that grid"
+                )
+
     def dict(self):
         """Returns dictionary form of VarData to be used in json output
 
@@ -254,24 +307,25 @@ class GeneralMatrixTerm:
         fixedMatrix=False,
         copyTermName: Union[str, None] = None,
     ) -> None:
-        """GeneralMatrixTerm option container constructor
+        """GeneralMatrixTerm option container constructor.
+
+        General matrix terms are of the form :math:`LHS=M_{ij}u_j` where the indices correspond to the evolved (row) and implicit (column) variables, and u is the implixit variable. The matrix M has the following form: :math:`M_{ij} = c*X_i*H_i*V_i*T_i*R_i*S_{ij}*C_j`, where this constructor sets the individual components.
 
         Args:
             evolvedVar (str): Name of evolved implicit variable
             implicitVar (str, optional): Name of column implicit variable. Defaults to evolvedVar value.
-            spatialProfile (List[float], optional): Spatial profile (should conform to grid size if supplied). Defaults to [].
-            harmonicProfile (List[float], optional): Harmonic profile (should conform to grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
-            velocityProfile (List[float], optional): Velocity profile (should conform to grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
-            evaluatedTermGroup (int, optional): Group in parent model to be optionally evaluated as additional row variable. Defaults to 0.
+            spatialProfile (List[float], optional): Spatial profile - X in the above formula (should conform to x-grid size if supplied). Defaults to [].
+            harmonicProfile (List[float], optional): Harmonic profile - H in the above formula (should conform to h-grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
+            velocityProfile (List[float], optional): Velocity profile - V in the above formula (should conform to v-grid size if supplied), used only if evolved variable is a distribution. Defaults to [].
+            evaluatedTermGroup (int, optional): Term group in parent model to be optionally evaluated as additional row variable (multiplying R in the above formula). Defaults to 0.
             implicitGroups (list, optional): Implicit term groups of parent model to which this term belongs to. Defaults to [1].
             generalGroups (list, optional): General term groups of parent model to which this term belongs to. Defaults to [1].
-            customNormConst (Union[CustomNormConst,float,int], optional): Custom normalization constant options. Defaults to CustomNormConst(), if a float/int is passed will use that as the normalization constant.
-            timeSignalData (TimeSignalData, optional): Time dependence options. Defaults to TimeSignalData().
-            varData (VarData, optional): Required row and column variable data. Defaults to VarData().
-            stencilData (dict, optional): Stencil data options. Defaults to {}, but should be supplied.
+            customNormConst (Union[CustomNormConst,float,int], optional): Custom normalization constant options - corresponds to the constant c in the above formula. Defaults to CustomNormConst(), if a float/int is passed will use that as the normalization constant.
+            timeSignalData (TimeSignalData, optional): Time dependence options - responsible for non-trivial components of the T in the above formula. Defaults to TimeSignalData().
+            varData (VarData, optional): Required row and column variable data - corresponding to R and C in the above formula. Defaults to VarData().
+            stencilData (dict, optional): Stencil data options - sets S in the above formula. See routines ending in Stencil in simple_containers.py. Defaults to {}, but should be supplied.
             skipPattern (bool, optional): Set to true if the matrix pattern should be skipped during PETSc preallocation (useful when the same pattern has been added already). Defaults to False.
-            skipPattern (bool, optional): Set to true to calculate matrix values only once. Defaults to False.
-            copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. Defaults to None.
+            copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape. Defaults to None.
         """
 
         if len(implicitVar) == 0:
@@ -296,6 +350,31 @@ class GeneralMatrixTerm:
         self.__skipPattern__ = skipPattern
         self.__fixedMatrix__ = fixedMatrix
         self.__copyTermName__ = copyTermName
+
+    def checkTerm(self, varCont: VariableContainer):
+        """Perform consistency check on term
+
+        Args:
+            varCont (VariableContainer): Variable container to be used with this term
+        """
+
+        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
+            "Evolved variable "
+            + self.__evolvedVar__
+            + " not registered in used variable container"
+        )
+
+        rowVarOnDual = varCont.dataset[self.__evolvedVar__].attrs["isOnDualGrid"]
+
+        assert self.__implicitVar__ in varCont.dataset.data_vars.keys(), (
+            "Implicit variable "
+            + self.__implicitVar__
+            + " not registered in used variable container"
+        )
+
+        colVarOnDual = varCont.dataset[self.__implicitVar__].attrs["isOnDualGrid"]
+
+        self.__varData__.checkRowColVars(varCont, rowVarOnDual, colVarOnDual)
 
     def dict(self):
         """Returns dictionary form of GeneralMatrixTerm to be used in json output
@@ -351,6 +430,17 @@ class CustomModel:
 
     def setModelboundData(self, mbData: dict):
         self.__modelboundData__ = mbData
+
+    def checkTerms(self, varCont: VariableContainer):
+        """Check terms in this model for consistency
+
+        Args:
+            varCont (VariableContainer): Variable container to be used in this check
+        """
+        print("Checking terms in model " + self.__modelTag__ + ":")
+        for i, term in enumerate(self.__terms__):
+            print("   Checking term " + self.__termTags__[i])
+            term.checkTerm(varCont)
 
     def dict(self):
         """Returns dictionary form of CustomModel to be used in json output
@@ -466,9 +556,10 @@ def additiveDerivation(
     assert len(derivTags) == len(
         derivIndices
     ), "derivTags and derivIndices in additiveDerivation must be of same size"
-    assert len(derivTags) == len(
-        linCoeffs
-    ), "derivTags and linCoeffs in additiveDerivation must be of same size"
+    if len(linCoeffs) != 0:
+        assert len(derivTags) == len(
+            linCoeffs
+        ), "derivTags and linCoeffs in additiveDerivation must be of same size"
 
     deriv = {
         "type": "additiveDerivation",
@@ -523,9 +614,9 @@ def multiplicativeDerivation(
         "innerDerivIndices": innerDerivationIndices,
         "innerDerivPower": innerDerivationPower,
         "outerDerivation": "none" if outerDerivation is None else outerDerivation,
-        "outerDerivIndices": []
-        if outerDerivationIndices is None
-        else outerDerivationIndices,
+        "outerDerivIndices": (
+            [] if outerDerivationIndices is None else outerDerivationIndices
+        ),
         "outerDerivPower": outerDerivationPower,
         "innerDerivFuncName": "none" if funcName is None else funcName,
     }
@@ -773,9 +864,9 @@ def ddvDerivation(
                     ind
                 ]
             if vifAtZero is not None:
-                cast(Dict[str, object], deriv["vifAtZero"])[
-                    "h=" + str(harmonic)
-                ] = vifAtZero[ind]
+                cast(Dict[str, object], deriv["vifAtZero"])["h=" + str(harmonic)] = (
+                    vifAtZero[ind]
+                )
 
     return deriv
 
@@ -817,9 +908,9 @@ def d2dv2Derivation(
                     ind
                 ]
             if vidfdvAtZero is not None:
-                cast(Dict[str, object], deriv["vidfdvAtZero"])[
-                    "h=" + str(harmonic)
-                ] = vidfdvAtZero[ind]
+                cast(Dict[str, object], deriv["vidfdvAtZero"])["h=" + str(harmonic)] = (
+                    vidfdvAtZero[ind]
+                )
 
     return deriv
 
@@ -989,6 +1080,53 @@ def rangeFilterDerivation(
     return deriv
 
 
+def nDInterpolationDerivation(
+    grids: List[np.ndarray], data: np.ndarray, gridNames: Union[List[str], None] = None
+) -> dict:
+    """Returns a derivation object that will perform n-dimensional linear interpolation on passed data. The number of entries in the grid list must be the dimensionality of the data ndarray, and each individual entry must have the same size as the corresponding dimension of the data. The optional grid names are only used in the construction of the JSON format for ReMKiT1D.
+
+    Args:
+        grids (List[np.ndarray]): Values of each of the grids associated with individual data dimensions
+        data (np.ndarray): Data to interpolate over
+        gridNames (Union[List[str],None], optional): Optional grid names. Defaults to None, resulting in numbered grids.
+
+
+    Returns:
+        dict: Derivation property dictionary
+    """
+
+    assert len(grids) == len(
+        np.shape(data)
+    ), "grids must have the same length as the dimensionality of the passed data"
+
+    dataShape = np.shape(data)
+
+    if gridNames is not None:
+        assert len(grids) == len(
+            gridNames
+        ), "gridNames must have the same length as the passed grid list"
+        usedNames = gridNames
+    else:
+        usedNames = ["grid" + str(i) for i in range(len(grids))]
+
+    for i, grid in enumerate(grids):
+        assert len(grid) == dataShape[i], (
+            usedNames[i]
+            + " does not conform to the corresponding dimension of interpolation data"
+        )
+
+    deriv = {
+        "type": "nDLinInterpDerivation",
+        "data": {"dims": list(dataShape), "values": data.flatten(order="F").tolist()},
+        "grids": {"names": usedNames},
+    }
+
+    for i, name in enumerate(usedNames):
+        cast(Dict[str, object], deriv["grids"])[name] = grids[i].tolist()
+
+    return deriv
+
+
 def groupEvaluatorManipulator(
     modelTag: str, evalTermGroup: int, resultVarName: str, priority=4
 ) -> dict:
@@ -1123,7 +1261,7 @@ def staggeredGradStencil() -> dict:
 def boundaryStencilDiv(
     fluxJacVar: str, lowerBoundVar: Union[None, str] = None, isLeft=False
 ) -> dict:
-    """Boundary stencil for divergence terms with extrapolation and lower jacobian bound
+    """Boundary stencil for divergence terms with extrapolation and lower jacobian bound. Effectively gives the missing boundary div(fluxJacVar * implicitVar) component, handling bounds and extrapolation.
 
     Args:
         fluxJacVar (str): Name of flux jacobian
@@ -1212,7 +1350,7 @@ def upwindedDiv(fluxJacVar: str) -> dict:
 def diffusionStencil(
     ruleName: str, reqVarNames: List[str], doNotInterpolate=False
 ) -> dict:
-    """Return diffusion stencil in x
+    """Return diffusion stencil in x which assumes that both the implicit and evolved variables live on the regular grid.
 
     Args:
         ruleName (str): Name of derivation used to calculate the diffusion coefficent
@@ -1695,15 +1833,19 @@ class IntegrationStep:
         self.__evolvedModels__.append(modelTag)
 
         self.__evolvedModelProperties__[modelTag] = {
-            "groupIndices": self.__defaultEvaluateGroups__
-            if evaluateGroups is None
-            else evaluateGroups,
-            "internallyUpdatedGroups": self.__defaultUpdateGroups__
-            if updateGroups is None
-            else updateGroups,
-            "internallyUpdateModelData": self.__defaultUpdateModelData__
-            if updateModelData is None
-            else updateModelData,
+            "groupIndices": (
+                self.__defaultEvaluateGroups__
+                if evaluateGroups is None
+                else evaluateGroups
+            ),
+            "internallyUpdatedGroups": (
+                self.__defaultUpdateGroups__ if updateGroups is None else updateGroups
+            ),
+            "internallyUpdateModelData": (
+                self.__defaultUpdateModelData__
+                if updateModelData is None
+                else updateModelData
+            ),
         }
 
     def dict(self) -> dict:

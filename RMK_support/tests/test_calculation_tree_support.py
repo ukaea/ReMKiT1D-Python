@@ -1,4 +1,12 @@
 import RMK_support.calculation_tree_support as ct
+import pytest
+import numpy as np
+from scipy import special  # type: ignore
+
+
+@pytest.fixture
+def varDict():
+    return {"a": np.ones(3), "b": -2 * np.ones(3)}
 
 
 def test_init_node():
@@ -28,7 +36,7 @@ def test_init_node():
     }
 
 
-def test_addition():
+def test_addition(varDict):
     a = ct.Node("a")
     a.additiveMode = True
     b = ct.Node("b")
@@ -50,8 +58,10 @@ def test_addition():
     assert nodes[1].constant == 2.0
     assert nodes[2].constant == 2.0
 
+    assert all(c.evaluate(varDict) == 10 * np.ones(3))
 
-def test_multiplication():
+
+def test_multiplication(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
     a = a * 2
@@ -70,8 +80,10 @@ def test_multiplication():
 
     assert nodes[4].constant == 2.0
 
+    assert all(c.evaluate(varDict) == -48 * np.ones(3))
 
-def test_div():
+
+def test_div(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
     c = a / b
@@ -85,8 +97,28 @@ def test_div():
     assert nodes[2].unaryTransform.dict()["unaryTransform"] == "ipow"
     assert nodes[2].unaryTransform.dict()["unaryIntegerParams"] == [-1]
 
+    assert all(c.evaluate(varDict) == -np.ones(3) / 8)
 
-def test_sub():
+
+def test_rtruediv(varDict):
+    a = ct.Node("a")
+    b = ct.Node("b")
+    c = 5 / a
+    d = 1 / b
+
+    nodesc, _, _ = ct.flattenTree(c)
+    nodesd, _, _ = ct.flattenTree(d)
+
+    assert len(nodesc) == 2
+    assert nodesc[0].constant == 5
+    assert len(nodesd) == 2
+    assert nodesd[0].constant == 1
+
+    assert all(c.evaluate(varDict) == 5 * np.ones(3))
+    assert all(d.evaluate(varDict) == -0.5 * np.ones(3))
+
+
+def test_sub(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
 
@@ -98,8 +130,10 @@ def test_sub():
     assert len(nodes) == 3
     assert nodes[0].constant == -2.0
 
+    assert all(c.evaluate(varDict) == np.ones(3))
 
-def test_pow():
+
+def test_pow(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
 
@@ -120,6 +154,8 @@ def test_pow():
     assert nodes[4].unaryTransform.dict()["unaryTransform"] == "ipow"
     assert nodes[4].unaryTransform.dict()["unaryIntegerParams"] == [2]
 
+    assert all(c.evaluate(varDict) == 65 * np.ones(3))
+
 
 def test_unary_call():
     a = ct.Node("a")
@@ -137,7 +173,7 @@ def test_unary_call():
     assert nodes[1].unaryTransform.dict()["unaryTransform"] == "fun"
 
 
-def test_neg():
+def test_neg(varDict):
     a = ct.Node("a")
 
     b = -a
@@ -147,6 +183,8 @@ def test_neg():
 
     assert len(nodes) == 1
     assert nodes[0].constant == 1.0
+
+    assert all(b.evaluate(varDict) == np.ones(3))
 
 
 def test_unaryTransformation_mul():
@@ -194,7 +232,7 @@ def test_unaryTransformation_add():
     assert nodes[0].constant == 2.0
 
 
-def test_unaryTransformation_sun():
+def test_unaryTransformation_sub():
     a = ct.Node("a")
     a.additiveMode = True
     fun = ct.UnaryTransform("fun")
@@ -218,7 +256,7 @@ def test_unaryTransformation_sun():
     assert nodes[0].constant == 2.0
 
 
-def test_funs():
+def test_funs(varDict):
     funs = [
         ct.log,
         ct.exp,
@@ -249,10 +287,27 @@ def test_funs():
         "erfc",
     ]
 
-    for i in range(len(funs)):
+    numFuns = [
+        np.log,
+        np.exp,
+        np.abs,
+        np.sin,
+        np.cos,
+        np.arccos,
+        np.sign,
+        np.arcsin,
+        np.tan,
+        np.arctan,
+        special.erf,
+        special.erfc,
+    ]
+
+    for i, fun in enumerate(funs):
         a = ct.Node("a")
-        b = funs[i](a)
-        b = funs[i](b)
+        b = fun(a)
+        assert all(b.evaluate(varDict) == numFuns[i](np.ones(3)))
+
+        b = fun(b)
 
         nodes, parents, children = ct.flattenTree(b)
 
@@ -262,7 +317,7 @@ def test_funs():
         assert nodes[1].unaryTransform.dict()["unaryTransform"] == funTags[i]
 
 
-def test_radd_multNode():
+def test_radd_multNode(varDict):
     a = ct.Node("a")
 
     a = 2 + a
@@ -273,8 +328,10 @@ def test_radd_multNode():
 
     assert nodes[0].constant == 2.0
 
+    assert all(a.evaluate(varDict) == 3 * np.ones(3))
 
-def test_rmul_addNode():
+
+def test_rmul_addNode(varDict):
     a = ct.Node("a")
     a.additiveMode = True
     a = 2 * a
@@ -285,8 +342,10 @@ def test_rmul_addNode():
 
     assert nodes[0].constant == 2.0
 
+    assert all(a.evaluate(varDict) == 2 * np.ones(3))
 
-def test_div_addNode():
+
+def test_div_addNode(varDict):
     a = ct.Node("a")
     a.additiveMode = True
     a = a / 2
@@ -297,8 +356,10 @@ def test_div_addNode():
 
     assert nodes[0].constant == 0.5
 
+    assert all(a.evaluate(varDict) == 0.5 * np.ones(3))
 
-def test_div_unaryNode():
+
+def test_div_unaryNode(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
     a = ct.exp(a)
@@ -313,8 +374,10 @@ def test_div_unaryNode():
 
     assert nodes[3].unaryTransform.dict()["unaryTransform"] == "exp"
 
+    assert all(c.evaluate(varDict) == -2 * np.ones(3) / np.exp(1))
 
-def test_sub_addNode():
+
+def test_sub_addNode(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
 
@@ -331,8 +394,10 @@ def test_sub_addNode():
     assert not nodes[2].additiveMode
     assert nodes[3].constant == -4.0
 
+    assert all(c.evaluate(varDict) == 7 * np.ones(3))
 
-def test_sub_multConstNode():
+
+def test_sub_multConstNode(varDict):
     a = ct.Node("a")
     b = ct.Node("b")
 
@@ -343,6 +408,8 @@ def test_sub_multConstNode():
 
     assert len(nodes) == 3
     assert nodes[2].constant == -2.0
+
+    assert all(c.evaluate(varDict) == 5 * np.ones(3))
 
 
 def test_calc_deriv():
@@ -379,3 +446,14 @@ def test_calc_deriv():
             },
         },
     }
+
+
+def testAddLeafVars():
+    a = ct.Node("a")
+    b = ct.Node("b")
+
+    c = a + a * b
+
+    leafVars = ct.getLeafVars(c)
+
+    assert leafVars == ["a", "b"]

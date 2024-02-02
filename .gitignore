@@ -10,4 +10,10 @@ __pycache__
 *.pdf
 *.gif
 *.zip
+*.csv
+*.xml
+*.tar*
 /docs/build
+.venv
+build
+*.egg-info*

@@ -9,13 +9,17 @@ class ModelboundCRMData:
     """Property container of modelbound CRM data"""
 
     def __init__(
-        self, fixedTransitionEnergies=np.array([]), energyResolution: float = 1e-16
+        self,
+        fixedTransitionEnergies=np.array([]),
+        energyResolution: float = 1e-16,
+        elState: int = 0,
     ) -> None:
         """ModelboundCRMData constructor
 
         Args:
             fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to [].
             energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-12.
+            elState (int, optional): State ID to treat as the electrons. Defaults to 0.
         """
 
         uniqueTransitionEnergies: List[float] = []
@@ -33,6 +37,7 @@ class ModelboundCRMData:
         self.__transitionTags__: List[str] = []
         self.__transitionProperties__: Dict[str, object] = {}
         self.__energyResolution__ = energyResolution
+        self.__elStateID__ = elState
 
     def addTransitionEnergy(self, transitionEnergy: float):
         """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within
@@ -94,6 +99,7 @@ class ModelboundCRMData:
             "transitionTags": self.__transitionTags__,
             "inelasticGridData": self.__inelGridData__,
             "transitions": {},
+            "electronStateID": self.__elStateID__,
         }
 
         mbData["transitions"].update(self.__transitionProperties__)
@@ -117,9 +123,11 @@ class ModelboundCRMData:
         ]
 
         transitionEnergyIndices = [
-            self.transitionProperties[tag]["fixedEnergyIndex"]
-            if "fixedEnergyIndex" in self.transitionProperties[tag].keys()
-            else 0
+            (
+                self.transitionProperties[tag]["fixedEnergyIndex"]
+                if "fixedEnergyIndex" in self.transitionProperties[tag].keys()
+                else 0
+            )
             for tag in [self.transitionTags[ind - 1] for ind in transitionIndices]
         ]
 
@@ -697,9 +705,7 @@ def addHSpontaneousEmissionToCRMData(
 
     for endState in range(1, maxEndState + 1):
         for startState in range(endState + 1, maxStartState + 1):
-            transitionEnergy = (
-                13.6 * (1 / endState**2 - 1 / startState**2) / energyNorm
-            )
+            transitionEnergy = 13.6 * (1 / endState**2 - 1 / startState**2) / energyNorm
             assert (
                 startState,
                 endState,
@@ -720,7 +726,6 @@ def readNISTAkiCSV(filename: str) -> dict:
     res = {}
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
-        line_count = 0
         for row in csv_reader:
             if row["Aki(s^-1)"] != "Aki(s^-1)":
                 rate = float(row["Aki(s^-1)"][2:-1])

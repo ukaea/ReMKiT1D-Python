@@ -95,6 +95,7 @@ class RKWrapper:
                 "save": False,  # If true, restart data will be saved
                 "load": False,  # If true, restart data will be loaded at the start of the loop. Will throw error if loadInitValsFromHDF5 is also true
                 "frequency": 1,  # Restart save frequency - saving every n steps
+                "resetTime": False,  # If true, the value of the time variable, if present, will be reset to 0 on loading from restart
             },
             "loadInitValsFromHDF5": False,  # True if variables should be loaded from a complete HDF5 file based on the input vars list in the HDF5 options.
             "initValFilename": "ReMKiT1DVarInput",  # Name of the input hdf5 file
@@ -172,16 +173,36 @@ class RKWrapper:
     def hdf5Filepath(self):
         return self.__optionsHDF5__["filepath"]
 
-    def modelTags(self):
-        return self.__modelData__["tags"]
+    def modelTags(self) -> List[str]:
+        """Return the list of models registered in this wrapper
+
+        Returns:
+            List[str]: List of models
+        """
+        return cast(List[str], self.__modelData__["tags"])
 
     def setNormDensity(self, dens: float):
+        """Set the normalization density
+
+        Args:
+            dens (float): Normalization density in math:`m^{-3}`
+        """
         self.__normalization__["density"] = dens
 
     def setNormTemperature(self, temp: float):
+        """Set the normalization temperature
+
+        Args:
+            temp (float): Normalization temperature in eV
+        """
         self.__normalization__["eVTemperature"] = temp
 
     def setNormRefZ(self, refZ: float):
+        """Set the reference ion charge used in normalization
+
+        Args:
+            refZ (float): Reference ion charge
+        """
         self.__normalization__["referenceIonZ"] = refZ
 
     def addVarToComm(
@@ -252,12 +273,13 @@ class RKWrapper:
         outputVar=True,
         isCommunicated=False,
         hostScalarProcess=0,
+        derivOptions: Union[None, dict] = None,
     ) -> None:
         """Add variable to the wrapper variable container
 
         Args:
             name (str): Variable names
-            data (Union[numpy.ndarray,None], optional): Optional numpy array representing variable data. Defaults to None, which initializes data to 0.
+            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
             isDerived (bool, optional): True if the variable is treated as derived by ReMKiT1D. Defaults to False.
             isDistribution (bool, optional): True for distribution-like variables. Defaults to False.
             units (str, optional): Variable units. Defaults to 'normalized units'.
@@ -269,6 +291,7 @@ class RKWrapper:
             outputVar (bool, optional): True if the variable should be added to the code output. Defaults to True.
             isCommunicated (bool, optional): True if the variable should be communicated. Defaults to False.
             hostScalarProcess (int, optional): Host process in case of a communicated scalar variable. Defaults to 0.
+            derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
         """
 
         if self.__varCont__ is None:
@@ -296,6 +319,22 @@ class RKWrapper:
         if isCommunicated:
             self.addVarToComm(name, isDistribution, isScalar, hostScalarProcess)
 
+        if derivOptions is not None:
+            assert (
+                isDerived
+            ), "Passing derivOptions to addVar requires the variable to be derived"
+            assert (
+                derivationRule is not None
+            ), "Passing derivOptions to addVar requires derivationRule"
+            assert (
+                "ruleName" in cast(Dict[str, str], derivationRule).keys()
+            ), "ruleName must be a key in passed derivationRule"
+
+            self.addCustomDerivation(
+                cast(Dict[str, str], derivationRule)["ruleName"],
+                cast(Dict[str, str], derivOptions),
+            )
+
     def addVarAndDual(
         self,
         varName: str,
@@ -311,23 +350,25 @@ class RKWrapper:
         outputVar=True,
         isCommunicated=False,
         communicateSecondary=True,
+        derivOptions: Union[None, dict] = None,
     ) -> None:
         """Add variable and its dual
 
         Args:
             varName (str): Name of variable on regular grid
-            data (Union[numpy.ndarray,None], optional): Optional numpy array representing variable data. Defaults to None, which initializes data to 0.
-            isDerived (bool, optional): True if both the primary variable is derived. Defaults to False.
+            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
+            isDerived (bool, optional): True if both the primary and secondary variable are derived. In that case the primary is calculated using the derivation rule, and the secondary is interpolated. Defaults to False.
             derivationRule (Union[None,dict], optional): Derivation rule for primary derived variable. Defaults to None.
             isDistribution (bool, optional): True if variable is a distribution. Defaults to False.
             isStationary (bool, optional): True if primary variable is stationary. Defaults to False.
-            primaryOnDualGrid (bool, optional): True if the primary variable is on the dual grid. Defaults to False.
+            primaryOnDualGrid (bool, optional): True if the primary variable is on the dual grid. The interpolated variable is then on the regular grid. Defaults to False.
             units (str, optional): Units for both primary and secondary. Defaults to 'normalized units'.
             priority (int, optional): Variable priority for both primary and secondary. Defaults to 0 (highest priority).
             dualSuffix (str, optional): Suffix for the variable on the dual grid. Defaults to "_dual".
             outputVar (bool, optional): Set to true if both variable and dual should be added to code output. Defaults to True.
             isCommunicated (bool, optional): Set to true if primary variable should be communicated. Defaults to False.
             communicateSecondary (bool, optional): Set to true if secondary variable should be communicated (only if primary is communicated). Defaults to True.
+            derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
         """
 
         if self.__varCont__ is None:
@@ -367,6 +408,22 @@ class RKWrapper:
             if communicateSecondary:
                 self.addVarToComm(secondaryVar, isDistribution)
 
+        if derivOptions is not None:
+            assert (
+                isDerived
+            ), "Passing derivOptions to addVar requires the variable to be derived"
+            assert (
+                derivationRule is not None
+            ), "Passing derivOptions to addVar requires derivationRule"
+            assert (
+                "ruleName" in cast(Dict[str, str], derivationRule).keys()
+            ), "ruleName must be a key in passed derivationRule"
+
+            self.addCustomDerivation(
+                cast(Dict[str, str], derivationRule)["ruleName"],
+                cast(Dict[str, str], derivOptions),
+            )
+
     def setMPIData(self, numProcsX: int, numProcsH=1, haloWidth=1) -> None:
         """Set general MPI data
 
@@ -402,7 +459,7 @@ class RKWrapper:
             kspSolverType (str, optional): Type of KSP solver used. Defaults to "bcgs".
             hyprePC (str, optional): Type of Hypre preconditioner used. Defaults to "euclid".
             cliOpts (str, optional): Optional command line PETSc options. Defaults to "".
-            objGroups (int, optional): Number of PETSc object groups to create. Defaults to 1.
+            objGroups (int, optional): Number of PETSc object groups to create. This is useful when different integrators need to be associated with different models/terms. Defaults to 1.
         """
 
         self.__optionsPETSc__["active"] = active
@@ -456,9 +513,9 @@ class RKWrapper:
         self.__standardTextook__["temperatureDerivSpeciesIDs"] = tempDerivSpeciesIDs
         self.__standardTextook__["electronPolytropicCoeff"] = ePolyCoeff
         self.__standardTextook__["ionPolytropicCoeff"] = ionPolyCoeff
-        self.__standardTextook__[
-            "electronSheathGammaIonSpeciesID"
-        ] = electronSheathGammaIonSpeciesID
+        self.__standardTextook__["electronSheathGammaIonSpeciesID"] = (
+            electronSheathGammaIonSpeciesID
+        )
 
     def addCustomDerivation(self, derivName: str, derivOptions: dict) -> None:
         """Add a custom derivation object
@@ -478,7 +535,7 @@ class RKWrapper:
         """Add a collection of custom derivations
 
         Args:
-            derivCollection (dict): Dictionary with derivation tags as keys and derivation options as velues
+            derivCollection (dict): Dictionary with derivation tags as keys and derivation options as values
         """
 
         for key in derivCollection.keys():
@@ -527,14 +584,24 @@ class RKWrapper:
         """
         return self.__species__[name]
 
-    def addModel(self, properties: dict) -> None:
+    def addModel(self, properties: Union[dict, sc.CustomModel]) -> None:
         """Add model to wrapper
 
         Args:
-            properties (dict): Model properies dictionary. Should have a single key pointing to all properties, with the key being the model tag.
+            properties (Union[dict,CustomModel]): Model properties dictionary or the model itself. If dictionary should have a single key pointing to all properties, with the key being the model tag. Dictionary option kept for backwards compatibility, use the model itself to include checks
         """
-        cast(List[str], self.__modelData__["tags"]).append(list(properties.keys())[0])
-        self.__modelData__.update(properties)
+
+        if isinstance(properties, dict):
+            propertiesDict = properties
+
+        if isinstance(properties, sc.CustomModel):
+            properties.checkTerms(self.varCont)
+            propertiesDict = properties.dict()
+
+        cast(List[str], self.__modelData__["tags"]).append(
+            list(propertiesDict.keys())[0]
+        )
+        self.__modelData__.update(propertiesDict)
 
     def addManipulator(self, tag: str, properties: dict) -> None:
         """Add a manipulator object to wrapper
@@ -645,13 +712,16 @@ class RKWrapper:
         self.__timeloopData__["outputMode"] = "minimumSaveInterval"
         self.__timeloopData__["minimumSaveInterval"] = minimumInterval
 
-    def setRestartOptions(self, save=False, load=False, frequency=1) -> None:
+    def setRestartOptions(
+        self, save=False, load=False, frequency=1, resetTime=False
+    ) -> None:
         """Set restart options in timeloop object
 
         Args:
             save (bool, optional): Set to true if the code should save restart data. Defaults to False.
             load (bool, optional): Set to true if the code should initialize from restart data. Defaults to False.
             frequency (int, optional): Frequency at which restart data is saved in timesteps. Defaults to 1.
+            resetTime (bool, optional): Set to true if the code should reset the time variable on restart. Defaults to False.
         """
 
         cast(Dict[str, object], self.__timeloopData__["restart"])["save"] = save
@@ -659,6 +729,9 @@ class RKWrapper:
         cast(Dict[str, object], self.__timeloopData__["restart"])[
             "frequency"
         ] = frequency
+        cast(Dict[str, object], self.__timeloopData__["restart"])[
+            "resetTime"
+        ] = resetTime
 
     def setHDF5FileInitialData(
         self,
@@ -741,6 +814,7 @@ class RKWrapper:
         return cast(List[str], self.__optionsHDF5__["outputVars"])
 
     def writeConfigFile(self) -> None:
+        """Generate a config file based on the current state of the wrapper"""
         try:
             os.remove(self.jsonFilepath)
         except FileNotFoundError:
@@ -749,7 +823,7 @@ class RKWrapper:
         io.writeDictToJSON(self.dict(), filepath=self.jsonFilepath)
 
     def addTermDiagnosisForVars(self, names: List[str]) -> None:
-        """Add all terms that evolve given variables as diagnostic variables
+        """Add all terms that evolve given fluid variables as diagnostic variables
 
         Args:
             name (List[str]): Names of variables whose evolution terms should be added
@@ -758,9 +832,38 @@ class RKWrapper:
         for name in names:
             terms = self.getTermsThatEvolveVar(name)
 
+            warnings.warn(
+                "addTermDiagnosisForVars called when variable "
+                + name
+                + " has no terms that evolve it"
+            )
+
             for pair in terms:
                 model, term = pair
                 self.addVar(model + term, isDerived=True)
+                self.addManipulator(
+                    model + term, sc.termEvaluatorManipulator([pair], model + term)
+                )
+
+    def addTermDiagnosisForDistVars(self, names: List[str]) -> None:
+        """Add all terms that evolve given distribution variables as diagnostic variables
+
+        Args:
+            name (List[str]): Names of variables whose evolution terms should be added
+        """
+
+        for name in names:
+            terms = self.getTermsThatEvolveVar(name)
+
+            warnings.warn(
+                "addTermDiagnosisForDistVars called when variable "
+                + name
+                + " has no terms that evolve it"
+            )
+
+            for pair in terms:
+                model, term = pair
+                self.addVar(model + term, isDerived=True, isDistribution=True)
                 self.addManipulator(
                     model + term, sc.termEvaluatorManipulator([pair], model + term)
                 )
