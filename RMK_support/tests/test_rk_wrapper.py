@@ -5,6 +5,7 @@ from RMK_support.simple_containers import Species
 import RMK_support.init_templates as it
 import warnings
 
+
 @pytest.fixture
 def grid():
     return Grid(
@@ -362,12 +363,19 @@ def test_add_models_and_maniplators(grid):
         },
     }
 
+
 def test_add_diagnosis_terms_warning():
 
     rk = RKWrapper()
 
-    with pytest.warns(UserWarning, match="addTermDiagnosisForVars called when variable n has no terms that evolve it"):
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForVars called when variable n has no terms that evolve it",
+    ):
         rk.addTermDiagnosisForVars(["n"])
 
-    with pytest.warns(UserWarning, match="addTermDiagnosisForDistVars called when variable n has no terms that evolve it"):
+    with pytest.warns(
+        UserWarning,
+        match="addTermDiagnosisForDistVars called when variable n has no terms that evolve it",
+    ):
         rk.addTermDiagnosisForDistVars(["n"])
