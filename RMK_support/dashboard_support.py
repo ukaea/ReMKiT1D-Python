@@ -163,8 +163,8 @@ class ReMKiT1DDashboard:
         return app
 
     def distDynMap(self):
-        """Open up a distribution function explorer dashboard. Allows for exploring different distribution function variables in velocity space, with the remaining coordinate values selectable.
-        """
+        """Open up a distribution function explorer dashboard. Allows for exploring different distribution function variables in velocity space, with the remaining coordinate values selectable."""
+
         class DistExplorer(param.Parameterized):
             variable = param.ObjectSelector(
                 default=self.__distNames__[0], objects=self.__distNames__
@@ -231,7 +231,9 @@ class ReMKiT1DDashboard:
         app = pn.Row(explorer.param, explorer.view)
         return app
 
-    def fluidMultiComparison(self, dataNames: List[str], fixedPosition=False) -> hv.HoloMap:
+    def fluidMultiComparison(
+        self, dataNames: List[str], fixedPosition=False
+    ) -> hv.HoloMap:
         """Generate a holoviews map comparing multiple different fluid variables on the same plot. By default compares data profiles at fixed points in time.
 
         Args:
