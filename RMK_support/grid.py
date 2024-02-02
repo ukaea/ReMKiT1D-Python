@@ -21,7 +21,7 @@ class Grid:
 
         Args:
             xGrid (numpy.ndarray): x coordinates of each spatial grid cell centre or their widths. If using widths set interpretXGridAsWidths to True.
-            vGrid (numpy.ndarray, optional): v coordinates of each velocity grid cell centres or their widths.  If using widths set interpretXGridAsWidths to True. Defaults to a single cell (effectively no v-grid)
+            vGrid (numpy.ndarray, optional): v coordinates of each velocity grid cell centres or their widths.  If using widths set interpretVGridAsWidths to True. Defaults to a single cell (effectively no v-grid)
             lMax (int, optional): Maximum l harmonic number. Defaults to 0.
             mMax (int, optional): Maximum m harmonic number. Defaults to 0.
             interpretXGridAsWidths (bool, optional): If True interprets xGrid as cell widths. Defaults to False.
@@ -235,7 +235,7 @@ class Grid:
         """Return velocity moment of distribution function (x,h,v), single harmonic variable (x,v), or velocity space vector (v)
 
         Args:
-            distFun (np.ndarray): Distribution or single harmonic variable values. The
+            distFun (np.ndarray): Distribution or single harmonic variable values.
             momentOrder (int): Moment order
             momentHarmonic (int, optional): Harmonic index (Fortran 1 indexing) to take moment of in case of distribution variable. Defaults to 1.
 
