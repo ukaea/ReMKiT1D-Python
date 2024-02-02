@@ -97,7 +97,7 @@ def collocatedPressureGrad(
         densityVar (str): Species density name factoring into pressure - this will be the implicit variable in the matrix term
         temperatureVar (str): Species temperature name factoring into pressure
         speciesMass (float): Species mass in kg
-        addExtrapolatedBCs (bool, optional): If true will add extrapolated values as left and right boundary condition (set fo False for periodic grids). Defaults to True
+        addExtrapolatedBCs (bool, optional): If true will add extrapolated values as left and right boundary condition (set to False for periodic grids). Defaults to True
 
     Returns:
         sc.CustomModel: CustomModel object ready for insertion into JSON config file
