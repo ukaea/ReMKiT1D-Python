@@ -832,6 +832,12 @@ class RKWrapper:
         for name in names:
             terms = self.getTermsThatEvolveVar(name)
 
+            warnings.warn(
+                "addTermDiagnosisForVars called when variable "
+                + name
+                + " has no terms that evolve it"
+            )
+
             for pair in terms:
                 model, term = pair
                 self.addVar(model + term, isDerived=True)
@@ -848,6 +854,12 @@ class RKWrapper:
 
         for name in names:
             terms = self.getTermsThatEvolveVar(name)
+
+            warnings.warn(
+                "addTermDiagnosisForDistVars called when variable "
+                + name
+                + " has no terms that evolve it"
+            )
 
             for pair in terms:
                 model, term = pair
