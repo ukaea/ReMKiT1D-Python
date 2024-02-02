@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.1.0, 2024-02-01
+## v1.1.0, 2024-02-02
 
 - Support for features in ReMKiT1D v1.1.0
 - Calculation tree improvements
@@ -36,6 +36,7 @@
 - Added \_\_rtruediv\_\_ operator for node calculations.
 - Added option to support resetting the time variable on restart.
 - velocityMoment on Grid now handles 1D vectors of the length of the velocity grid and has better assertions
+- addTermDiagnosisForVars and addTermDiagnosisForDistVars now raise warnings when no terms are added for any of the passed variables
 
 ### Bug Fixes
 
