@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v1.1.1, 2024-02-21
+
+- Bug fixes
+
+### Breaking Changes
+
+- N/A
+
+### Deprecations
+
+- N/A
+
+### New Features
+
+- N/A
+
+### Bug Fixes
+
+- Fixed bug where addTermDiagnosis calls in the wrapper always displayed a warning
+
 ## v1.1.0, 2024-02-02
 
 - Support for features in ReMKiT1D v1.1.0
