@@ -1666,11 +1666,15 @@ def customFluid1DStencil(
             xStencil
         ), "varContColumnVars must be of same length as xStencil in customFluid1DStencil"
         stencil.update({"columnVarContVars": varContColumnVars})
+    else: 
+        stencil.update({"columnVarContVars":["none" for _ in xStencil]})
     if mbDataColumnVars is not None:
         assert len(mbDataColumnVars) == len(
             xStencil
         ), "mbDataColumnVars must be of same length as xStencil in customFluid1DStencil"
         stencil.update({"columnMBDataVars": mbDataColumnVars})
+    else:
+        stencil.update({"columnMBDataVars":["none" for _ in xStencil]})
 
     return stencil
 
