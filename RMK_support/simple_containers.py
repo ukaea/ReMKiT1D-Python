@@ -1745,6 +1745,27 @@ def picardBDEIntegrator(
 
     return integ
 
+def CVODEIntegrator(relTol = 1e-5, absTol = 1e-10,maxGMRESRestarts = 50, CVODEBBDPreParams: List[int] = [0,0,0,0]) -> dict:
+    """Return dictionary with CVODE integrator properties. See https://sundials.readthedocs.io/en/latest/index.html
+
+    Args:
+        relTol (float, optional): CVODE solver relative tolerance. Defaults to 1e-5.
+        absTol (float, optional): CVODE solver absolute tolerance. Defaults to 1e-10.
+        maxGMRESRestarts (int, optional): SPGMR maximum number of restarts. Defaults to 50.
+        CVODEBBDPreParams (List[int], optional): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
+
+    Returns:
+        dict: Integrator property dictionary
+    """
+
+    assert len(CVODEBBDPreParams) == 4, "CVODEBBDPreParams must be size 4"
+    integ = {"type": "CVODE", 
+             "relTol": relTol,
+             "absTol": absTol,
+             "maxRestarts": maxGMRESRestarts,
+             "CVODEPreBBDParams": CVODEBBDPreParams}
+
+    return integ
 
 class IntegrationStep:
     """Class containing integration step data"""

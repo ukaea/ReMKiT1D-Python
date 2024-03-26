@@ -1,8 +1,10 @@
 # CHANGELOG
 
-## v1.1.1, 2024-02-26
+
+## v1.2.0, 2024-03-26
 
 - Bug fixes
+- Added CVODE integrator as an option
 
 ### Breaking Changes
 
@@ -14,7 +16,7 @@
 
 ### New Features
 
-- N/A
+- New CVODE integrator
 
 ### Bug Fixes
 
