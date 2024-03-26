@@ -1,5 +1,6 @@
 # CHANGELOG
 
+
 ## v1.2.0, 2024-03-26
 
 - Bug fixes
@@ -20,6 +21,7 @@
 ### Bug Fixes
 
 - Fixed bug where addTermDiagnosis calls in the wrapper always displayed a warning
+- Fixed bug in customFluid1DStencil where the required variables were not correctly set to "none" when not passed
 
 ## v1.1.0, 2024-02-02
 
