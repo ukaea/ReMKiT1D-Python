@@ -1741,7 +1741,13 @@ def picardBDEIntegrator(
 
     return integ
 
-def CVODEIntegrator(relTol = 1e-5, absTol = 1e-10,maxGMRESRestarts = 50, CVODEBBDPreParams: List[int] = [0,0,0,0]) -> dict:
+
+def CVODEIntegrator(
+    relTol=1e-5,
+    absTol=1e-10,
+    maxGMRESRestarts=50,
+    CVODEBBDPreParams: List[int] = [0, 0, 0, 0],
+) -> dict:
     """Return dictionary with CVODE integrator properties. See https://sundials.readthedocs.io/en/latest/index.html
 
     Args:
@@ -1755,13 +1761,16 @@ def CVODEIntegrator(relTol = 1e-5, absTol = 1e-10,maxGMRESRestarts = 50, CVODEBB
     """
 
     assert len(CVODEBBDPreParams) == 4, "CVODEBBDPreParams must be size 4"
-    integ = {"type": "CVODE", 
-             "relTol": relTol,
-             "absTol": absTol,
-             "maxRestarts": maxGMRESRestarts,
-             "CVODEPreBBDParams": CVODEBBDPreParams}
+    integ = {
+        "type": "CVODE",
+        "relTol": relTol,
+        "absTol": absTol,
+        "maxRestarts": maxGMRESRestarts,
+        "CVODEPreBBDParams": CVODEBBDPreParams,
+    }
 
     return integ
+
 
 class IntegrationStep:
     """Class containing integration step data"""
