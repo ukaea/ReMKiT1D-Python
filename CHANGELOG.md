@@ -4,6 +4,7 @@
 
 - Bug fixes
 - Added CVODE integrator as an option
+- Added support for new manipulator features
 
 ### Breaking Changes
 
@@ -16,6 +17,8 @@
 ### New Features
 
 - New CVODE integrator
+- Support for new manipulator features for stationary equations
+- New helper functions in wrapper and variable container
 
 ### Bug Fixes
 
