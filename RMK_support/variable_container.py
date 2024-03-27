@@ -83,6 +83,18 @@ class VariableContainer:
             if derivationRule is not None:
                 self.__derivationRules__[name] = derivationRule
 
+    def getVarAttrs(self, varName: str) -> dict:
+        """Get attributes associated with given variable
+
+        Args:
+            varName (str): Variable name
+
+        Returns:
+            dict: Attribute dictionary
+        """
+
+        return self.dataset[varName].attrs
+
     def dict(self, outputVals=True) -> dict:
         """Return dictionary form of variable container for json output
 

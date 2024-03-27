@@ -34,7 +34,7 @@ def test_add_fluid_zeros(grid, vCont):
     testCont.setVariable("var")
 
     assert all(testCont.dataset["var"] == 0)
-    assert testCont.dataset["var"].attrs == {
+    assert testCont.getVarAttrs("var") == {
         "isDerived": False,
         "isDistribution": False,
         "units": "normalized units",

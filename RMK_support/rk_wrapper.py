@@ -71,6 +71,7 @@ class RKWrapper:
         self.__jsonFilepath__ = "./config.json"
 
         self.__modelData__: Dict[str, object] = {"tags": []}
+        self.__integrableModels__: List[str] = []  # List of integrable models
         self.__manipulatorData__: Dict[str, object] = {"tags": []}
         self.__integratorData__: Dict[str, object] = {
             "stepTags": [],
@@ -173,12 +174,18 @@ class RKWrapper:
     def hdf5Filepath(self):
         return self.__optionsHDF5__["filepath"]
 
-    def modelTags(self) -> List[str]:
+    def modelTags(self, integrableOnly=False) -> List[str]:
         """Return the list of models registered in this wrapper
+        Args:
+            integrableOnly (bool, optional): Only returns models marked as integrable. Defaults to False.
 
-        Returns:
+         Returns:
             List[str]: List of models
         """
+
+        if integrableOnly:
+            return self.__integrableModels__
+
         return cast(List[str], self.__modelData__["tags"])
 
     def setNormDensity(self, dens: float):
@@ -584,11 +591,14 @@ class RKWrapper:
         """
         return self.__species__[name]
 
-    def addModel(self, properties: Union[dict, sc.CustomModel]) -> None:
+    def addModel(
+        self, properties: Union[dict, sc.CustomModel], isIntegrable=True
+    ) -> None:
         """Add model to wrapper
 
         Args:
             properties (Union[dict,CustomModel]): Model properties dictionary or the model itself. If dictionary should have a single key pointing to all properties, with the key being the model tag. Dictionary option kept for backwards compatibility, use the model itself to include checks
+            isIntegrable (bool, optional): Mark the model as integrable for easier definition of integrator steps. Defaults to True.
         """
 
         if isinstance(properties, dict):
@@ -602,6 +612,9 @@ class RKWrapper:
             list(propertiesDict.keys())[0]
         )
         self.__modelData__.update(propertiesDict)
+
+        if isIntegrable:
+            self.__integrableModels__.append(list(propertiesDict.keys())[0])
 
     def addManipulator(self, tag: str, properties: dict) -> None:
         """Add a manipulator object to wrapper
@@ -868,3 +881,30 @@ class RKWrapper:
                 self.addManipulator(
                     model + term, sc.termEvaluatorManipulator([pair], model + term)
                 )
+
+    def addStationaryEvaluator(self, varName: str, priority=0) -> None:
+        """Add a cumulative term evaluator for all models/terms evolving a given variable. This will store the result in the evolved variable, and is useful when evaluating stationary variables of the first kind (where the equation is var = f(v) with v /= var).
+
+        Args:
+            varName (str): Evolved variable to store models and terms for
+            priority (int, optional): Manipulator priority. Defaults to 0.
+        """
+
+        terms = self.getTermsThatEvolveVar(varName)
+        if not len(terms):
+            warnings.warn(
+                "addStationaryEvaluator called when variable "
+                + varName
+                + " has no terms that evolve it"
+            )
+
+        self.addManipulator(
+            "stationaryEval_"+varName,
+            sc.termEvaluatorManipulator(
+                terms,
+                varName,
+                accumulate=True,
+                update=True,
+                priority=priority,
+            ),
+        )

@@ -1155,7 +1155,11 @@ def groupEvaluatorManipulator(
 
 
 def termEvaluatorManipulator(
-    modelTermTags: List[Tuple[str, str]], resultVarName: str, priority=4
+    modelTermTags: List[Tuple[str, str]],
+    resultVarName: str,
+    priority=4,
+    accumulate=False,
+    update=False,
 ) -> dict:
     """Return manipulator properties for a term evaluator manipulator, which evaluates a set of model,term pairs and stores the result
     in a given variable
@@ -1164,6 +1168,8 @@ def termEvaluatorManipulator(
         modelTermTag (List[Tuple[str,str]]): Pairs of model,term tags to be evaluated
         resultVarName (str): Name of variable into which to store the evaluation
         priority (int, optional): Manipulator priority (0-4). Defaults to 4.
+        accumulate (bool, optional): If true, will accumulate the values into the result variable instead of overwriting. Defaults to False.
+        update (bool, optional): If true will independently request updates for the evaluated terms/models. Defaults to False.
 
     Returns:
         dict: Manipulator property dictionary
@@ -1176,6 +1182,8 @@ def termEvaluatorManipulator(
         "evaluatedTermNames": list(terms),
         "resultVarName": resultVarName,
         "priority": priority,
+        "update":update,
+        "accumulate":accumulate
     }
 
     return manip
