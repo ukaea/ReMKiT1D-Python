@@ -2,6 +2,45 @@ from typing import Union, List, Dict, cast, Tuple
 from .variable_container import VariableContainer
 import numpy as np
 import warnings
+from abc import ABC, abstractmethod
+
+
+class Term(ABC):
+
+    def __init__(
+        self,
+        evolvedVar: str,
+        implicitGroups: List[int] = [],
+        generalGroups: List[int] = [],
+    ) -> None:
+        super().__init__()
+        self.__evolvedVar__ = evolvedVar
+        self.__implicitGroups__ = implicitGroups
+        self.__generalGroups__ = generalGroups
+
+    @property
+    def evolvedVar(self):
+        return self.__evolvedVar__
+
+    @property
+    def implicitGroups(self):
+        return self.__implicitGroups__
+
+    @property
+    def generalGroups(self):
+        return self.__generalGroups__
+
+    @abstractmethod
+    def dict(self) -> dict:
+        pass
+
+    def checkTerm(self, varCont: VariableContainer):
+
+        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
+            "Evolved variable "
+            + self.__evolvedVar__
+            + " not registered in used variable container"
+        )
 
 
 class Species:
@@ -286,7 +325,7 @@ class TimeSignalData:
         return tData
 
 
-class GeneralMatrixTerm:
+class GeneralMatrixTerm(Term):
     """General (custom) matrix term options used to construct custom models"""
 
     def __init__(
@@ -328,17 +367,16 @@ class GeneralMatrixTerm:
             copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape. Defaults to None.
         """
 
+        super().__init__(evolvedVar, implicitGroups, generalGroups)
+
         if len(implicitVar) == 0:
             implicitVar = evolvedVar
 
-        self.__evolvedVar__ = evolvedVar
         self.__implicitVar__ = implicitVar
         self.__spatialProfile__ = spatialProfile
         self.__harmonicProfile__ = harmonicProfile
         self.__velocityProfile__ = velocityProfile
         self.__evaluatedTermGroup__ = evaluatedTermGroup
-        self.__implicitGroups__ = implicitGroups
-        self.__generalGroups__ = generalGroups
         self.__customNormConst__ = (
             customNormConst
             if isinstance(customNormConst, CustomNormConst)
@@ -358,13 +396,9 @@ class GeneralMatrixTerm:
             varCont (VariableContainer): Variable container to be used with this term
         """
 
-        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
-            "Evolved variable "
-            + self.__evolvedVar__
-            + " not registered in used variable container"
-        )
+        super().checkTerm(varCont)
 
-        rowVarOnDual = varCont.dataset[self.__evolvedVar__].attrs["isOnDualGrid"]
+        rowVarOnDual = varCont.dataset[self.evolvedVar].attrs["isOnDualGrid"]
 
         assert self.__implicitVar__ in varCont.dataset.data_vars.keys(), (
             "Implicit variable "
@@ -383,14 +417,14 @@ class GeneralMatrixTerm:
             dict: Dictionary form of GeneralMatrixTerm to be used as individual custom term properties
         """
         gTerm = {
-            "evolvedVar": self.__evolvedVar__,
+            "evolvedVar": self.evolvedVar,
             "implicitVar": self.__implicitVar__,
             "spatialProfile": self.__spatialProfile__,
             "harmonicProfile": self.__harmonicProfile__,
             "velocityProfile": self.__velocityProfile__,
             "evaluatedTermGroup": self.__evaluatedTermGroup__,
-            "implicitGroups": self.__implicitGroups__,
-            "generalGroups": self.__generalGroups__,
+            "implicitGroups": self.implicitGroups,
+            "generalGroups": self.generalGroups,
             "customNormConst": self.__customNormConst__.dict(),
             "timeSignalData": self.__timeSignalData__.dict(),
             "varData": self.__varData__.dict(),
@@ -405,28 +439,90 @@ class GeneralMatrixTerm:
         return gTerm
 
 
+class TermGenerator:
+
+    def __init__(
+        self,
+        implicitGroups: List[int] = [1],
+        generalGroups: List[int] = [],
+        options: Dict[str, object] = {},
+    ) -> None:
+        self.__implicitGroups__ = implicitGroups
+        self.__generalGroups__ = generalGroups
+        self.__options__ = options
+
+    @property
+    def implicitGroups(self) -> List[int]:
+        return self.__implicitGroups__
+
+    @property
+    def generalGroups(self) -> List[int]:
+        return self.__generalGroups__
+
+    def dict(self) -> dict:
+
+        tgDict: Dict[str, object] = {
+            "implicitGroups": self.__implicitGroups__,
+            "generalGroups": self.__generalGroups__,
+        }
+
+        tgDict.update(self.__options__)
+
+        return tgDict
+
+
 class CustomModel:
     """Custom model object property container"""
 
     def __init__(self, modelTag: str) -> None:
         self.__modelTag__ = modelTag
         self.__termTags__: List[str] = []
-        self.__terms__: List[GeneralMatrixTerm] = []
+        self.__terms__: List[Term] = []
         self.__modelboundData__: Dict[str, object] = {}
         self.__termGeneratorTags__: List[str] = []
         self.__termGeneratorProperties__: Dict[str, object] = {}
+        self.__activeImplicitGroups__: List[int] = []
+        self.__activeGeneralGroups__: List[int] = []
 
     @property
     def mbData(self):
         return self.__modelboundData__
 
-    def addTerm(self, termTag: str, term: GeneralMatrixTerm):
+    @property
+    def activeImplicitGroups(self):
+        return self.__activeImplicitGroups__
+
+    @property
+    def activeGeneralGroups(self):
+        return self.__activeGeneralGroups__
+
+    def addTerm(self, termTag: str, term: Term):
         self.__termTags__.append(termTag)
         self.__terms__.append(term)
+        self.__activeImplicitGroups__ += term.implicitGroups
+        self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
+        self.__activeGeneralGroups__ += term.generalGroups
+        self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
 
-    def addTermGenerator(self, generatorTag: str, generatorProperties: dict):
+    def addTermGenerator(
+        self, generatorTag: str, generatorProperties: Union[dict, TermGenerator]
+    ):
         self.__termGeneratorTags__.append(generatorTag)
-        self.__termGeneratorProperties__[generatorTag] = generatorProperties
+
+        if isinstance(generatorProperties, dict):
+            propertiesDict = generatorProperties
+            warnings.warn(
+                "Adding term generator as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+
+        if isinstance(generatorProperties, TermGenerator):
+            propertiesDict = generatorProperties.dict()
+            self.__activeImplicitGroups__ += generatorProperties.implicitGroups
+            self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
+            self.__activeGeneralGroups__ += generatorProperties.generalGroups
+            self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
+
+        self.__termGeneratorProperties__[generatorTag] = propertiesDict
 
     def setModelboundData(self, mbData: dict):
         self.__modelboundData__ = mbData
@@ -1182,8 +1278,8 @@ def termEvaluatorManipulator(
         "evaluatedTermNames": list(terms),
         "resultVarName": resultVarName,
         "priority": priority,
-        "update":update,
-        "accumulate":accumulate
+        "update": update,
+        "accumulate": accumulate,
     }
 
     return manip
@@ -1757,7 +1853,7 @@ def picardBDEIntegrator(
 def CVODEIntegrator(
     relTol=1e-5,
     absTol=1e-10,
-    maxGMRESRestarts=50,
+    maxGMRESRestarts=0,
     CVODEBBDPreParams: List[int] = [0, 0, 0, 0],
 ) -> dict:
     """Return dictionary with CVODE integrator properties. See https://sundials.readthedocs.io/en/latest/index.html
@@ -1765,7 +1861,7 @@ def CVODEIntegrator(
     Args:
         relTol (float, optional): CVODE solver relative tolerance. Defaults to 1e-5.
         absTol (float, optional): CVODE solver absolute tolerance. Defaults to 1e-10.
-        maxGMRESRestarts (int, optional): SPGMR maximum number of restarts. Defaults to 50.
+        maxGMRESRestarts (int, optional): SPGMR maximum number of restarts. Defaults to 0.
         CVODEBBDPreParams (List[int], optional): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
 
     Returns:

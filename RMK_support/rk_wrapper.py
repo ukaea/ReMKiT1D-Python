@@ -71,6 +71,8 @@ class RKWrapper:
         self.__jsonFilepath__ = "./config.json"
 
         self.__modelData__: Dict[str, object] = {"tags": []}
+        self.__activeImplicitGroups__: Dict[str, List[int]] = {}
+        self.__activeGeneralGroups__: Dict[str, List[int]] = {}
         self.__integrableModels__: List[str] = []  # List of integrable models
         self.__manipulatorData__: Dict[str, object] = {"tags": []}
         self.__integratorData__: Dict[str, object] = {
@@ -173,6 +175,14 @@ class RKWrapper:
     @property
     def hdf5Filepath(self):
         return self.__optionsHDF5__["filepath"]
+
+    @property
+    def activeImplicitGroups(self):
+        return self.__activeImplicitGroups__
+
+    @property
+    def activeGeneralGroups(self):
+        return self.__activeGeneralGroups__
 
     def modelTags(self, integrableOnly=False) -> List[str]:
         """Return the list of models registered in this wrapper
@@ -603,10 +613,20 @@ class RKWrapper:
 
         if isinstance(properties, dict):
             propertiesDict = properties
+            warnings.warn(
+                "Adding model as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
 
         if isinstance(properties, sc.CustomModel):
             properties.checkTerms(self.varCont)
             propertiesDict = properties.dict()
+
+            self.__activeGeneralGroups__[list(propertiesDict.keys())[0]] = (
+                properties.activeGeneralGroups
+            )
+            self.__activeImplicitGroups__[list(propertiesDict.keys())[0]] = (
+                properties.activeImplicitGroups
+            )
 
         cast(List[str], self.__modelData__["tags"]).append(
             list(propertiesDict.keys())[0]
@@ -627,17 +647,32 @@ class RKWrapper:
         self.__manipulatorData__[tag] = properties
 
     def setIntegratorGlobalData(
-        self, numImplicitGroups=1, numGeneralGroups=1, initialTimestep=0.1
+        self, numImplicitGroups:Union[int,None]=None, numGeneralGroups:Union[int,None]=None, initialTimestep=0.1
     ) -> None:
         """Set global data for the time integration routines
 
         Args:
-            numImplicitGroups (int, optional): Maximum number of allowed implicit groups. Defaults to 1.
-            numGeneralGroups (int, optional): Maximum number of allowed general groups. Defaults to 1.
+            numImplicitGroups (Union[int,None], optional): Maximum number of allowed implicit groups. Defaults to None, deducing the groups from the models in the wrapper.
+            numGeneralGroups (Union[int,None], optional): Maximum number of allowed general groups. Defaults to None, deducing the groups from the models in the wrapper.
             initialTimestep (float, optional): Default/initial timestep value in normalized units. Defaults to 0.1.
         """
-        self.__integratorData__["numImplicitGroups"] = numImplicitGroups
-        self.__integratorData__["numGeneralGroups"] = numGeneralGroups
+
+        if numImplicitGroups is not None:
+            self.__integratorData__["numImplicitGroups"] = numImplicitGroups
+            warnings.warn(
+                "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+        else: 
+            self.__integratorData__["numImplicitGroups"] = max([max(self.activeImplicitGroups[tag]) for tag in self.modelTags()])
+
+        if numGeneralGroups is not None:
+            self.__integratorData__["numGeneralGroups"] = numGeneralGroups
+            warnings.warn(
+                "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+        else: 
+            self.__integratorData__["numGeneralGroups"] = max([max(self.activeGeneralGroups[tag]) for tag in self.modelTags()])
+
         self.__integratorData__["initialTimestep"] = initialTimestep
 
     def addIntegrator(self, tag: str, properties: dict) -> None:
@@ -899,7 +934,7 @@ class RKWrapper:
             )
 
         self.addManipulator(
-            "stationaryEval_"+varName,
+            "stationaryEval_" + varName,
             sc.termEvaluatorManipulator(
                 terms,
                 varName,

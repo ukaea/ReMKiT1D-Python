@@ -1,7 +1,12 @@
 import numpy as np
 import pytest
 from RMK_support import RKWrapper, VariableContainer, Grid
-from RMK_support.simple_containers import Species
+from RMK_support.simple_containers import (
+    Species,
+    CustomModel,
+    TermGenerator,
+    GeneralMatrixTerm,
+)
 import RMK_support.init_templates as it
 import warnings
 
@@ -232,9 +237,14 @@ def test_set_options():
 
 def test_set_integrators():
     rk = RKWrapper()
+    
+    with pytest.warns(UserWarning) as warnings:
+        rk.setIntegratorGlobalData(2, 2, 0.5)
 
-    rk.setIntegratorGlobalData(2, 2, 0.5)
+    assert warnings[0].message.args[0] == "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
 
+    assert warnings[1].message.args[0] == "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+    
     rk.setTimestepController({"property": True})
 
     rk.addIntegrator("integ", {"property": True})
@@ -332,9 +342,12 @@ def test_add_models_and_maniplators(grid):
     }
 
     dummyModel2 = {"termTags": ["term1"], "term1": {"evolvedVar": "a"}}
-
-    rk.addModel({"model1": dummyModel1})
-    rk.addModel({"model2": dummyModel2})
+    with pytest.warns(
+        UserWarning,
+        match="Adding model as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk.",
+    ):
+        rk.addModel({"model1": dummyModel1})
+        rk.addModel({"model2": dummyModel2})
 
     assert rk.modelTags() == ["model1", "model2"]
 
@@ -349,17 +362,21 @@ def test_add_models_and_maniplators(grid):
         "manip": {"properties": True},
         "model1term1": {
             "type": "termEvaluator",
+            "accumulate": False,
             "evaluatedModelNames": ["model1"],
             "evaluatedTermNames": ["term1"],
             "resultVarName": "model1term1",
             "priority": 4,
+            "update": False,
         },
         "model2term1": {
             "type": "termEvaluator",
+            "accumulate": False,
             "evaluatedModelNames": ["model2"],
             "evaluatedTermNames": ["term1"],
             "resultVarName": "model2term1",
             "priority": 4,
+            "update": False,
         },
     }
 
@@ -379,3 +396,71 @@ def test_add_diagnosis_terms_warning():
         match="addTermDiagnosisForDistVars called when variable n has no terms that evolve it",
     ):
         rk.addTermDiagnosisForDistVars(["n"])
+
+
+def test_add_model_as_obj_error(grid):
+
+    rk = RKWrapper()
+
+    rk.grid = grid
+    rk.addVar("evo1")
+
+    testModel = CustomModel("test")
+
+    testModel.addTerm("term1", GeneralMatrixTerm("evo2", implicitGroups=[1, 2]))
+
+    with pytest.raises(AssertionError) as e_info:
+        rk.addModel(testModel)
+
+    assert (
+        e_info.value.args[0]
+        == "Evolved variable evo2 not registered in used variable container"
+    )
+
+
+def test_add_model_as_obj(grid):
+
+    rk = RKWrapper()
+
+    rk.grid = grid
+    rk.addVar("evo1")
+
+    testModel = CustomModel("test")
+
+    testModel.addTerm("term1", GeneralMatrixTerm("evo1", implicitGroups=[1, 2]))
+    testModel.addTerm(
+        "term2", GeneralMatrixTerm("evo1", implicitGroups=[3], generalGroups=[1, 2])
+    )
+
+    rk.addModel(testModel)
+
+    assert rk.modelTags() == ["test"]
+
+    assert rk.activeImplicitGroups["test"] == [1, 2, 3]
+    assert rk.activeGeneralGroups["test"] == [1, 2]
+
+    rk.setIntegratorGlobalData()
+
+    assert rk.__integratorData__["numImplicitGroups"]==3
+    assert rk.__integratorData__["numGeneralGroups"]==2
+
+
+def test_add_term_gen_as_object():
+
+    rk = RKWrapper()
+
+    testModel = CustomModel("test")
+
+    testModel.addTermGenerator("test1", TermGenerator([1, 2], [1, 2, 3], {"opt1": 1}))
+
+    assert testModel.dict()["test"]["termGenerators"]["test1"] == {
+        "implicitGroups": [1, 2],
+        "generalGroups": [1, 2, 3],
+        "opt1": 1,
+    }
+    rk.addModel(testModel)
+
+    assert rk.modelTags() == ["test"]
+
+    assert rk.activeImplicitGroups["test"] == [1, 2]
+    assert rk.activeGeneralGroups["test"] == [1, 2, 3]

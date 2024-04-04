@@ -3,6 +3,7 @@ import numpy as np
 import csv
 import warnings
 from typing import Tuple
+from .simple_containers import TermGenerator
 
 
 class ModelboundCRMData:
@@ -791,7 +792,7 @@ def termGeneratorCRM(
     implicitTermGroups: List[int] = [1],
     evolvedSpeciesIDs: List[int] = [],
     includedTransitionIndices: List[int] = [],
-) -> dict:
+) -> TermGenerator:
     """Return dictionary with implicit CRM density evolution term generator properties. The term generator must be added to a model
         which has a CRM modelbound data object
 
@@ -802,24 +803,23 @@ def termGeneratorCRM(
         includedTransitionIndices (List[int], optional): List of transition indices in modelbound CRM which should be included in rate calculations
                                                         by this generator. Defaults to [], which is interpreted as all transitions.
     Returns:
-        dict: CRM term generator property dictionary ready to be added to custom model
+        TermGenerator: CRM term generator ready to be added to custom model
     """
 
-    crmTermGenerator = {
+    crmTermGeneratorOptions: Dict[str, object] = {
         "type": "CRMDensityEvolution",
-        "implicitGroups": implicitTermGroups,
         "evolvedSpeciesIDs": evolvedSpeciesIDs,
         "includedTransitionIndices": includedTransitionIndices,
     }
 
-    return crmTermGenerator
+    return TermGenerator(implicitTermGroups, [], crmTermGeneratorOptions)
 
 
 def termGeneratorCRMElEnergy(
     electronEnergyDensVar: str,
     implicitTermGroups: List[int] = [1],
     includedTransitionIndices: List[int] = [],
-) -> dict:
+) -> TermGenerator:
     """Return dictionary with implicit CRM electron energy evolution term generator properties. The term generator must be added to a model
         which has a CRM modelbound data object
 
@@ -830,17 +830,16 @@ def termGeneratorCRMElEnergy(
                                                         by this generator. Defaults to [], which is interpreted as all transitions.
 
     Returns:
-        dict: CRM electron energy evolution term generator property dictionary ready to be added to custom model
+         TermGenerator: CRM electron energy evolution term generator ready to be added to custom model
     """
 
-    crmElEnergyTermGenerator = {
+    crmElEnergyTermGeneratorOptions: Dict[str, object] = {
         "type": "CRMElectronEnergyEvolution",
-        "implicitGroups": implicitTermGroups,
         "electronEnergyDensity": electronEnergyDensVar,
         "includedTransitionIndices": includedTransitionIndices,
     }
 
-    return crmElEnergyTermGenerator
+    return TermGenerator(implicitTermGroups, [], crmElEnergyTermGeneratorOptions)
 
 
 def termGeneratorCRMBoltz(
@@ -852,7 +851,7 @@ def termGeneratorCRMBoltz(
     associatedVarIndex=1,
     absorptionTerms=False,
     detailedBalanceTerms=False,
-) -> dict:
+) -> TermGenerator:
     """Return dictionary with term generator for Boltzmann collision terms based on CRM modelbound data
 
     Args:
@@ -866,10 +865,10 @@ def termGeneratorCRMBoltz(
         detailedBalanceTerms (bool, optional): Set to true if the generated terms are detailed balance terms. Defaults to False.
 
     Returns:
-        dict: CRM Boltzmann term generator property dictionary
+        TermGenerator: CRM Boltzmann term generator
     """
 
-    crmBoltzGenerator = {
+    crmBoltzGeneratorOptions: Dict[str, object] = {
         "type": "CRMFixedBoltzmannCollInt",
         "evolvedHarmonic": evolvedHarmonic,
         "distributionVarName": distributionVarName,
@@ -877,18 +876,17 @@ def termGeneratorCRMBoltz(
         "fixedEnergyIndices": fixedEnergyIndices,
         "absorptionTerm": absorptionTerms,
         "detailedBalanceTerm": detailedBalanceTerms,
-        "implicitGroups": implicitTermGroups,
         "associatedVarIndex": associatedVarIndex,
     }
 
-    return crmBoltzGenerator
+    return TermGenerator(implicitTermGroups, [], crmBoltzGeneratorOptions)
 
 
 def termGeneratorCRMSecEl(
     distributionVarName: str,
     includedTransitionIndices: List[int] = [],
     implicitTermGroups: List[int] = [1],
-) -> dict:
+) -> TermGenerator:
     """Return term generator property dictionary for secondary electron kinetic term generators, which put secondary electrons generated
     in given transitions into the lowest energy cell
 
@@ -898,17 +896,16 @@ def termGeneratorCRMSecEl(
         implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
 
     Returns:
-        dict: CRM term generator for kinetic secondary electron generation terms
+        TermGenerator: CRM term generator for kinetic secondary electron generation terms
     """
 
-    secElGenerator = {
+    secElGeneratorOptions: Dict[str, object] = {
         "type": "CRMSecondaryElectronTerms",
         "distributionVarName": distributionVarName,
         "includedTransitionIndices": includedTransitionIndices,
-        "implicitGroups": implicitTermGroups,
     }
 
-    return secElGenerator
+    return TermGenerator(implicitTermGroups, [], secElGeneratorOptions)
 
 
 def termGeneratorVarCRMBoltz(
@@ -919,7 +916,7 @@ def termGeneratorVarCRMBoltz(
     associatedVarIndex=1,
     absorptionTerms=False,
     superelasticTerms=False,
-) -> dict:
+) -> TermGenerator:
     """Return dictionary with term generator for variable mapping Boltzmann collision terms based on CRM modelbound data
 
     Args:
@@ -932,18 +929,17 @@ def termGeneratorVarCRMBoltz(
         superelasticTerms (bool, optional): Set to true if the generated terms are superelastic terms. Defaults to False.
 
     Returns:
-        dict: CRM Boltzmann term generator property dictionary
+        TermGenerator: CRM Boltzmann term generator
     """
 
-    crmBoltzGenerator = {
+    crmBoltzGeneratorOptions: Dict[str, object] = {
         "type": "CRMFixedBoltzmannCollInt",
         "evolvedHarmonic": evolvedHarmonic,
         "distributionVarName": distributionVarName,
         "includedTransitionIndices": includedTransitionIndices,
         "absorptionTerm": absorptionTerms,
         "superelasticTerm": superelasticTerms,
-        "implicitGroups": implicitTermGroups,
         "associatedVarIndex": associatedVarIndex,
     }
 
-    return crmBoltzGenerator
+    return TermGenerator(implicitTermGroups, [], crmBoltzGeneratorOptions)

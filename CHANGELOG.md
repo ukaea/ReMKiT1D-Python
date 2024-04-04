@@ -5,6 +5,8 @@
 - Bug fixes
 - Added CVODE integrator as an option
 - Added support for new manipulator features
+- Wrapper and model utilities
+- New abstract Term class
 
 ### Breaking Changes
 
@@ -12,13 +14,19 @@
 
 ### Deprecations
 
-- N/A
+- Adding models using just the dictionary form will now raise a deprecation warning.
+- Adding term generators using just the dictionary form will now raise a deprecation warning.
+- Explicitly setting the global number of implicit and general groups will now raise a deprecation warning.
 
 ### New Features
 
 - New CVODE integrator
 - Support for new manipulator features for stationary equations
 - New helper functions in wrapper and variable container
+- It is now possible to query active term groups in models through the wrapper to avoid mixed term group errors due to empty groups. 
+- Terms now inherit from abstract class that enables term group tracking and validity checks
+- Term generators are now a class that enables term group tracking
+- Setting global integrator data can now automatically detect the correct number of implicit and general groups to request from ReMKiT1D
 
 ### Bug Fixes
 
