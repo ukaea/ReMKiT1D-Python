@@ -237,14 +237,20 @@ def test_set_options():
 
 def test_set_integrators():
     rk = RKWrapper()
-    
+
     with pytest.warns(UserWarning) as warnings:
         rk.setIntegratorGlobalData(2, 2, 0.5)
 
-    assert warnings[0].message.args[0] == "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+    assert (
+        warnings[0].message.args[0]
+        == "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+    )
 
-    assert warnings[1].message.args[0] == "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
-    
+    assert (
+        warnings[1].message.args[0]
+        == "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+    )
+
     rk.setTimestepController({"property": True})
 
     rk.addIntegrator("integ", {"property": True})
@@ -441,8 +447,8 @@ def test_add_model_as_obj(grid):
 
     rk.setIntegratorGlobalData()
 
-    assert rk.__integratorData__["numImplicitGroups"]==3
-    assert rk.__integratorData__["numGeneralGroups"]==2
+    assert rk.__integratorData__["numImplicitGroups"] == 3
+    assert rk.__integratorData__["numGeneralGroups"] == 2
 
 
 def test_add_term_gen_as_object():

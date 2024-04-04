@@ -647,7 +647,10 @@ class RKWrapper:
         self.__manipulatorData__[tag] = properties
 
     def setIntegratorGlobalData(
-        self, numImplicitGroups:Union[int,None]=None, numGeneralGroups:Union[int,None]=None, initialTimestep=0.1
+        self,
+        numImplicitGroups: Union[int, None] = None,
+        numGeneralGroups: Union[int, None] = None,
+        initialTimestep=0.1,
     ) -> None:
         """Set global data for the time integration routines
 
@@ -662,16 +665,20 @@ class RKWrapper:
             warnings.warn(
                 "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
             )
-        else: 
-            self.__integratorData__["numImplicitGroups"] = max([max(self.activeImplicitGroups[tag]) for tag in self.modelTags()])
+        else:
+            self.__integratorData__["numImplicitGroups"] = max(
+                [max(self.activeImplicitGroups[tag]) for tag in self.modelTags()]
+            )
 
         if numGeneralGroups is not None:
             self.__integratorData__["numGeneralGroups"] = numGeneralGroups
             warnings.warn(
                 "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
             )
-        else: 
-            self.__integratorData__["numGeneralGroups"] = max([max(self.activeGeneralGroups[tag]) for tag in self.modelTags()])
+        else:
+            self.__integratorData__["numGeneralGroups"] = max(
+                [max(self.activeGeneralGroups[tag]) for tag in self.modelTags()]
+            )
 
         self.__integratorData__["initialTimestep"] = initialTimestep
 

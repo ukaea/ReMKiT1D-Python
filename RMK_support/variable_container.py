@@ -2,6 +2,7 @@ import numpy as np
 import xarray as xr
 from .grid import Grid
 from typing import Union, List, Dict, cast
+import warnings
 
 
 class VariableContainer:
@@ -60,6 +61,12 @@ class VariableContainer:
 
         if data is not None:
             usedData = data
+            if isOnDualGrid:
+                warnings.warn(
+                    "Variable on dual grid "
+                    + name
+                    + " has been initialised with non-zero data. Make sure that the rightmost cell is zeroed out or intentionally left as non-zero."
+                )
         else:
             usedData = np.zeros(dataShape)
 
