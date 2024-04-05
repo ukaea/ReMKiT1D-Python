@@ -132,7 +132,7 @@ def test_add_var(grid):
     rk.addVarAndDual("var", isCommunicated=True, primaryOnDualGrid=True)
 
     compVarCont = VariableContainer(grid)
-    compVarCont.setVariable("time",isDerived=True,isScalar=True)
+    compVarCont.setVariable("time", isDerived=True, isScalar=True)
     compVarCont.setVariable("a")
     compVarCont.setVariable("b", isDerived=True, isScalar=True)
     it.addVarAndDual(compVarCont, "var", primaryOnDualGrid=True)
@@ -149,8 +149,8 @@ def test_add_var(grid):
         "scalarBroadcastRoots": [1],
     }
 
-    assert rk.varList() == ["time","a", "b", "var_dual", "var"]
-    assert rk.varsInOutput() == ["time","a", "b", "var", "var_dual"]
+    assert rk.varList() == ["time", "a", "b", "var_dual", "var"]
+    assert rk.varsInOutput() == ["time", "a", "b", "var", "var_dual"]
 
     rk.varCont = VariableContainer(grid)
 

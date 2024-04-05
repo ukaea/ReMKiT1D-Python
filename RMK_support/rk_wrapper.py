@@ -20,7 +20,7 @@ class RKWrapper:
         """
 
         self.__addTimeVar__ = addTimeVar
-        
+
         self.__normalization__ = {
             "density": 1.0e19,
             "eVTemperature": 10.0,
