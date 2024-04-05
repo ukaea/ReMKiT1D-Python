@@ -503,6 +503,7 @@ class DerivationTerm(Term):
 
 
 class TermGenerator:
+    """Term generator class used to track the term groups into which the generators will put their turns"""
 
     def __init__(
         self,
@@ -523,7 +524,11 @@ class TermGenerator:
         return self.__generalGroups__
 
     def dict(self) -> dict:
+        """Produce dictionary form of TermGenerator
 
+        Returns:
+            dict: Dictionary ready to be added to the config file
+        """
         tgDict: Dict[str, object] = {
             "implicitGroups": self.__implicitGroups__,
             "generalGroups": self.__generalGroups__,
