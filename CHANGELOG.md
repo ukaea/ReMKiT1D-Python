@@ -29,6 +29,7 @@
 - Terms now inherit from abstract class that enables term group tracking and validity checks
 - Term generators are now a class that enables term group tracking
 - Setting global integrator data can now automatically detect the correct number of implicit and general groups to request from ReMKiT1D
+- The "time" variable is now added automatically by the wrapper unless instructed otherwise
 
 ### Bug Fixes
 

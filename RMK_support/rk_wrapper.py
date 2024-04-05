@@ -12,7 +12,15 @@ import os
 class RKWrapper:
     """Wrapper allowing for convenience when building ReMKiT1D config.json file"""
 
-    def __init__(self) -> None:
+    def __init__(self, addTimeVar=True) -> None:
+        """ReMKiT1D wrapper constructor
+
+        Args:
+            addTimeVar (bool, optional): Automatically add the derived "time" variable. Defaults to True.
+        """
+
+        self.__addTimeVar__ = addTimeVar
+        
         self.__normalization__ = {
             "density": 1.0e19,
             "eVTemperature": 10.0,
@@ -103,6 +111,8 @@ class RKWrapper:
             "loadInitValsFromHDF5": False,  # True if variables should be loaded from a complete HDF5 file based on the input vars list in the HDF5 options.
             "initValFilename": "ReMKiT1DVarInput",  # Name of the input hdf5 file
         }
+
+        self.__timeVarPresent__ = False
 
     @property
     def normalization(self):
@@ -332,6 +342,13 @@ class RKWrapper:
             ), "Attempted to add variable to RKWrapper variable container without first setting grid"
             self.__varCont__ = VariableContainer(self.__gridObj__)
 
+            if not self.__timeVarPresent__ and self.__addTimeVar__:
+                self.addVar("time", isDerived=True, isScalar=True)
+                self.__timeVarPresent__ = True
+
+        if name == "time" and self.__timeVarPresent__:
+            return
+
         self.__varCont__.setVariable(
             name,
             data,
@@ -408,6 +425,10 @@ class RKWrapper:
                 self.__gridObj__ is not None
             ), "Attempted to add variable and dual to RKWrapper variable container without first setting grid"
             self.__varCont__ = VariableContainer(self.__gridObj__)
+
+            if not self.__timeVarPresent__ and self.__addTimeVar__:
+                self.addVar("time", isDerived=True, isScalar=True)
+                self.__timeVarPresent__ = True
 
         it.addVarAndDual(
             self.__varCont__,
