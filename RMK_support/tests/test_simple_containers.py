@@ -20,6 +20,7 @@ def test_general_matrix_term_simple():
     )
 
     assert term.dict() == {
+        "termType": "matrixTerm",
         "evolvedVar": "evo",
         "implicitVar": "impl",
         "spatialProfile": [],
@@ -49,6 +50,7 @@ def test_general_matrix_term_profiles():
     )
 
     assert term.dict() == {
+        "termType": "matrixTerm",
         "evolvedVar": "evo",
         "implicitVar": "impl",
         "spatialProfile": np.ones(15).tolist(),
@@ -204,3 +206,16 @@ def test_additive_derivartion():
         str(excinfo.value)
         == "derivTags and linCoeffs in additiveDerivation must be of same size"
     )
+
+
+def test_derivation_term():
+    term = sc.DerivationTerm("evo", sc.derivationRule("rule", ["var1"]), "mbv", [1, 2])
+
+    assert term.dict() == {
+        "termType": "derivationTerm",
+        "evolvedVar": "evo",
+        "generalGroups": [1, 2],
+        "requiredMBVarName": "mbv",
+        "ruleName": "rule",
+        "requiredVarNames": ["var1"],
+    }

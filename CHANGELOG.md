@@ -1,16 +1,17 @@
 # CHANGELOG
 
-## v1.2.0, 2024-03-26
+## v1.2.0, 2024-04-05
 
-- Bug fixes
 - Added CVODE integrator as an option
 - Added support for new manipulator features
 - Wrapper and model utilities
-- New abstract Term class
+- New abstract Term and TermGenerator classes
+- Support for DerivationTerms 
+- Bug fixes
 
 ### Breaking Changes
 
-- N/A
+- ReMKiT1D v1.2.0 will no longer work with old config files, but RMK_Support v1.2.0 should still work with the scripts that generated those files, and will generate v1.2.0-compatible configs.
 
 ### Deprecations
 
@@ -21,6 +22,7 @@
 ### New Features
 
 - New CVODE integrator
+- Support for new DerivationTerms in ReMKiT1D v1.2.0
 - Support for new manipulator features for stationary equations
 - New helper functions in wrapper and variable container
 - It is now possible to query active term groups in models through the wrapper to avoid mixed term group errors due to empty groups. 

@@ -21,6 +21,7 @@ def test_collocated_advection():
             "type": "customModel",
             "termTags": ["divFlux", "leftBC", "rightBC"],
             "divFlux": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "var",
                 "spatialProfile": [],
@@ -44,6 +45,7 @@ def test_collocated_advection():
                 "fixedMatrix": False,
             },
             "leftBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "var",
                 "spatialProfile": [],
@@ -69,6 +71,7 @@ def test_collocated_advection():
                 "fixedMatrix": False,
             },
             "rightBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "var",
                 "spatialProfile": [],
@@ -109,6 +112,7 @@ def test_collocated_pressure_grad():
             "type": "customModel",
             "termTags": ["bulkGrad", "leftBC", "rightBC"],
             "bulkGrad": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux",
                 "implicitVar": "n",
                 "spatialProfile": [],
@@ -132,6 +136,7 @@ def test_collocated_pressure_grad():
                 "fixedMatrix": False,
             },
             "leftBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux",
                 "implicitVar": "n",
                 "spatialProfile": [],
@@ -156,6 +161,7 @@ def test_collocated_pressure_grad():
                 "fixedMatrix": False,
             },
             "rightBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux",
                 "implicitVar": "n",
                 "spatialProfile": [],
@@ -201,6 +207,7 @@ def test_staggered_advection():
             "type": "customModel",
             "termTags": ["divFlux", "leftBC", "rightBC"],
             "divFlux": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "varflux",
                 "spatialProfile": [],
@@ -221,6 +228,7 @@ def test_staggered_advection():
                 "fixedMatrix": False,
             },
             "leftBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "var",
                 "spatialProfile": [],
@@ -246,6 +254,7 @@ def test_staggered_advection():
                 "fixedMatrix": False,
             },
             "rightBC": {
+                "termType": "matrixTerm",
                 "evolvedVar": "var",
                 "implicitVar": "var",
                 "spatialProfile": [],
@@ -286,6 +295,7 @@ def test_staggered_pressure_grad():
             "type": "customModel",
             "termTags": ["bulkGrad"],
             "bulkGrad": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux",
                 "implicitVar": "n",
                 "spatialProfile": [],
@@ -329,6 +339,7 @@ def test_lorentz_forces():
             "type": "customModel",
             "termTags": ["lorentzflux_e", "lorentzflux_ion"],
             "lorentzflux_e": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux_e",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -354,6 +365,7 @@ def test_lorentz_forces():
                 "fixedMatrix": False,
             },
             "lorentzflux_ion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "flux_ion",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -396,6 +408,7 @@ def test_lorentz_force_work():
             "type": "customModel",
             "termTags": ["lorentzWorkflux_e", "lorentzWorkflux_ion"],
             "lorentzWorkflux_e": {
+                "termType": "matrixTerm",
                 "evolvedVar": "We",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -421,6 +434,7 @@ def test_lorentz_force_work():
                 "fixedMatrix": False,
             },
             "lorentzWorkflux_ion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Wion",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -479,6 +493,7 @@ def test_implicit_temperature():
                 "u2TermTion",
             ],
             "identityTermTe": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Te",
                 "implicitVar": "Te",
                 "spatialProfile": [],
@@ -504,6 +519,7 @@ def test_implicit_temperature():
                 "fixedMatrix": False,
             },
             "wTermTe": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Te",
                 "implicitVar": "We",
                 "spatialProfile": [],
@@ -531,6 +547,7 @@ def test_implicit_temperature():
             "modelboundData": {},
             "termGenerators": {"tags": []},
             "u2TermTe": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Te",
                 "implicitVar": "flux_e",
                 "spatialProfile": [],
@@ -558,6 +575,7 @@ def test_implicit_temperature():
                 "fixedMatrix": False,
             },
             "identityTermTion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Tion",
                 "implicitVar": "Tion",
                 "spatialProfile": [],
@@ -583,6 +601,7 @@ def test_implicit_temperature():
                 "fixedMatrix": False,
             },
             "wTermTion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Tion",
                 "implicitVar": "Wion",
                 "spatialProfile": [],
@@ -610,6 +629,7 @@ def test_implicit_temperature():
             "modelboundData": {},
             "termGenerators": {"tags": []},
             "u2TermTion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Tion",
                 "implicitVar": "flux_ion",
                 "spatialProfile": [],
@@ -679,6 +699,7 @@ def test_kinAdvX():
             "type": "customModel",
             "termTags": ["adv_plus1", "adv_minus2"],
             "adv_plus1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -703,6 +724,7 @@ def test_kinAdvX():
                 "fixedMatrix": True,
             },
             "adv_minus2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -745,6 +767,7 @@ def test_ampere_maxwell():
             "type": "customModel",
             "termTags": ["currentflux_e", "currentflux_ion"],
             "currentflux_e": {
+                "termType": "matrixTerm",
                 "evolvedVar": "E",
                 "implicitVar": "flux_e",
                 "spatialProfile": [],
@@ -770,6 +793,7 @@ def test_ampere_maxwell():
                 "fixedMatrix": False,
             },
             "currentflux_ion": {
+                "termType": "matrixTerm",
                 "evolvedVar": "E",
                 "implicitVar": "flux_ion",
                 "spatialProfile": [],
@@ -821,6 +845,7 @@ def test_E_adv():
             "type": "customModel",
             "termTags": ["eAdv_H1", "eAdv_G2"],
             "eAdv_H1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -846,6 +871,7 @@ def test_E_adv():
                 "fixedMatrix": False,
             },
             "eAdv_G2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "E",
                 "spatialProfile": [],
@@ -938,6 +964,7 @@ def test_eeCollIsotropic():
             "type": "customModel",
             "termTags": ["dragTerm", "diffTerm"],
             "dragTerm": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -964,6 +991,7 @@ def test_eeCollIsotropic():
                 "fixedMatrix": False,
             },
             "diffTerm": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1078,6 +1106,7 @@ def test_eiCollIsotropic():
             "type": "customModel",
             "termTags": ["dragTerm", "diffTerm", "diffTermIon", "dragTermIon"],
             "dragTerm": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1106,6 +1135,7 @@ def test_eiCollIsotropic():
                 "fixedMatrix": False,
             },
             "diffTerm": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1134,6 +1164,7 @@ def test_eiCollIsotropic():
                 "fixedMatrix": False,
             },
             "diffTermIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Wion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1159,6 +1190,7 @@ def test_eiCollIsotropic():
                 "fixedMatrix": False,
             },
             "dragTermIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "Wion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1228,6 +1260,7 @@ def test_stationaryIonEIColl():
             "type": "customModel",
             "termTags": ["eiCollStationaryIons"],
             "eiCollStationaryIons": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1327,6 +1360,7 @@ def test_flowingIonEIColl():
                 "df0TermIon4",
             ],
             "diffTermI2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1353,6 +1387,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "diffTermJ2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1379,6 +1414,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "dfdv2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1405,6 +1441,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "termLL2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1430,6 +1467,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C1Il+2_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1455,6 +1493,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C1J-l-1_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1480,6 +1519,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C2Il_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1505,6 +1545,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C2J1-l_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1530,6 +1571,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C3Il+2_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1555,6 +1597,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C4J-l-1_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1580,6 +1623,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C5Il_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1605,6 +1649,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "C6J1-l_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1630,6 +1675,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "diffTermIIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1658,6 +1704,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "diffTermJIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1686,6 +1733,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "dfdvTermIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1714,6 +1762,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "llTermIon": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -1742,6 +1791,8 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "ddf0TermIon1": {
+                "termType": "matrixTerm",
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1770,6 +1821,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "ddf0TermIon2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1798,6 +1850,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "ddf0TermIon3": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1826,6 +1879,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "ddf0TermIon4": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1854,6 +1908,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "df0TermIon1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1882,6 +1937,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "df0TermIon2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1910,6 +1966,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "df0TermIon3": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -1938,6 +1995,7 @@ def test_flowingIonEIColl():
                 "fixedMatrix": False,
             },
             "df0TermIon4": {
+                "termType": "matrixTerm",
                 "evolvedVar": "G_ion",
                 "implicitVar": "nion",
                 "spatialProfile": [],
@@ -2161,6 +2219,7 @@ def test_eeCollHigherL():
                 "C6J1-l_h=2",
             ],
             "8pi*f0*fl": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2186,6 +2245,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "diffTermI2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2212,6 +2272,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "diffTermJ2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2238,6 +2299,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "dfdv2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2264,6 +2326,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "termLL": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2289,6 +2352,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C1Il+2_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2315,6 +2379,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C1J-l-1_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2341,6 +2406,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C2Il_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2367,6 +2433,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C2J1-l_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2393,6 +2460,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C3Il+2_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2419,6 +2487,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C4J-l-1_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2445,6 +2514,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C5Il_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2471,6 +2541,7 @@ def test_eeCollHigherL():
                 "fixedMatrix": False,
             },
             "C6J1-l_h=2": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2610,6 +2681,7 @@ def test_lbcModelRight():
                 "lbcMinus_even3",
             ],
             "lbcPlus_odd1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2637,6 +2709,7 @@ def test_lbcModelRight():
                 "fixedMatrix": False,
             },
             "lbcPlus_even1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2664,6 +2737,7 @@ def test_lbcModelRight():
                 "fixedMatrix": False,
             },
             "lbcMinus_odd3": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2691,6 +2765,7 @@ def test_lbcModelRight():
                 "fixedMatrix": False,
             },
             "lbcMinus_even3": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2755,6 +2830,7 @@ def test_lbcModelLeft():
             "type": "customModel",
             "termTags": ["lbcPlus1", "lbcMinus3"],
             "lbcPlus1": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],
@@ -2781,6 +2857,7 @@ def test_lbcModelLeft():
                 "fixedMatrix": False,
             },
             "lbcMinus3": {
+                "termType": "matrixTerm",
                 "evolvedVar": "f",
                 "implicitVar": "f",
                 "spatialProfile": [],

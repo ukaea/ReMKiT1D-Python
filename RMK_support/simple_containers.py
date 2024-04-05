@@ -417,6 +417,7 @@ class GeneralMatrixTerm(Term):
             dict: Dictionary form of GeneralMatrixTerm to be used as individual custom term properties
         """
         gTerm = {
+            "termType": "matrixTerm",
             "evolvedVar": self.evolvedVar,
             "implicitVar": self.__implicitVar__,
             "spatialProfile": self.__spatialProfile__,
@@ -435,6 +436,68 @@ class GeneralMatrixTerm(Term):
 
         if self.__copyTermName__ is not None:
             gTerm["multCopyTermName"] = self.__copyTermName__
+
+        return gTerm
+
+
+class DerivationTerm(Term):
+    """Derivation-based explicit term options used to construct custom models. The result of evaluating a derivation term is the result of the derivation optionally multiplied by a modelbound variable. Does not support evolving distributions."""
+
+    def __init__(
+        self,
+        evolvedVar: str,
+        derivationRule: dict,
+        mbVar: Union[str, None] = None,
+        generalGroups=[1],
+    ) -> None:
+        """Derivation term constructor
+
+        Args:
+            evolvedVar (str): Name of the evolved variable. Distributions not supported.
+            derivationRule (dict): Derivation rule containing name and required variables.
+            mbVar (Union[str,None], optional): Optional modelbound varibale. Defaults to None.
+            generalGroups (list, optional): General groups this term belongs to within its model. Defaults to [1].
+        """
+
+        super().__init__(evolvedVar, [], generalGroups)
+
+        self.__derivationRule__ = derivationRule
+        self.__mbVar__ = mbVar
+
+    def checkTerm(self, varCont: VariableContainer):
+        """Perform consistency check on term, including the required variables
+
+        Args:
+            varCont (VariableContainer): Variable container to be used with this term
+        """
+
+        super().checkTerm(varCont)
+
+        requiredVars = self.__derivationRule__["requiredVarNames"]
+
+        for name in requiredVars:
+            assert name in varCont.dataset.data_vars.keys(), (
+                "Required derivation variable "
+                + name
+                + " not registered in used variable container"
+            )
+
+    def dict(self):
+        """Returns dictionary form of DerivationTerm to be used in json output
+
+        Returns:
+            dict: Dictionary form of DerivationTerm to be used as individual custom term properties
+        """
+        gTerm = {
+            "termType": "derivationTerm",
+            "evolvedVar": self.evolvedVar,
+            "generalGroups": self.generalGroups,
+        }
+
+        if self.__mbVar__ is not None:
+            gTerm["requiredMBVarName"] = self.__mbVar__
+
+        gTerm.update(self.__derivationRule__)
 
         return gTerm
 
@@ -1855,6 +1918,13 @@ def CVODEIntegrator(
     absTol=1e-10,
     maxGMRESRestarts=0,
     CVODEBBDPreParams: List[int] = [0, 0, 0, 0],
+    useAdamsMoulton=False,
+    useStabLimitDet=False,
+    maxOrder=5,
+    maxInternalStep=500,
+    minTimestep: float = 0.0,
+    maxTimestep: float = 0.0,
+    initTimestep: float = 0.0,
 ) -> dict:
     """Return dictionary with CVODE integrator properties. See https://sundials.readthedocs.io/en/latest/index.html
 
@@ -1863,6 +1933,13 @@ def CVODEIntegrator(
         absTol (float, optional): CVODE solver absolute tolerance. Defaults to 1e-10.
         maxGMRESRestarts (int, optional): SPGMR maximum number of restarts. Defaults to 0.
         CVODEBBDPreParams (List[int], optional): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
+        useAdamsMoulton (bool, optional): If true will use Adams Moulton method instead of the default BDF. Defaults to False.
+        useStabLimitDet (bool, optional): If true will use stability limit detection. Defaults to False.
+        maxOrder (int, optional): Maximum integrator order (set to BDF default, AM default is 12). Defaults to 5.
+        maxInternalStep (int, optional): Maximum number of internal CVODE steps per ReMKiT1D timestep. Defaults to 500.
+        minTimestep (float, optional): Minimum allowed internal timestep. Defaults to 0.0.
+        maxTimestep (float, optional): Maximum allowed internal timestep. Defaults to 0.0, resulting in no limit.
+        initTimestep (float, optional): Initial internal timestep. Defaults to 0.0, letting CVODE decide.
 
     Returns:
         dict: Integrator property dictionary

@@ -184,6 +184,21 @@ class RKWrapper:
     def activeGeneralGroups(self):
         return self.__activeGeneralGroups__
 
+    def activeGroups(self, modelTag: str) -> List[int]:
+        """Return list of active model term groups of given model.
+        NOTE: Should only be called after all models have been added and global integrator data set.
+
+        Args:
+            modelTag (str): Model tag
+
+        Returns:
+            List[int]: List of active term groups, taking into account offset of general groups
+        """
+        return self.activeImplicitGroups[modelTag] + [
+            self.__integratorData__["numImplicitGroups"] + g
+            for g in self.activeGeneralGroups[modelTag]
+        ]
+
     def modelTags(self, integrableOnly=False) -> List[str]:
         """Return the list of models registered in this wrapper
         Args:
@@ -667,7 +682,10 @@ class RKWrapper:
             )
         else:
             self.__integratorData__["numImplicitGroups"] = max(
-                [max(self.activeImplicitGroups[tag]) for tag in self.modelTags()]
+                [
+                    max(self.activeImplicitGroups[tag], default=0)
+                    for tag in self.modelTags()
+                ]
             )
 
         if numGeneralGroups is not None:
@@ -677,7 +695,10 @@ class RKWrapper:
             )
         else:
             self.__integratorData__["numGeneralGroups"] = max(
-                [max(self.activeGeneralGroups[tag]) for tag in self.modelTags()]
+                [
+                    max(self.activeGeneralGroups[tag], default=0)
+                    for tag in self.modelTags()
+                ]
             )
 
         self.__integratorData__["initialTimestep"] = initialTimestep
