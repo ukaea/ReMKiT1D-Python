@@ -337,7 +337,7 @@ class GeneralMatrixTerm(Term):
         velocityProfile: List[float] = [],
         evaluatedTermGroup=0,
         implicitGroups=[1],
-        generalGroups=[1],
+        generalGroups: List[int] = [],
         customNormConst: Union[CustomNormConst, float, int] = CustomNormConst(),
         timeSignalData=TimeSignalData(),
         varData=VarData(),
