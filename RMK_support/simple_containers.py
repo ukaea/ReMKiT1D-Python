@@ -325,6 +325,32 @@ class TimeSignalData:
         return tData
 
 
+def diagonalStencil(
+    evolvedXCells: List[int] = [],
+    evolvedHarmonics: List[int] = [],
+    evolvedVCells: List[int] = [],
+) -> dict:
+    """Return diagonal stencil properties
+
+    Args:
+        evolvedXCells (List[int], optional): List of evolved x cells. Defaults to [], resulting in all allowed cells.
+        evolvedHarmonics (List[int], optional): List of evolved harmonics, used only if the row variable is a distribution. Defaults to [], resulting in all harmonics.
+        evolvedVCells (List[int], optional): List of evolved velocity cells, used only if the row variable is a distribution. Defaults to [], resulting in all velocity cells.
+
+    Returns:
+        dict: Stencil property dictionary
+    """
+
+    stencil = {
+        "stencilType": "diagonalStencil",
+        "evolvedXCells": evolvedXCells,
+        "evolvedHarmonics": evolvedHarmonics,
+        "evolvedVCells": evolvedVCells,
+    }
+
+    return stencil
+
+
 class GeneralMatrixTerm(Term):
     """General (custom) matrix term options used to construct custom models"""
 
@@ -341,7 +367,7 @@ class GeneralMatrixTerm(Term):
         customNormConst: Union[CustomNormConst, float, int] = CustomNormConst(),
         timeSignalData=TimeSignalData(),
         varData=VarData(),
-        stencilData={},
+        stencilData=diagonalStencil(),
         skipPattern=False,
         fixedMatrix=False,
         copyTermName: Union[str, None] = None,
@@ -1378,32 +1404,6 @@ def extractorManipulator(
     }
 
     return manip
-
-
-def diagonalStencil(
-    evolvedXCells: List[int] = [],
-    evolvedHarmonics: List[int] = [],
-    evolvedVCells: List[int] = [],
-) -> dict:
-    """Return diagonal stencil properties
-
-    Args:
-        evolvedXCells (List[int], optional): List of evolved x cells. Defaults to [], resulting in all allowed cells.
-        evolvedHarmonics (List[int], optional): List of evolved harmonics, used only if the row variable is a distribution. Defaults to [], resulting in all harmonics.
-        evolvedVCells (List[int], optional): List of evolved velocity cells, used only if the row variable is a distribution. Defaults to [], resulting in all velocity cells.
-
-    Returns:
-        dict: Stencil property dictionary
-    """
-
-    stencil = {
-        "stencilType": "diagonalStencil",
-        "evolvedXCells": evolvedXCells,
-        "evolvedHarmonics": evolvedHarmonics,
-        "evolvedVCells": evolvedVCells,
-    }
-
-    return stencil
 
 
 def staggeredDivStencil() -> dict:

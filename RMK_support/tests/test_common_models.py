@@ -29,7 +29,7 @@ def test_collocated_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -53,7 +53,7 @@ def test_collocated_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -79,7 +79,7 @@ def test_collocated_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -120,7 +120,7 @@ def test_collocated_pressure_grad():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["eVTemperature", "time", "length", "speed"],
@@ -144,7 +144,7 @@ def test_collocated_pressure_grad():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["eVTemperature", "time", "length", "speed"],
@@ -169,7 +169,7 @@ def test_collocated_pressure_grad():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["eVTemperature", "time", "length", "speed"],
@@ -215,7 +215,7 @@ def test_staggered_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -236,7 +236,7 @@ def test_staggered_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -262,7 +262,7 @@ def test_staggered_advection():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["speed", "time", "length"],
@@ -303,7 +303,7 @@ def test_staggered_pressure_grad():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["eVTemperature", "time", "length", "speed"],
@@ -347,7 +347,7 @@ def test_lorentz_forces():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elCharge / amu,
                     "normNames": ["EField", "time", "speed"],
@@ -373,7 +373,7 @@ def test_lorentz_forces():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": elCharge / amu,
                     "normNames": ["EField", "time", "speed"],
@@ -416,7 +416,7 @@ def test_lorentz_force_work():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1,
                     "normNames": ["EField", "time", "speed", "eVTemperature"],
@@ -442,7 +442,7 @@ def test_lorentz_force_work():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 1,
                     "normNames": ["EField", "time", "speed", "eVTemperature"],
@@ -501,7 +501,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": [],
@@ -527,7 +527,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 2 / 3,
                     "normNames": [],
@@ -555,7 +555,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -amu / (3 * elCharge),
                     "normNames": ["speed", "eVTemperature"],
@@ -583,7 +583,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": [],
@@ -609,7 +609,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 2 / 3,
                     "normNames": [],
@@ -637,7 +637,7 @@ def test_implicit_temperature():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -amu / (3 * elCharge),
                     "normNames": ["speed", "eVTemperature"],
@@ -707,7 +707,7 @@ def test_kinAdvX():
                 "velocityProfile": grid.vGrid.tolist(),
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0 / 3.0,
                     "normNames": ["time", "velGrid", "length"],
@@ -732,7 +732,7 @@ def test_kinAdvX():
                 "velocityProfile": grid.vGrid.tolist(),
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": ["time", "velGrid", "length"],
@@ -775,7 +775,7 @@ def test_ampere_maxwell():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": elCharge / epsilon0,
                     "normNames": ["density", "time", "speed", "EField"],
@@ -801,7 +801,7 @@ def test_ampere_maxwell():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elCharge / epsilon0,
                     "normNames": ["density", "time", "speed", "EField"],
@@ -853,7 +853,7 @@ def test_E_adv():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": chargeMassRatio / 3.0,
                     "normNames": ["EField", "time", "velGrid"],
@@ -879,7 +879,7 @@ def test_E_adv():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": chargeMassRatio,
                     "normNames": ["EField", "time", "velGrid"],
@@ -972,7 +972,7 @@ def test_eeCollIsotropic():
                 "velocityProfile": [1.0 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -999,7 +999,7 @@ def test_eeCollIsotropic():
                 "velocityProfile": [1.0 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -1114,7 +1114,7 @@ def test_eiCollIsotropic():
                 "velocityProfile": vOuter,
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -1143,7 +1143,7 @@ def test_eiCollIsotropic():
                 "velocityProfile": vOuter,
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -1172,7 +1172,7 @@ def test_eiCollIsotropic():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": [],
@@ -1198,7 +1198,7 @@ def test_eiCollIsotropic():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1.0,
                     "normNames": [],
@@ -1268,7 +1268,7 @@ def test_stationaryIonEIColl():
                 "velocityProfile": vProfile,
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -1368,7 +1368,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -1395,7 +1395,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -1422,7 +1422,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -1449,7 +1449,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**3 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -1475,7 +1475,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -1501,7 +1501,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -1527,7 +1527,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -1553,7 +1553,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -1579,7 +1579,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -1605,7 +1605,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": (2.0 / 15.0 + 1.0 / 3.0) * gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -1631,7 +1631,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -1657,7 +1657,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -1683,7 +1683,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1712,7 +1712,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1741,7 +1741,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1770,7 +1770,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1800,7 +1800,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1829,7 +1829,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1858,7 +1858,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1887,7 +1887,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1916,7 +1916,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1945,7 +1945,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -1974,7 +1974,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -2003,7 +2003,7 @@ def test_flowingIonEIColl():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -elIonMassRatio / 3,
                     "normNames": ["velGrid", "speed"],
@@ -2227,7 +2227,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 8 * np.pi * gamma0norm,
                     "normNames": ["density", "time", "velGrid"],
@@ -2253,7 +2253,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -2280,7 +2280,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -2307,7 +2307,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -2334,7 +2334,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**3 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -2360,7 +2360,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -2387,7 +2387,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -2414,7 +2414,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -2441,7 +2441,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -2468,7 +2468,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -gamma0norm / 5,
                     "normNames": ["density", "time", "velGrid"],
@@ -2495,7 +2495,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 2 * gamma0norm / 15,
                     "normNames": ["density", "time", "velGrid"],
@@ -2522,7 +2522,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": gamma0norm / 3,
                     "normNames": ["density", "time", "velGrid"],
@@ -2549,7 +2549,7 @@ def test_eeCollHigherL():
                 "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -0.0,
                     "normNames": ["density", "time", "velGrid"],
@@ -2689,7 +2689,7 @@ def test_lbcModelRight():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1 / 3,
                     "normNames": [],
@@ -2717,7 +2717,7 @@ def test_lbcModelRight():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -1 / 3,
                     "normNames": [],
@@ -2745,7 +2745,7 @@ def test_lbcModelRight():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -2 / 3,
                     "normNames": [],
@@ -2773,7 +2773,7 @@ def test_lbcModelRight():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": -2 / 3,
                     "normNames": [],
@@ -2838,7 +2838,7 @@ def test_lbcModelLeft():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 1 / 3,
                     "normNames": [],
@@ -2865,7 +2865,7 @@ def test_lbcModelLeft():
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
-                "generalGroups": [1],
+                "generalGroups": [],
                 "customNormConst": {
                     "multConst": 2 / 3,
                     "normNames": [],

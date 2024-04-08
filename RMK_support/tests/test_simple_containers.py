@@ -28,11 +28,16 @@ def test_general_matrix_term_simple():
         "velocityProfile": [],
         "evaluatedTermGroup": 0,
         "implicitGroups": [1],
-        "generalGroups": [1],
+        "generalGroups": [],
         "customNormConst": {"multConst": 5.0, "normNames": [], "normPowers": []},
         "timeSignalData": sc.TimeSignalData().dict(),
         "varData": sc.VarData(["var"]).dict(),
-        "stencilData": {},
+        "stencilData": {
+            "stencilType": "diagonalStencil",
+            "evolvedXCells": [],
+            "evolvedHarmonics": [],
+            "evolvedVCells": [],
+        },
         "skipPattern": False,
         "fixedMatrix": False,
     }
@@ -58,7 +63,7 @@ def test_general_matrix_term_profiles():
         "velocityProfile": 2 * np.ones(10).tolist(),
         "evaluatedTermGroup": 0,
         "implicitGroups": [1],
-        "generalGroups": [1],
+        "generalGroups": [],
         "customNormConst": {
             "multConst": 2.0,
             "normNames": ["norm1"],
@@ -66,7 +71,12 @@ def test_general_matrix_term_profiles():
         },
         "timeSignalData": sc.TimeSignalData(signalType="box", period=5).dict(),
         "varData": sc.VarData().dict(),
-        "stencilData": {},
+        "stencilData": {
+            "stencilType": "diagonalStencil",
+            "evolvedXCells": [],
+            "evolvedHarmonics": [],
+            "evolvedVCells": [],
+        },
         "skipPattern": False,
         "fixedMatrix": False,
     }
