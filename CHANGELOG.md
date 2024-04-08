@@ -7,6 +7,7 @@
 - Wrapper and model utilities
 - New abstract Term and TermGenerator classes
 - Support for DerivationTerms 
+- New examples with CVODE and other v1.2.0 features
 - Bug fixes
 
 ### Breaking Changes
