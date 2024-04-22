@@ -198,9 +198,8 @@ class VarData:
                         "Variable "
                         + var
                         + " appears in required row variables for evolved variable on "
-                        + ("dual"
-                        if rowVarOnDual
-                        else "regular") + " grid but doesn't live on that grid"
+                        + ("dual" if rowVarOnDual else "regular")
+                        + " grid but doesn't live on that grid"
                     )
 
         for var in self.__reqColVars___:
@@ -219,9 +218,8 @@ class VarData:
                     "Variable "
                     + var
                     + " appears in required column variables for implicit variable on "
-                    + ("dual"
-                    if colVarOnDual
-                    else "regular") + " grid but doesn't live on that grid"
+                    + ("dual" if colVarOnDual else "regular")
+                    + " grid but doesn't live on that grid"
                 )
 
     def dict(self):
@@ -1878,7 +1876,7 @@ def picardBDEIntegrator(
     stepMultiplier=2,
     stepDecrament=1,
     minNonlinIters=5,
-    maxBDERestarts=3
+    maxBDERestarts=3,
 ) -> dict:
     """Return integrator properties for Backward Euler integrator with Picard (fixed point) iterations
 
@@ -1914,7 +1912,7 @@ def picardBDEIntegrator(
             "stepMultiplier": stepMultiplier,
             "stepDecrament": stepDecrament,
             "minNumNonlinIters": minNonlinIters,
-            "maxBDERestarts":maxBDERestarts
+            "maxBDERestarts": maxBDERestarts,
         },
     }
 
