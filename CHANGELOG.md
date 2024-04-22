@@ -31,11 +31,13 @@
 - Term generators are now a class that enables term group tracking
 - Setting global integrator data can now automatically detect the correct number of implicit and general groups to request from ReMKiT1D
 - The "time" variable is now added automatically by the wrapper unless instructed otherwise
+- Can now directly control maximum number of BDE integrator restarts (still hard-capped to 10 in the Fortran code)
 
 ### Bug Fixes
 
 - Fixed bug where addTermDiagnosis calls in the wrapper always displayed a warning
 - Fixed bug in customFluid1DStencil where the required variables were not correctly set to "none" when not passed
+- Fixed bug in VarData validity checking where the wrong warning message was shown
 
 ## v1.1.0, 2024-02-02
 

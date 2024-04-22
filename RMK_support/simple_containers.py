@@ -198,9 +198,9 @@ class VarData:
                         "Variable "
                         + var
                         + " appears in required row variables for evolved variable on "
-                        + "dual"
+                        + ("dual"
                         if rowVarOnDual
-                        else "regular" + " grid but doesn't live on that grid"
+                        else "regular") + " grid but doesn't live on that grid"
                     )
 
         for var in self.__reqColVars___:
@@ -219,9 +219,9 @@ class VarData:
                     "Variable "
                     + var
                     + " appears in required column variables for implicit variable on "
-                    + "dual"
+                    + ("dual"
                     if colVarOnDual
-                    else "regular" + " grid but doesn't live on that grid"
+                    else "regular") + " grid but doesn't live on that grid"
                 )
 
     def dict(self):
@@ -1878,6 +1878,7 @@ def picardBDEIntegrator(
     stepMultiplier=2,
     stepDecrament=1,
     minNonlinIters=5,
+    maxBDERestarts=3
 ) -> dict:
     """Return integrator properties for Backward Euler integrator with Picard (fixed point) iterations
 
@@ -1893,6 +1894,7 @@ def picardBDEIntegrator(
         stepMultiplier (int, optional): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
         stepDecrament (int, optional): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
         minNonlinIters (int, optional): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        maxBDERestarts (int, optional): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
 
     Returns:
         dict: Integrator property dictionary
@@ -1912,6 +1914,7 @@ def picardBDEIntegrator(
             "stepMultiplier": stepMultiplier,
             "stepDecrament": stepDecrament,
             "minNumNonlinIters": minNonlinIters,
+            "maxBDERestarts":maxBDERestarts
         },
     }
 
