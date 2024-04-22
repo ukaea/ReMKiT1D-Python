@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-04-05
+## v1.2.0, 2024-04-22
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
