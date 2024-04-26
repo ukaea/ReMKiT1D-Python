@@ -76,6 +76,7 @@ def test_wrapper_init(grid):
         "restart": {"save": False, "load": False, "frequency": 1, "resetTime": False},
         "loadInitValsFromHDF5": False,
         "initValFilename": "ReMKiT1DVarInput",
+        "outputPoints":[]
     }
 
     assert rk.manipulatorData == {"tags": []}
@@ -291,6 +292,9 @@ def test_timeloop_options():
     assert rk.timeloopData["outputMode"] == "minimumSaveInterval"
     assert rk.timeloopData["minimumSaveInterval"] == 10.0
 
+    rk.setOutputDrivenTimesteps([0.1, 0.2])
+    assert rk.timeloopData["mode"] == "outputDriven"
+    assert rk.timeloopData["outputPoints"] == [0.1, 0.2]
     rk.setRestartOptions(True, True, 100, True)
 
     assert rk.timeloopData["restart"] == {

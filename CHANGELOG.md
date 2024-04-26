@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-04-22
+## v1.2.0, 2024-04-26
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
@@ -8,6 +8,7 @@
 - New abstract Term and TermGenerator classes
 - Support for DerivationTerms 
 - New examples with CVODE and other v1.2.0 features
+- Support for new timeloop option
 - Bug fixes
 
 ### Breaking Changes
@@ -32,6 +33,7 @@
 - Setting global integrator data can now automatically detect the correct number of implicit and general groups to request from ReMKiT1D
 - The "time" variable is now added automatically by the wrapper unless instructed otherwise
 - Can now directly control maximum number of BDE integrator restarts (still hard-capped to 10 in the Fortran code)
+- New timeloop option for output-driven timesteps
 
 ### Bug Fixes
 

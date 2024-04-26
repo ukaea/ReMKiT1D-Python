@@ -96,12 +96,15 @@ class RKWrapper:
             # Options: "fixedNumSteps" - advances for a fixed number of (global) integration steps, with no regard to elapsed time
             #          "normalizedTimeTarget" - advances until a set amount of time has passed, expressed in normalized time units
             #          "realTimeTarget" - advances until a set amount of time has passed in seconds
+            #          "outputDriven" - takes steps small enough to hit specific output points. If an output point is sufficiently far
+            #                           into the future, the integrator initial timestep is observed
             "numTimesteps": 1,  # Number of timesteps to advance for, ignored unless mode = fixedNumSteps
             "timeValueTarget": 1.0,  # Time value for the two non-fixed step number modes - the mode governs how this number is interpreted
             "outputMode": "fixedNumSteps",  # Output options: "fixedNumSteps" - output once a fixed number of steps has passed
             #            "minimumSaveInterval" - outputs once a set amount of time has passed (in normalized time units)
             "fixedSaveInterval": 1,  # Save frequency if the output mode is fixedNumSteps, ignored otherwise
             "minimumSaveInterval": 0.1,  # Interval corresponding to the output mode of the same name
+            "outputPoints": [],  # Output points for the outputDriven mode
             "restart": {  # Options governing the saving and loading of restart data.
                 "save": False,  # If true, restart data will be saved
                 "load": False,  # If true, restart data will be loaded at the start of the loop. Will throw error if loadInitValsFromHDF5 is also true
@@ -773,6 +776,16 @@ class RKWrapper:
 
         self.__timeloopData__["mode"] = "fixedNumSteps"
         self.__timeloopData__["numTimesteps"] = numTimesteps
+
+    def setOutputDrivenTimesteps(self, outputPoints: List[float]) -> None:
+        """Set timeloop mode to output-driven. Overrides any output options for the timeloop in favour of the defined steps
+
+        Args:
+            outputPoints (List[float]): List of output times. Should be positive increasing numbers
+        """
+
+        self.__timeloopData__["mode"] = "outputDriven"
+        self.__timeloopData__["outputPoints"] = outputPoints
 
     def setTimeTargetTimestepping(
         self, timeTarget: float, realTimeTarget=False
