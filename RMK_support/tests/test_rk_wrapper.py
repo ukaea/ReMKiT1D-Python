@@ -73,10 +73,16 @@ def test_wrapper_init(grid):
         "outputMode": "fixedNumSteps",
         "fixedSaveInterval": 1,
         "minimumSaveInterval": 0.1,
-        "restart": {"save": False, "load": False, "frequency": 1, "resetTime": False},
+        "restart": {
+            "save": False,
+            "load": False,
+            "frequency": 1,
+            "resetTime": False,
+            "initialOutputIndex": 0,
+        },
         "loadInitValsFromHDF5": False,
         "initValFilename": "ReMKiT1DVarInput",
-        "outputPoints":[]
+        "outputPoints": [],
     }
 
     assert rk.manipulatorData == {"tags": []}
@@ -295,13 +301,14 @@ def test_timeloop_options():
     rk.setOutputDrivenTimesteps([0.1, 0.2])
     assert rk.timeloopData["mode"] == "outputDriven"
     assert rk.timeloopData["outputPoints"] == [0.1, 0.2]
-    rk.setRestartOptions(True, True, 100, True)
+    rk.setRestartOptions(True, True, 100, True, 2)
 
     assert rk.timeloopData["restart"] == {
         "save": True,
         "load": True,
         "frequency": 100,
         "resetTime": True,
+        "initialOutputIndex": 2,
     }
 
     rk.setHDF5FileInitialData(["var", "var2"], filename="hdf5file")

@@ -8,7 +8,7 @@
 - New abstract Term and TermGenerator classes
 - Support for DerivationTerms 
 - New examples with CVODE and other v1.2.0 features
-- Support for new timeloop option
+- Support for new timeloop options
 - Bug fixes
 
 ### Breaking Changes
@@ -34,6 +34,7 @@
 - The "time" variable is now added automatically by the wrapper unless instructed otherwise
 - Can now directly control maximum number of BDE integrator restarts (still hard-capped to 10 in the Fortran code)
 - New timeloop option for output-driven timesteps
+- New timeloop restart option for setting initial output index
 
 ### Bug Fixes
 
