@@ -1877,6 +1877,7 @@ def picardBDEIntegrator(
     stepDecrament=1,
     minNonlinIters=5,
     maxBDERestarts=3,
+    relaxationWeight: float = 1.0,
 ) -> dict:
     """Return integrator properties for Backward Euler integrator with Picard (fixed point) iterations
 
@@ -1893,6 +1894,8 @@ def picardBDEIntegrator(
         stepDecrament (int, optional): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
         minNonlinIters (int, optional): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
         maxBDERestarts (int, optional): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
+        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxatioWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+
 
     Returns:
         dict: Integrator property dictionary
@@ -1906,6 +1909,7 @@ def picardBDEIntegrator(
         "convergenceVars": convergenceVars,
         "associatedPETScGroup": associatedPETScGroup,
         "use2Norm": use2Norm,
+        "relaxationWeight": relaxationWeight,
         "internalStepControl": {
             "active": internalStepControl,
             "startingNumSteps": initialNumInternalSteps,

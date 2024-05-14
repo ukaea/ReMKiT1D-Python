@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-04-26
+## v1.2.0, 2024-05-14
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
@@ -9,6 +9,7 @@
 - Support for DerivationTerms 
 - New examples with CVODE and other v1.2.0 features
 - Support for new timeloop options
+- Support for setting relaxation weight in BDE integrator
 - Bug fixes
 
 ### Breaking Changes
@@ -35,6 +36,7 @@
 - Can now directly control maximum number of BDE integrator restarts (still hard-capped to 10 in the Fortran code)
 - New timeloop option for output-driven timesteps
 - New timeloop restart option for setting initial output index
+- Over- and under-relaxation now supported in BDE integrator 
 
 ### Bug Fixes
 
