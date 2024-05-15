@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-05-14
+## v1.2.0, 2024-05-15
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
@@ -10,6 +10,7 @@
 - New examples with CVODE and other v1.2.0 features
 - Support for new timeloop options
 - Support for setting relaxation weight in BDE integrator
+- Improvements to Grid class
 - Bug fixes
 
 ### Breaking Changes
@@ -37,6 +38,7 @@
 - New timeloop option for output-driven timesteps
 - New timeloop restart option for setting initial output index
 - Over- and under-relaxation now supported in BDE integrator 
+- Added functions to the Grid class for calculating the dual cell widths and cell volumes
 
 ### Bug Fixes
 

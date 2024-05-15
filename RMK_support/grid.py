@@ -226,6 +226,69 @@ class Grid:
 
         return gridData
 
+    def dualXGridWidths(self, extendedBoundaryCells=False) -> np.ndarray:
+        """Return the widths of the dual grid cells, potentially extending the boundary cells so that the dual domain covers the regular domain. Note that the returned array is the same length as the grid, with the last value set to 1 if the grid is not periodic and to dx[0]/2+dx[-1]/2 if it is
+
+        Args:
+            extendedBoundaryCells (bool, optional): If true and the grid is not periodic will extend the left and right boundary cells to completely cover the first and last dual cell. Defaults to False.
+
+        Returns:
+            np.ndarray: Dual grid cell widths (same length as regular cell widths)
+        """
+        dx = self.xWidths
+        dx_dual = np.ones(len(dx))
+        dx_dual[:-1] = dx[:-1] / 2 + dx[1:] / 2
+
+        if self.isPeriodic:
+            dx_dual[-1] = dx[0] / 2 + dx[-1] / 2
+
+        if extendedBoundaryCells and not self.isPeriodic:
+            dx_dual[0] += dx[0] / 2
+            dx_dual[-2] += dx[-1] / 2
+
+        return dx_dual
+
+    def xGridCellVolumes(self) -> np.ndarray:
+        """Return cell volumes on the regular grid
+
+        Returns:
+            np.ndarray: Regular cell volumes
+        """
+
+        dx = self.xWidths
+        J = self.xJacobian
+
+        V = np.zeros(len(dx))
+
+        V = dx * (J[:-1] + J[1:]) / 2
+
+        return V
+
+    def xGridCellVolumesDual(self, extendedBoundaryCells=False) -> np.ndarray:
+        """Return cell volumes on the dual grid, potentially extending the boundary cells so that the dual domain covers the regular domain. Note that the returned array is the same length as the grid, with the last value set to 1 if the grid is not periodic and to V[0]/2+V[-1]/2 if it is
+
+        Args:
+            extendedBoundaryCells (bool, optional): If true and the grid is not periodic will extend the left and right boundary cells to completely cover the first and last dual cell. Defaults to False.
+
+
+        Returns:
+            np.ndarray: Dual cell volumes
+        """
+
+        V = self.xGridCellVolumes()
+
+        V_dual = np.ones(len(V))
+        V_dual[:-1] = V[:-1] / 2 + V[1:] / 2
+
+        if self.isPeriodic:
+            V_dual[-1] = V[0] / 2 + V[-1] / 2
+
+        if extendedBoundaryCells and not self.isPeriodic:
+            V_dual[0] += V[0] / 2
+            V_dual[-2] += V[-1] / 2
+
+        return V_dual
+
     def __repr__(self) -> str:
         return json.dumps(self.dict(), indent=4, sort_keys=True)
 

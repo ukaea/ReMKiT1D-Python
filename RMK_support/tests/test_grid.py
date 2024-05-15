@@ -134,3 +134,51 @@ def test_velocity_moment_velocity_vector(xGrid, vGrid):
     assert all(
         abs(expectedResult - grid.velocityMoment(testArray, 0)) < 1e-15 * sumGrid
     )
+
+
+def test_x_widths_dual(xGrid):
+    grid = Grid(xGrid=xGrid, interpretXGridAsWidths=True)
+
+    dx_dual = grid.dualXGridWidths(True)
+
+    assert abs(dx_dual[0] - xGrid[0] - xGrid[1] / 2) < 1e-12
+    assert abs(dx_dual[-2] - xGrid[-1] - xGrid[-2] / 2) < 1e-12
+
+    assert abs(dx_dual[1] - xGrid[1] / 2 - xGrid[2] / 2) < 1e-12
+
+    gridPeriodic = Grid(xGrid=xGrid, interpretXGridAsWidths=True, isPeriodic=True)
+
+    dx_dual = gridPeriodic.dualXGridWidths(True)
+    assert abs(dx_dual[0] - xGrid[0] / 2 - xGrid[1] / 2) < 1e-12
+    assert abs(dx_dual[-1] - xGrid[0] / 2 - xGrid[-1] / 2) < 1e-12
+
+
+def test_x_volumes(xGrid):
+    grid = Grid(xGrid=xGrid, interpretXGridAsWidths=True)
+
+    grid.xJacobian = 2 * np.ones(len(xGrid) + 1)
+
+    V = grid.xGridCellVolumes()
+
+    assert all(abs(V - 2 * xGrid) < 1e-12)
+
+
+def test_x_volumes_dual(xGrid):
+    grid = Grid(xGrid=xGrid, interpretXGridAsWidths=True)
+
+    grid.xJacobian = 2 * np.ones(len(xGrid) + 1)
+
+    V = grid.xGridCellVolumes()
+    V_dual = grid.xGridCellVolumesDual(True)
+
+    assert abs(V_dual[0] - V[0] - V[1] / 2) < 1e-12
+    assert abs(V_dual[-2] - V[-1] - V[-2] / 2) < 1e-12
+
+    assert abs(V_dual[1] - V[1] / 2 - V[2] / 2) < 1e-12
+
+    gridPeriodic = Grid(xGrid=xGrid, interpretXGridAsWidths=True, isPeriodic=True)
+    gridPeriodic.xJacobian = 2 * np.ones(len(xGrid) + 1)
+
+    V_dual = gridPeriodic.xGridCellVolumesDual(True)
+    assert abs(V_dual[0] - V[0] / 2 - V[1] / 2) < 1e-12
+    assert abs(V_dual[-1] - V[0] / 2 - V[-1] / 2) < 1e-12
