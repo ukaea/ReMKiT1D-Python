@@ -40,6 +40,7 @@
 - Over- and under-relaxation now supported in BDE integrator 
 - Added functions to the Grid class for calculating the dual cell widths and cell volumes
 - Added spatial integral functions to the Grid class and analysis helper routines relating to spatial integrals in analysis_support
+- Derivation rules are now stored as xarray attributes, so VariableContainers can be built directly from datasets
 
 ### Bug Fixes
 

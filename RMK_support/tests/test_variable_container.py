@@ -42,6 +42,7 @@ def test_add_fluid_zeros(grid, vCont):
         "isScalar": False,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
     }
 
 
@@ -65,6 +66,7 @@ def test_add_fluid_nonzeros(grid, vCont):
         "isScalar": False,
         "isOnDualGrid": True,
         "priority": 0,
+        "derivationRule": "none",
     }
 
 
@@ -90,6 +92,7 @@ def test_add_dist_nonzeros(grid, vCont):
         "isScalar": False,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
     }
 
 
@@ -108,6 +111,7 @@ def test_add_scalar(grid, vCont):
         "isScalar": True,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
     }
 
 

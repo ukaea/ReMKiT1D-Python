@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 from .grid import Grid
-from typing import Union, List, Dict, cast
+from typing import Union, List, Dict, cast, Any
 import warnings
 
 
@@ -13,7 +13,8 @@ class VariableContainer:
             coords={"x": gridObj.xGrid, "h": range(gridObj.numH()), "v": gridObj.vGrid}
         )
 
-        self.__derivationRules__: Dict[str, object] = {}
+    def initFromDataset(self, dataset: xr.Dataset) -> None:
+        self.dataset = dataset
 
     def setVariable(
         self,
@@ -70,6 +71,12 @@ class VariableContainer:
         else:
             usedData = np.zeros(dataShape)
 
+        derivRule: Union[Dict[Any, Any], str] = "none"
+
+        if isDerived:
+            if derivationRule is not None:
+                derivRule = derivationRule
+
         dataArr = xr.DataArray(
             usedData,
             dims=dims,
@@ -81,14 +88,11 @@ class VariableContainer:
                 "isScalar": isScalar,
                 "isOnDualGrid": isOnDualGrid,
                 "priority": priority,
+                "derivationRule": derivRule,
             },
         )
 
         self.dataset[name] = dataArr
-
-        if isDerived:
-            if derivationRule is not None:
-                self.__derivationRules__[name] = derivationRule
 
     def getVarAttrs(self, varName: str) -> dict:
         """Get attributes associated with given variable
@@ -157,8 +161,10 @@ class VariableContainer:
                     self.dataset.data_vars[var].data.flatten().tolist()
                 )
 
-            if var in self.__derivationRules__.keys():
-                varProps["derivationRule"] = self.__derivationRules__[var]
+            if self.dataset.data_vars[var].attrs["derivationRule"] is not "none":
+                varProps["derivationRule"] = self.dataset.data_vars[var].attrs[
+                    "derivationRule"
+                ]
 
             cast(Dict[str, object], derDict)[var] = varProps
 
