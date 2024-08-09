@@ -5,6 +5,8 @@ from .grid import Grid
 from .rk_wrapper import RKWrapper
 from typing import List, Dict
 import matplotlib.pyplot as plt  # type: ignore
+import matplotlib as mpl  # type: ignore
+from itertools import cycle, islice
 
 
 def calculateFullF(data: xr.Dataset, dataName: str, Ntheta: int) -> xr.DataArray:
@@ -88,7 +90,7 @@ def termXIntegralPlot(
         and not loadedData[varName].attrs["isScalar"]
     ), "termXIntegralPlot available only for fluid variables"
     termVarNames = [
-        model + term for model, term in wrapper.getTermsThatEvolveVar("Wi")
+        model + term for model, term in wrapper.getTermsThatEvolveVar(varName)
     ] + extraTermNames
 
     varIntegrals = {
@@ -98,7 +100,11 @@ def termXIntegralPlot(
 
     plt.rcParams["figure.dpi"] = 150
     _, ax = plt.subplots(1, 1, figsize=(4, 4))
-    s = np.zeros(len(loadedData["time"][plotFrom:]))
+    s = np.zeros(len(loadedData["time"]))
+    cmap = mpl.colormaps["plasma"]
+    colors = cmap(np.linspace(0, 1, len(varIntegrals.keys())))
+    linestyles = list(islice(cycle(["-", "--", "-."]), len(colors)))
+    ax.set_prop_cycle(color=colors, linestyle=linestyles)
     for k, v in varIntegrals.items():
         (
             ax.semilogy(loadedData["time"][plotFrom:], abs(v[plotFrom:]), label=k)
@@ -107,9 +113,21 @@ def termXIntegralPlot(
         )
         s += v
     (
-        ax.semilogy(loadedData["time"][plotFrom:], abs(s[plotFrom:]), label="Total")
+        ax.semilogy(
+            loadedData["time"][plotFrom:],
+            abs(s[plotFrom:]),
+            color="k",
+            linestyle="--",
+            label="Total",
+        )
         if logPlot
-        else ax.plot(loadedData["time"][plotFrom:], s[plotFrom:], label="Total")
+        else ax.plot(
+            loadedData["time"][plotFrom:],
+            s[plotFrom:],
+            color="k",
+            linestyle="--",
+            label="Total",
+        )
     )
     ax.legend(bbox_to_anchor=(1.1, 1.05))
     ax.set_ylabel("$\int [d(" + varName + ")/dt] dx$")
