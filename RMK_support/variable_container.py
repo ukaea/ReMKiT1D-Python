@@ -161,7 +161,7 @@ class VariableContainer:
                     self.dataset.data_vars[var].data.flatten().tolist()
                 )
 
-            if self.dataset.data_vars[var].attrs["derivationRule"] is not "none":
+            if self.dataset.data_vars[var].attrs["derivationRule"] != "none":
                 varProps["derivationRule"] = self.dataset.data_vars[var].attrs[
                     "derivationRule"
                 ]
