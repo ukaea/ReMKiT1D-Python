@@ -331,3 +331,22 @@ class Grid:
             )
 
         return moment
+
+    def domainIntegral(
+        self, data: np.ndarray, isOnDualGrid: bool = False
+    ) -> np.ndarray:
+
+        assert (
+            data.shape[0] == self.numX()
+        ), "data passed to domainIntegral must have its first dimension conform to the spatial grid"
+
+        dV = (
+            self.xGridCellVolumesDual(extendedBoundaryCells=True)
+            if isOnDualGrid
+            else self.xGridCellVolumes()
+        )
+
+        if isOnDualGrid and not self.isPeriodic:
+            dV[-1] = 0
+
+        return np.transpose(np.dot(data.transpose(), dV))
