@@ -130,7 +130,7 @@ def termXIntegralPlot(
         )
     )
     ax.legend(bbox_to_anchor=(1.1, 1.05))
-    ax.set_ylabel("$\int [d(" + varName + ")/dt] dx$")
+    ax.set_ylabel("$\int [d($" + varName + "$)/dt] dx$")
     ax.set_xlabel("$t[t_0]$")
 
     varIntegrals.update({"Total": s})
