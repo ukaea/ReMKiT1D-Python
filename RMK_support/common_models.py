@@ -4,6 +4,7 @@ import numpy as np
 from .grid import Grid
 from .rk_wrapper import RKWrapper
 from . import calculation_tree_support as ct
+from .sk_normalization import calculateNorms
 
 
 def collocatedAdvection(
@@ -2809,6 +2810,7 @@ def standardBaseFluid(
 
 
 def bohmBoundaryModel(
+    wrapper: RKWrapper,
     speciesName: str,
     densityName: str,
     fluxName: str,
@@ -2819,6 +2821,7 @@ def bohmBoundaryModel(
     speciesMass: float,
     sheathGamma: str,
     boundaryFlowSpeed: Union[str, None] = None,
+    boundaryFlux: Union[str, None] = None,
     viscosityName: Union[str, None] = None,
     viscosityLimitMultName: Union[str, None] = None,
     leftBoundary=False,
@@ -2858,7 +2861,7 @@ def bohmBoundaryModel(
         ),
     )
 
-    newModel.addTerm("continuity_Bohm", bcCont)
+    # newModel.addTerm("continuity_Bohm", bcCont)
 
     # Momentum BC
     bcMom = sc.GeneralMatrixTerm(
@@ -2870,6 +2873,31 @@ def bohmBoundaryModel(
     )
 
     newModel.addTerm("momentum_Bohm", bcMom)
+
+    if boundaryFlowSpeed is not None:
+
+        gridObj = wrapper.grid
+        jacobian = gridObj.xJacobian
+        dV = gridObj.xGridCellVolumesDual()
+        Nx = len(dV)
+        lastCellVolume = dV[-2]
+        skNorms = calculateNorms(
+            wrapper.normalization["eVTemperature"],
+            wrapper.normalization["density"],
+            wrapper.normalization["referenceIonZ"],
+        )
+
+        momAdvBC = sc.GeneralMatrixTerm(
+            fluxName + "_dual",
+            densityName,
+            customNormConst=-skNorms["length"] * jacobian[-1] / lastCellVolume,
+            stencilData=sc.diagonalStencil([Nx - 1]),
+            varData=sc.VarData(
+                reqRowVars=[densityName + "_dual", boundaryFlux, boundaryFlowSpeed],
+                reqRowPowers=[-1.0, 1.0, 1.0],
+            ),
+        )
+        # newModel.addTerm("momentum_Bohm", momAdvBC)
 
     # Energy BC
 

@@ -182,3 +182,25 @@ def test_x_volumes_dual(xGrid):
     V_dual = gridPeriodic.xGridCellVolumesDual(True)
     assert abs(V_dual[0] - V[0] / 2 - V[1] / 2) < 1e-12
     assert abs(V_dual[-1] - V[0] / 2 - V[-1] / 2) < 1e-12
+
+
+def test_domain_integral(xGrid):
+    grid = Grid(xGrid=xGrid, interpretXGridAsWidths=True)
+
+    grid.xJacobian = 2 * np.ones(len(xGrid) + 1)
+
+    data = np.ones((len(xGrid), 3))
+
+    assert all(grid.domainIntegral(data) == np.ones(3) * np.sum(grid.xWidths * 2))
+
+
+def test_domain_integral_dual(xGrid):
+    grid = Grid(xGrid=xGrid, interpretXGridAsWidths=True)
+
+    grid.xJacobian = 2 * np.ones(len(xGrid) + 1)
+
+    data = np.ones((len(xGrid), 3))
+
+    dV = grid.xGridCellVolumesDual(extendedBoundaryCells=True)
+
+    assert all(grid.domainIntegral(data) == np.ones(3) * np.sum(dV[:-1]))
