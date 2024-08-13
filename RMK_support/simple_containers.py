@@ -1962,6 +1962,13 @@ def CVODEIntegrator(
         "absTol": absTol,
         "maxRestarts": maxGMRESRestarts,
         "CVODEPreBBDParams": CVODEBBDPreParams,
+        "CVODEUseAdamsMoulton": useAdamsMoulton,
+        "CVODEUseStabLimDet":useStabLimitDet,
+        "CVODEMaxOrder":maxOrder,
+        "CVODEMaxInternalSteps":maxInternalStep,
+        "CVODEMaxStepSize":maxTimestep,
+        "CVODEMinStepSize":minTimestep,
+        "CVODEInitStepSize":initTimestep
     }
 
     return integ
