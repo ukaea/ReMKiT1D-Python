@@ -479,7 +479,7 @@ class DerivationTerm(Term):
         Args:
             evolvedVar (str): Name of the evolved variable. Distributions not supported.
             derivationRule (dict): Derivation rule containing name and required variables.
-            mbVar (Union[str,None], optional): Optional modelbound varibale. Defaults to None.
+            mbVar (Union[str,None], optional): Optional modelbound variable. Defaults to None.
             generalGroups (list, optional): General groups this term belongs to within its model. Defaults to [1].
         """
 
