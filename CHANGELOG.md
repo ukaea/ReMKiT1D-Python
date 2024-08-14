@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-08-09
+## v1.2.0, 2024-08-14
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
@@ -11,6 +11,7 @@
 - Support for new timeloop options
 - Support for setting relaxation weight in BDE integrator
 - Improvements to Grid class
+- Metadata improvements
 - Bug fixes
 
 ### Breaking Changes
@@ -41,6 +42,7 @@
 - Added functions to the Grid class for calculating the dual cell widths and cell volumes
 - Added spatial integral functions to the Grid class and analysis helper routines relating to spatial integrals in analysis_support
 - Derivation rules are now stored as xarray attributes, so VariableContainers can be built directly from datasets
+- Variables can now have normalisation constants and related unnormalised units associated with them as xarray attributes
 
 ### Bug Fixes
 

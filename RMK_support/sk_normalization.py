@@ -128,7 +128,7 @@ def calculateNorms(Te: float, ne: float, Z: float) -> dict:
     Returns:
         dict: Dictionary containing all norms with corresponding ReMKiT1D keys
     """
-    
+
     return {
         "eVTemperature": Te,
         "density": ne,

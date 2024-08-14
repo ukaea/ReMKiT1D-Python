@@ -43,6 +43,8 @@ def test_add_fluid_zeros(grid, vCont):
         "isOnDualGrid": False,
         "priority": 0,
         "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 
@@ -54,7 +56,13 @@ def test_add_fluid_nonzeros(grid, vCont):
         match="Variable on dual grid var has been initialised with non-zero data. Make sure that the rightmost cell is zeroed out or intentionally left as non-zero.",
     ):
         testCont.setVariable(
-            "var", np.ones(grid.numX()), isDerived=True, units="arb", isOnDualGrid=True
+            "var",
+            np.ones(grid.numX()),
+            isDerived=True,
+            units="arb",
+            isOnDualGrid=True,
+            normSI=2.0,
+            unitSI="a",
         )
 
     assert all(testCont.dataset["var"] == np.ones(grid.numX()))
@@ -67,6 +75,8 @@ def test_add_fluid_nonzeros(grid, vCont):
         "isOnDualGrid": True,
         "priority": 0,
         "derivationRule": "none",
+        "normSI": 2.0,
+        "unitSI": "a",
     }
 
 
@@ -93,6 +103,8 @@ def test_add_dist_nonzeros(grid, vCont):
         "isOnDualGrid": False,
         "priority": 0,
         "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 
@@ -112,6 +124,8 @@ def test_add_scalar(grid, vCont):
         "isOnDualGrid": False,
         "priority": 0,
         "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 

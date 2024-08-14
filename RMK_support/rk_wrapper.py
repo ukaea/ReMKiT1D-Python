@@ -320,6 +320,8 @@ class RKWrapper:
         isCommunicated=False,
         hostScalarProcess=0,
         derivOptions: Union[None, dict] = None,
+        normSI: float = 1.0,
+        unitSI: str = "",
     ) -> None:
         """Add variable to the wrapper variable container
 
@@ -338,6 +340,8 @@ class RKWrapper:
             isCommunicated (bool, optional): True if the variable should be communicated. Defaults to False.
             hostScalarProcess (int, optional): Host process in case of a communicated scalar variable. Defaults to 0.
             derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
+            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional) Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -364,6 +368,8 @@ class RKWrapper:
             isOnDualGrid,
             priority,
             derivationRule,
+            normSI=normSI,
+            unitSI=unitSI,
         )
 
         if outputVar:
@@ -404,6 +410,8 @@ class RKWrapper:
         isCommunicated=False,
         communicateSecondary=True,
         derivOptions: Union[None, dict] = None,
+        normSI: float = 1.0,
+        unitSI: str = "",
     ) -> None:
         """Add variable and its dual
 
@@ -422,6 +430,8 @@ class RKWrapper:
             isCommunicated (bool, optional): Set to true if primary variable should be communicated. Defaults to False.
             communicateSecondary (bool, optional): Set to true if secondary variable should be communicated (only if primary is communicated). Defaults to True.
             derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
+            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional) Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -446,6 +456,8 @@ class RKWrapper:
             units,
             priority,
             dualSuffix,
+            normSI=normSI,
+            unitSI=unitSI,
         )
 
         if outputVar:

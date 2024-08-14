@@ -28,6 +28,8 @@ class VariableContainer:
         isOnDualGrid=False,
         priority=0,
         derivationRule: Union[None, dict] = None,
+        normSI: float = 1.0,
+        unitSI: str = "",
     ):
         """Sets values and attributes for variable in dataset
 
@@ -42,6 +44,8 @@ class VariableContainer:
             isOnDualGrid (bool, optional): True if the variable is defined on dual grid. Defaults to False.
             priority (int, optional): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
             derivationRule (Union[None,dict], optional) Optional derivation rule for derived variables. Defaults to None.
+            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional) Optional associated SI unit. Defaults to "".
         """
 
         assert name not in ["x", "h", "v"], (
@@ -89,6 +93,8 @@ class VariableContainer:
                 "isOnDualGrid": isOnDualGrid,
                 "priority": priority,
                 "derivationRule": derivRule,
+                "normSI": normSI,
+                "unitSI": unitSI,
             },
         )
 
