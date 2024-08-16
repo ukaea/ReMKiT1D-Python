@@ -2931,10 +2931,8 @@ def addNodeMatrixTermModel(
     wrapper: RKWrapper,
     modelTag: str,
     evolvedVar: str,
-    termDefs: List[Tuple[Union[ct.Node, None], str]],
+    termDefs: List[Tuple[ct.Node, str]],
     stencilData: Union[List[dict], None] = None,
-    colDefs: Union[List[Union[ct.Node, None]], None] = None,
-    normConsts: Union[List[Union[float, None]], None] = None,
 ):
     """Adds model with additive matrix terms of the form rowVar * implicitVar, where rowVar is a modelbound variable derived from a treeDerivation given a node. Optionally gives each matrix terms a different stencil.
 
@@ -2944,7 +2942,6 @@ def addNodeMatrixTermModel(
         evolvedVar (str): Evolved variable for all matrix terms
         termDefs (List[Tuple[ct.Node,str]]): Term definitions. A list of (Node,implicitVarName) tuples, such that each matrix term is given by the variable calulated using the corresponding tuple's first component (the Node) and with the implicit variable name given by the second component
         stencilData (Union[List[dict, optional): Optional list of stencil data for each matrix term. Defaults to None.
-        ...
     """
 
     newModel = sc.CustomModel(modelTag)
@@ -2955,55 +2952,27 @@ def addNodeMatrixTermModel(
         assert len(stencilData) == len(
             termDefs
         ), "If provided, stencilData in addNodeMatrixTermModel must conform to length of termDefs"
-    # Add more assertions
+
     for i, term in enumerate(termDefs):
-
-        reqMBRowVars = []
-        reqMBColVars = []
-        if term[0] is not None:
-            wrapper.addCustomDerivation(
-                "nodeModelDeriv_" + modelTag + "_" + str(i),
-                ct.treeDerivation(cast(ct.Node, term[0])),
-            )
-            mbData.addVariable(
-                "nodeVar_" + str(i),
-                sc.derivationRule(
-                    "nodeModelDeriv_" + modelTag + "_" + str(i),
-                    ct.getLeafVars(cast(ct.Node, term[0])),
-                ),
-            )
-
-            reqMBRowVars = ["nodeVar_" + str(i)]
-
-        if colDefs is not None:
-            if colDefs[i] is not None:
-                wrapper.addCustomDerivation(
-                    "nodeModelDeriv_" + modelTag + "_" + str(i) + "_col",
-                    ct.treeDerivation(cast(ct.Node, colDefs[i])),
-                )
-            mbData.addVariable(
-                "nodeColVar_" + str(i),
-                sc.derivationRule(
-                    "nodeModelDeriv_" + modelTag + "_" + str(i) + "_col",
-                    ct.getLeafVars(cast(ct.Node, colDefs[i])),
-                ),
-            )
-            reqMBColVars = ["nodeColVar_" + str(i)]
+        wrapper.addCustomDerivation(
+            "nodeModelDeriv_" + modelTag + "_" + str(i), ct.treeDerivation(term[0])
+        )
+        mbData.addVariable(
+            "nodeVar_" + str(i),
+            sc.derivationRule(
+                "nodeModelDeriv_" + modelTag + "_" + str(i), ct.getLeafVars(term[0])
+            ),
+        )
 
         usedStencilData = sc.diagonalStencil()
         if stencilData is not None:
             usedStencilData = stencilData[i]
 
-        normConst = 1.0
-        if normConsts is not None:
-            if normConsts[i] is not None:
-                normConst = normConsts[i]
         newTerm = sc.GeneralMatrixTerm(
             evolvedVar,
             term[1],
-            varData=sc.VarData(reqMBRowVars=reqMBColVars, reqMBColVars=reqMBColVars),
+            varData=sc.VarData(reqMBRowVars=["nodeVar_" + str(i)]),
             stencilData=usedStencilData,
-            customNormConst=normConst,
         )
 
         newModel.addTerm("nodeTerm_" + str(i), newTerm)
