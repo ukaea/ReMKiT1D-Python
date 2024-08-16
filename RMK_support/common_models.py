@@ -2810,7 +2810,6 @@ def standardBaseFluid(
 
 
 def bohmBoundaryModel(
-    wrapper: RKWrapper,
     speciesName: str,
     densityName: str,
     fluxName: str,
@@ -2821,7 +2820,6 @@ def bohmBoundaryModel(
     speciesMass: float,
     sheathGamma: str,
     boundaryFlowSpeed: Union[str, None] = None,
-    boundaryFlux: Union[str, None] = None,
     viscosityName: Union[str, None] = None,
     viscosityLimitMultName: Union[str, None] = None,
     leftBoundary=False,
