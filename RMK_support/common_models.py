@@ -1239,7 +1239,7 @@ def flowingIonEIColl(
     Args:
         modelTag (str): Tag of model to be added
         distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of the implicit ion density variable 
+        ionDensVar (str): Name of the implicit ion density variable
         ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
@@ -2861,7 +2861,7 @@ def bohmBoundaryModel(
         ),
     )
 
-    # newModel.addTerm("continuity_Bohm", bcCont)
+    newModel.addTerm("continuity_Bohm", bcCont)
 
     # Momentum BC
     bcMom = sc.GeneralMatrixTerm(
@@ -2873,31 +2873,6 @@ def bohmBoundaryModel(
     )
 
     newModel.addTerm("momentum_Bohm", bcMom)
-
-    if boundaryFlowSpeed is not None:
-
-        gridObj = wrapper.grid
-        jacobian = gridObj.xJacobian
-        dV = gridObj.xGridCellVolumesDual()
-        Nx = len(dV)
-        lastCellVolume = dV[-2]
-        skNorms = calculateNorms(
-            wrapper.normalization["eVTemperature"],
-            wrapper.normalization["density"],
-            wrapper.normalization["referenceIonZ"],
-        )
-
-        momAdvBC = sc.GeneralMatrixTerm(
-            fluxName + "_dual",
-            densityName,
-            customNormConst=-skNorms["length"] * jacobian[-1] / lastCellVolume,
-            stencilData=sc.diagonalStencil([Nx - 1]),
-            varData=sc.VarData(
-                reqRowVars=[densityName + "_dual", boundaryFlux, boundaryFlowSpeed],
-                reqRowPowers=[-1.0, 1.0, 1.0],
-            ),
-        )
-        # newModel.addTerm("momentum_Bohm", momAdvBC)
 
     # Energy BC
 
