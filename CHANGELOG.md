@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.0, 2024-08-14
+## v1.2.0, 2024-09-19
 
 - Added CVODE integrator as an option
 - Added support for new manipulator features
@@ -12,6 +12,7 @@
 - Support for setting relaxation weight in BDE integrator
 - Improvements to Grid class
 - Metadata improvements
+- Added New Notebooks section to the changelog
 - Bug fixes
 
 ### Breaking Changes
@@ -49,6 +50,12 @@
 - Fixed bug where addTermDiagnosis calls in the wrapper always displayed a warning
 - Fixed bug in customFluid1DStencil where the required variables were not correctly set to "none" when not passed
 - Fixed bug in VarData validity checking where the wrong warning message was shown
+
+### New Notebooks 
+
+- ReMKiT1D_advection_matrix_free
+- ReMKiT1D_limiters_CVODE
+- ReMKiT1D_pred_prey_CVODE
 
 ## v1.1.0, 2024-02-02
 

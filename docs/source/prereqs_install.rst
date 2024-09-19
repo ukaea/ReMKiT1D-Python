@@ -16,6 +16,7 @@ The following libraries are required by the package and will be installed automa
 #. panel 
 #. matplotlib
 #. h5py
+#. scipy
 
 -------------
 Installation
