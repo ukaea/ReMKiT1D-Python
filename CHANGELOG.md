@@ -1,5 +1,62 @@
 # CHANGELOG
 
+## v1.2.0, 2024-09-19
+
+- Added CVODE integrator as an option
+- Added support for new manipulator features
+- Wrapper and model utilities
+- New abstract Term and TermGenerator classes
+- Support for DerivationTerms 
+- New examples with CVODE and other v1.2.0 features
+- Support for new timeloop options
+- Support for setting relaxation weight in BDE integrator
+- Improvements to Grid class
+- Metadata improvements
+- Added New Notebooks section to the changelog
+- Bug fixes
+
+### Breaking Changes
+
+- ReMKiT1D v1.2.0 will no longer work with old config files, but RMK_Support v1.2.0 should still work with the scripts that generated those files, and will generate v1.2.0-compatible configs.
+
+### Deprecations
+
+- Adding models using just the dictionary form will now raise a deprecation warning.
+- Adding term generators using just the dictionary form will now raise a deprecation warning.
+- Explicitly setting the global number of implicit and general groups will now raise a deprecation warning.
+
+### New Features
+
+- New CVODE integrator
+- Support for new DerivationTerms in ReMKiT1D v1.2.0
+- Support for new manipulator features for stationary equations
+- New helper functions in wrapper and variable container
+- It is now possible to query active term groups in models through the wrapper to avoid mixed term group errors due to empty groups. 
+- Terms now inherit from abstract class that enables term group tracking and validity checks
+- Term generators are now a class that enables term group tracking
+- Setting global integrator data can now automatically detect the correct number of implicit and general groups to request from ReMKiT1D
+- The "time" variable is now added automatically by the wrapper unless instructed otherwise
+- Can now directly control maximum number of BDE integrator restarts (still hard-capped to 10 in the Fortran code)
+- New timeloop option for output-driven timesteps
+- New timeloop restart option for setting initial output index
+- Over- and under-relaxation now supported in BDE integrator 
+- Added functions to the Grid class for calculating the dual cell widths and cell volumes
+- Added spatial integral functions to the Grid class and analysis helper routines relating to spatial integrals in analysis_support
+- Derivation rules are now stored as xarray attributes, so VariableContainers can be built directly from datasets
+- Variables can now have normalisation constants and related unnormalised units associated with them as xarray attributes
+
+### Bug Fixes
+
+- Fixed bug where addTermDiagnosis calls in the wrapper always displayed a warning
+- Fixed bug in customFluid1DStencil where the required variables were not correctly set to "none" when not passed
+- Fixed bug in VarData validity checking where the wrong warning message was shown
+
+### New Notebooks 
+
+- ReMKiT1D_advection_matrix_free
+- ReMKiT1D_limiters_CVODE
+- ReMKiT1D_pred_prey_CVODE
+
 ## v1.1.0, 2024-02-02
 
 - Support for features in ReMKiT1D v1.1.0

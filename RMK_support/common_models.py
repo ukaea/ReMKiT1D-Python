@@ -4,6 +4,7 @@ import numpy as np
 from .grid import Grid
 from .rk_wrapper import RKWrapper
 from . import calculation_tree_support as ct
+from .sk_normalization import calculateNorms
 
 
 def collocatedAdvection(
@@ -1238,7 +1239,7 @@ def flowingIonEIColl(
     Args:
         modelTag (str): Tag of model to be added
         distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
+        ionDensVar (str): Name of the implicit ion density variable
         ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
@@ -2510,6 +2511,7 @@ def dvEnergyTerm(
     wrapper: RKWrapper,
     multConst: float = -1.0,
     k: int = 0,
+    implicitGroups=[1],
 ) -> sc.GeneralMatrixTerm:
     """Return velocity space drag-like heating/cooling matrix term: proportional to 1/v**2 * d/dv(Df) where D is a velocity space vector proportional to v**k * dv, with k set by the user, controlling which velocity cells get the bulk of the energy source. Assumes default normalization.
 
@@ -2518,7 +2520,8 @@ def dvEnergyTerm(
         varData (sc.VarData): Required variable data used to customize the rate (should result in something normalized to temperature/time, assuming velocity is normalized to thermal velocity)
         wrapper (RKWrapper): Wrapper used to retrieve velocity grid info
         multConst (float, optional): Multiplicative constant for the normalization. Defaults to -1.0, which assumes that a positive rate is heating
-        k (int ,optional): Optional power for the drag coefficient (effectively multiplies by v**k). If not 0 varData should include the electron density divided by the k-th moment of f_0 (in the moment derivation sense). Defaults to 0.
+        k (int, optional): Optional power for the drag coefficient (effectively multiplies by v**k). If not 0 varData should include the electron density divided by the k-th moment of f_0 (in the moment derivation sense). Defaults to 0.
+        implicitGroups (list, optional): Implicit term groups of parent model to which this term belongs to. Defaults to [1].
     Returns:
         sc.GeneralMatrixTerm: Term object ready to be added into a model
     """
@@ -2539,6 +2542,7 @@ def dvEnergyTerm(
 
     newTerm = sc.GeneralMatrixTerm(
         distFunName,
+        implicitGroups=implicitGroups,
         customNormConst=normConst,
         velocityProfile=vProfile,
         varData=varData,

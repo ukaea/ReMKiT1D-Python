@@ -12,7 +12,15 @@ import os
 class RKWrapper:
     """Wrapper allowing for convenience when building ReMKiT1D config.json file"""
 
-    def __init__(self) -> None:
+    def __init__(self, addTimeVar=True) -> None:
+        """ReMKiT1D wrapper constructor
+
+        Args:
+            addTimeVar (bool, optional): Automatically add the derived "time" variable. Defaults to True.
+        """
+
+        self.__addTimeVar__ = addTimeVar
+
         self.__normalization__ = {
             "density": 1.0e19,
             "eVTemperature": 10.0,
@@ -71,6 +79,9 @@ class RKWrapper:
         self.__jsonFilepath__ = "./config.json"
 
         self.__modelData__: Dict[str, object] = {"tags": []}
+        self.__activeImplicitGroups__: Dict[str, List[int]] = {}
+        self.__activeGeneralGroups__: Dict[str, List[int]] = {}
+        self.__integrableModels__: List[str] = []  # List of integrable models
         self.__manipulatorData__: Dict[str, object] = {"tags": []}
         self.__integratorData__: Dict[str, object] = {
             "stepTags": [],
@@ -85,21 +96,27 @@ class RKWrapper:
             # Options: "fixedNumSteps" - advances for a fixed number of (global) integration steps, with no regard to elapsed time
             #          "normalizedTimeTarget" - advances until a set amount of time has passed, expressed in normalized time units
             #          "realTimeTarget" - advances until a set amount of time has passed in seconds
+            #          "outputDriven" - takes steps small enough to hit specific output points. If an output point is sufficiently far
+            #                           into the future, the integrator initial timestep is observed
             "numTimesteps": 1,  # Number of timesteps to advance for, ignored unless mode = fixedNumSteps
             "timeValueTarget": 1.0,  # Time value for the two non-fixed step number modes - the mode governs how this number is interpreted
             "outputMode": "fixedNumSteps",  # Output options: "fixedNumSteps" - output once a fixed number of steps has passed
             #            "minimumSaveInterval" - outputs once a set amount of time has passed (in normalized time units)
             "fixedSaveInterval": 1,  # Save frequency if the output mode is fixedNumSteps, ignored otherwise
             "minimumSaveInterval": 0.1,  # Interval corresponding to the output mode of the same name
+            "outputPoints": [],  # Output points for the outputDriven mode
             "restart": {  # Options governing the saving and loading of restart data.
                 "save": False,  # If true, restart data will be saved
                 "load": False,  # If true, restart data will be loaded at the start of the loop. Will throw error if loadInitValsFromHDF5 is also true
                 "frequency": 1,  # Restart save frequency - saving every n steps
                 "resetTime": False,  # If true, the value of the time variable, if present, will be reset to 0 on loading from restart
+                "initialOutputIndex": 0,  # Initial output index, useful when restarting so that no data is overwritten
             },
             "loadInitValsFromHDF5": False,  # True if variables should be loaded from a complete HDF5 file based on the input vars list in the HDF5 options.
             "initValFilename": "ReMKiT1DVarInput",  # Name of the input hdf5 file
         }
+
+        self.__timeVarPresent__ = False
 
     @property
     def normalization(self):
@@ -173,12 +190,41 @@ class RKWrapper:
     def hdf5Filepath(self):
         return self.__optionsHDF5__["filepath"]
 
-    def modelTags(self) -> List[str]:
-        """Return the list of models registered in this wrapper
+    @property
+    def activeImplicitGroups(self):
+        return self.__activeImplicitGroups__
+
+    @property
+    def activeGeneralGroups(self):
+        return self.__activeGeneralGroups__
+
+    def activeGroups(self, modelTag: str) -> List[int]:
+        """Return list of active model term groups of given model.
+        NOTE: Should only be called after all models have been added and global integrator data set.
+
+        Args:
+            modelTag (str): Model tag
 
         Returns:
+            List[int]: List of active term groups, taking into account offset of general groups
+        """
+        return self.activeImplicitGroups[modelTag] + [
+            self.__integratorData__["numImplicitGroups"] + g
+            for g in self.activeGeneralGroups[modelTag]
+        ]
+
+    def modelTags(self, integrableOnly=False) -> List[str]:
+        """Return the list of models registered in this wrapper
+        Args:
+            integrableOnly (bool, optional): Only returns models marked as integrable. Defaults to False.
+
+         Returns:
             List[str]: List of models
         """
+
+        if integrableOnly:
+            return self.__integrableModels__
+
         return cast(List[str], self.__modelData__["tags"])
 
     def setNormDensity(self, dens: float):
@@ -274,6 +320,8 @@ class RKWrapper:
         isCommunicated=False,
         hostScalarProcess=0,
         derivOptions: Union[None, dict] = None,
+        normSI: float = 1.0,
+        unitSI: str = "",
     ) -> None:
         """Add variable to the wrapper variable container
 
@@ -292,6 +340,8 @@ class RKWrapper:
             isCommunicated (bool, optional): True if the variable should be communicated. Defaults to False.
             hostScalarProcess (int, optional): Host process in case of a communicated scalar variable. Defaults to 0.
             derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
+            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional) Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -299,6 +349,13 @@ class RKWrapper:
                 self.__gridObj__ is not None
             ), "Attempted to add variable to RKWrapper variable container without first setting grid"
             self.__varCont__ = VariableContainer(self.__gridObj__)
+
+            if not self.__timeVarPresent__ and self.__addTimeVar__:
+                self.addVar("time", isDerived=True, isScalar=True)
+                self.__timeVarPresent__ = True
+
+        if name == "time" and self.__timeVarPresent__:
+            return
 
         self.__varCont__.setVariable(
             name,
@@ -311,6 +368,8 @@ class RKWrapper:
             isOnDualGrid,
             priority,
             derivationRule,
+            normSI=normSI,
+            unitSI=unitSI,
         )
 
         if outputVar:
@@ -351,6 +410,8 @@ class RKWrapper:
         isCommunicated=False,
         communicateSecondary=True,
         derivOptions: Union[None, dict] = None,
+        normSI: float = 1.0,
+        unitSI: str = "",
     ) -> None:
         """Add variable and its dual
 
@@ -369,6 +430,8 @@ class RKWrapper:
             isCommunicated (bool, optional): Set to true if primary variable should be communicated. Defaults to False.
             communicateSecondary (bool, optional): Set to true if secondary variable should be communicated (only if primary is communicated). Defaults to True.
             derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
+            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional) Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -376,6 +439,10 @@ class RKWrapper:
                 self.__gridObj__ is not None
             ), "Attempted to add variable and dual to RKWrapper variable container without first setting grid"
             self.__varCont__ = VariableContainer(self.__gridObj__)
+
+            if not self.__timeVarPresent__ and self.__addTimeVar__:
+                self.addVar("time", isDerived=True, isScalar=True)
+                self.__timeVarPresent__ = True
 
         it.addVarAndDual(
             self.__varCont__,
@@ -389,6 +456,8 @@ class RKWrapper:
             units,
             priority,
             dualSuffix,
+            normSI=normSI,
+            unitSI=unitSI,
         )
 
         if outputVar:
@@ -584,24 +653,40 @@ class RKWrapper:
         """
         return self.__species__[name]
 
-    def addModel(self, properties: Union[dict, sc.CustomModel]) -> None:
+    def addModel(
+        self, properties: Union[dict, sc.CustomModel], isIntegrable=True
+    ) -> None:
         """Add model to wrapper
 
         Args:
             properties (Union[dict,CustomModel]): Model properties dictionary or the model itself. If dictionary should have a single key pointing to all properties, with the key being the model tag. Dictionary option kept for backwards compatibility, use the model itself to include checks
+            isIntegrable (bool, optional): Mark the model as integrable for easier definition of integrator steps. Defaults to True.
         """
 
         if isinstance(properties, dict):
             propertiesDict = properties
+            warnings.warn(
+                "Adding model as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
 
         if isinstance(properties, sc.CustomModel):
             properties.checkTerms(self.varCont)
             propertiesDict = properties.dict()
 
+            self.__activeGeneralGroups__[list(propertiesDict.keys())[0]] = (
+                properties.activeGeneralGroups
+            )
+            self.__activeImplicitGroups__[list(propertiesDict.keys())[0]] = (
+                properties.activeImplicitGroups
+            )
+
         cast(List[str], self.__modelData__["tags"]).append(
             list(propertiesDict.keys())[0]
         )
         self.__modelData__.update(propertiesDict)
+
+        if isIntegrable:
+            self.__integrableModels__.append(list(propertiesDict.keys())[0])
 
     def addManipulator(self, tag: str, properties: dict) -> None:
         """Add a manipulator object to wrapper
@@ -614,17 +699,45 @@ class RKWrapper:
         self.__manipulatorData__[tag] = properties
 
     def setIntegratorGlobalData(
-        self, numImplicitGroups=1, numGeneralGroups=1, initialTimestep=0.1
+        self,
+        numImplicitGroups: Union[int, None] = None,
+        numGeneralGroups: Union[int, None] = None,
+        initialTimestep=0.1,
     ) -> None:
         """Set global data for the time integration routines
 
         Args:
-            numImplicitGroups (int, optional): Maximum number of allowed implicit groups. Defaults to 1.
-            numGeneralGroups (int, optional): Maximum number of allowed general groups. Defaults to 1.
+            numImplicitGroups (Union[int,None], optional): Maximum number of allowed implicit groups. Defaults to None, deducing the groups from the models in the wrapper.
+            numGeneralGroups (Union[int,None], optional): Maximum number of allowed general groups. Defaults to None, deducing the groups from the models in the wrapper.
             initialTimestep (float, optional): Default/initial timestep value in normalized units. Defaults to 0.1.
         """
-        self.__integratorData__["numImplicitGroups"] = numImplicitGroups
-        self.__integratorData__["numGeneralGroups"] = numGeneralGroups
+
+        if numImplicitGroups is not None:
+            self.__integratorData__["numImplicitGroups"] = numImplicitGroups
+            warnings.warn(
+                "Explicitly setting number of implicit groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+        else:
+            self.__integratorData__["numImplicitGroups"] = max(
+                [
+                    max(self.activeImplicitGroups[tag], default=0)
+                    for tag in self.modelTags()
+                ]
+            )
+
+        if numGeneralGroups is not None:
+            self.__integratorData__["numGeneralGroups"] = numGeneralGroups
+            warnings.warn(
+                "Explicitly setting number of general groups in models. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+        else:
+            self.__integratorData__["numGeneralGroups"] = max(
+                [
+                    max(self.activeGeneralGroups[tag], default=0)
+                    for tag in self.modelTags()
+                ]
+            )
+
         self.__integratorData__["initialTimestep"] = initialTimestep
 
     def addIntegrator(self, tag: str, properties: dict) -> None:
@@ -677,6 +790,16 @@ class RKWrapper:
         self.__timeloopData__["mode"] = "fixedNumSteps"
         self.__timeloopData__["numTimesteps"] = numTimesteps
 
+    def setOutputDrivenTimesteps(self, outputPoints: List[float]) -> None:
+        """Set timeloop mode to output-driven. Overrides any output options for the timeloop in favour of the defined steps
+
+        Args:
+            outputPoints (List[float]): List of output times. Should be positive increasing numbers
+        """
+
+        self.__timeloopData__["mode"] = "outputDriven"
+        self.__timeloopData__["outputPoints"] = outputPoints
+
     def setTimeTargetTimestepping(
         self, timeTarget: float, realTimeTarget=False
     ) -> None:
@@ -713,7 +836,7 @@ class RKWrapper:
         self.__timeloopData__["minimumSaveInterval"] = minimumInterval
 
     def setRestartOptions(
-        self, save=False, load=False, frequency=1, resetTime=False
+        self, save=False, load=False, frequency=1, resetTime=False, initialOutputIndex=0
     ) -> None:
         """Set restart options in timeloop object
 
@@ -722,6 +845,7 @@ class RKWrapper:
             load (bool, optional): Set to true if the code should initialize from restart data. Defaults to False.
             frequency (int, optional): Frequency at which restart data is saved in timesteps. Defaults to 1.
             resetTime (bool, optional): Set to true if the code should reset the time variable on restart. Defaults to False.
+            initialOutputIndex (int, optional): Sets the first output file index. Useful when avoiding overwriting files. Defaults to 0, outputting the initial value and grid.
         """
 
         cast(Dict[str, object], self.__timeloopData__["restart"])["save"] = save
@@ -732,6 +856,9 @@ class RKWrapper:
         cast(Dict[str, object], self.__timeloopData__["restart"])[
             "resetTime"
         ] = resetTime
+        cast(Dict[str, object], self.__timeloopData__["restart"])[
+            "initialOutputIndex"
+        ] = initialOutputIndex
 
     def setHDF5FileInitialData(
         self,
@@ -831,12 +958,12 @@ class RKWrapper:
 
         for name in names:
             terms = self.getTermsThatEvolveVar(name)
-
-            warnings.warn(
-                "addTermDiagnosisForVars called when variable "
-                + name
-                + " has no terms that evolve it"
-            )
+            if not len(terms):
+                warnings.warn(
+                    "addTermDiagnosisForVars called when variable "
+                    + name
+                    + " has no terms that evolve it"
+                )
 
             for pair in terms:
                 model, term = pair
@@ -855,11 +982,12 @@ class RKWrapper:
         for name in names:
             terms = self.getTermsThatEvolveVar(name)
 
-            warnings.warn(
-                "addTermDiagnosisForDistVars called when variable "
-                + name
-                + " has no terms that evolve it"
-            )
+            if not len(terms):
+                warnings.warn(
+                    "addTermDiagnosisForDistVars called when variable "
+                    + name
+                    + " has no terms that evolve it"
+                )
 
             for pair in terms:
                 model, term = pair
@@ -867,3 +995,30 @@ class RKWrapper:
                 self.addManipulator(
                     model + term, sc.termEvaluatorManipulator([pair], model + term)
                 )
+
+    def addStationaryEvaluator(self, varName: str, priority=0) -> None:
+        """Add a cumulative term evaluator for all models/terms evolving a given variable. This will store the result in the evolved variable, and is useful when evaluating stationary variables of the first kind (where the equation is var = f(v) with v /= var).
+
+        Args:
+            varName (str): Evolved variable to store models and terms for
+            priority (int, optional): Manipulator priority. Defaults to 0.
+        """
+
+        terms = self.getTermsThatEvolveVar(varName)
+        if not len(terms):
+            warnings.warn(
+                "addStationaryEvaluator called when variable "
+                + varName
+                + " has no terms that evolve it"
+            )
+
+        self.addManipulator(
+            "stationaryEval_" + varName,
+            sc.termEvaluatorManipulator(
+                terms,
+                varName,
+                accumulate=True,
+                update=True,
+                priority=priority,
+            ),
+        )

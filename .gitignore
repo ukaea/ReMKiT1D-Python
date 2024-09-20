@@ -17,3 +17,6 @@ __pycache__
 .venv
 build
 *.egg-info*
+*.tex
+*.json
+ignore

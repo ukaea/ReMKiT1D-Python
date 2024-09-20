@@ -2,6 +2,45 @@ from typing import Union, List, Dict, cast, Tuple
 from .variable_container import VariableContainer
 import numpy as np
 import warnings
+from abc import ABC, abstractmethod
+
+
+class Term(ABC):
+
+    def __init__(
+        self,
+        evolvedVar: str,
+        implicitGroups: List[int] = [],
+        generalGroups: List[int] = [],
+    ) -> None:
+        super().__init__()
+        self.__evolvedVar__ = evolvedVar
+        self.__implicitGroups__ = implicitGroups
+        self.__generalGroups__ = generalGroups
+
+    @property
+    def evolvedVar(self):
+        return self.__evolvedVar__
+
+    @property
+    def implicitGroups(self):
+        return self.__implicitGroups__
+
+    @property
+    def generalGroups(self):
+        return self.__generalGroups__
+
+    @abstractmethod
+    def dict(self) -> dict:
+        pass
+
+    def checkTerm(self, varCont: VariableContainer):
+
+        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
+            "Evolved variable "
+            + self.__evolvedVar__
+            + " not registered in used variable container"
+        )
 
 
 class Species:
@@ -159,9 +198,8 @@ class VarData:
                         "Variable "
                         + var
                         + " appears in required row variables for evolved variable on "
-                        + "dual"
-                        if rowVarOnDual
-                        else "regular" + " grid but doesn't live on that grid"
+                        + ("dual" if rowVarOnDual else "regular")
+                        + " grid but doesn't live on that grid"
                     )
 
         for var in self.__reqColVars___:
@@ -180,9 +218,8 @@ class VarData:
                     "Variable "
                     + var
                     + " appears in required column variables for implicit variable on "
-                    + "dual"
-                    if colVarOnDual
-                    else "regular" + " grid but doesn't live on that grid"
+                    + ("dual" if colVarOnDual else "regular")
+                    + " grid but doesn't live on that grid"
                 )
 
     def dict(self):
@@ -286,7 +323,33 @@ class TimeSignalData:
         return tData
 
 
-class GeneralMatrixTerm:
+def diagonalStencil(
+    evolvedXCells: List[int] = [],
+    evolvedHarmonics: List[int] = [],
+    evolvedVCells: List[int] = [],
+) -> dict:
+    """Return diagonal stencil properties
+
+    Args:
+        evolvedXCells (List[int], optional): List of evolved x cells. Defaults to [], resulting in all allowed cells.
+        evolvedHarmonics (List[int], optional): List of evolved harmonics, used only if the row variable is a distribution. Defaults to [], resulting in all harmonics.
+        evolvedVCells (List[int], optional): List of evolved velocity cells, used only if the row variable is a distribution. Defaults to [], resulting in all velocity cells.
+
+    Returns:
+        dict: Stencil property dictionary
+    """
+
+    stencil = {
+        "stencilType": "diagonalStencil",
+        "evolvedXCells": evolvedXCells,
+        "evolvedHarmonics": evolvedHarmonics,
+        "evolvedVCells": evolvedVCells,
+    }
+
+    return stencil
+
+
+class GeneralMatrixTerm(Term):
     """General (custom) matrix term options used to construct custom models"""
 
     def __init__(
@@ -298,11 +361,11 @@ class GeneralMatrixTerm:
         velocityProfile: List[float] = [],
         evaluatedTermGroup=0,
         implicitGroups=[1],
-        generalGroups=[1],
+        generalGroups: List[int] = [],
         customNormConst: Union[CustomNormConst, float, int] = CustomNormConst(),
         timeSignalData=TimeSignalData(),
         varData=VarData(),
-        stencilData={},
+        stencilData=diagonalStencil(),
         skipPattern=False,
         fixedMatrix=False,
         copyTermName: Union[str, None] = None,
@@ -328,17 +391,16 @@ class GeneralMatrixTerm:
             copyTermName (Union[str,None], optional): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape. Defaults to None.
         """
 
+        super().__init__(evolvedVar, implicitGroups, generalGroups)
+
         if len(implicitVar) == 0:
             implicitVar = evolvedVar
 
-        self.__evolvedVar__ = evolvedVar
         self.__implicitVar__ = implicitVar
         self.__spatialProfile__ = spatialProfile
         self.__harmonicProfile__ = harmonicProfile
         self.__velocityProfile__ = velocityProfile
         self.__evaluatedTermGroup__ = evaluatedTermGroup
-        self.__implicitGroups__ = implicitGroups
-        self.__generalGroups__ = generalGroups
         self.__customNormConst__ = (
             customNormConst
             if isinstance(customNormConst, CustomNormConst)
@@ -358,13 +420,9 @@ class GeneralMatrixTerm:
             varCont (VariableContainer): Variable container to be used with this term
         """
 
-        assert self.__evolvedVar__ in varCont.dataset.data_vars.keys(), (
-            "Evolved variable "
-            + self.__evolvedVar__
-            + " not registered in used variable container"
-        )
+        super().checkTerm(varCont)
 
-        rowVarOnDual = varCont.dataset[self.__evolvedVar__].attrs["isOnDualGrid"]
+        rowVarOnDual = varCont.dataset[self.evolvedVar].attrs["isOnDualGrid"]
 
         assert self.__implicitVar__ in varCont.dataset.data_vars.keys(), (
             "Implicit variable "
@@ -383,14 +441,15 @@ class GeneralMatrixTerm:
             dict: Dictionary form of GeneralMatrixTerm to be used as individual custom term properties
         """
         gTerm = {
-            "evolvedVar": self.__evolvedVar__,
+            "termType": "matrixTerm",
+            "evolvedVar": self.evolvedVar,
             "implicitVar": self.__implicitVar__,
             "spatialProfile": self.__spatialProfile__,
             "harmonicProfile": self.__harmonicProfile__,
             "velocityProfile": self.__velocityProfile__,
             "evaluatedTermGroup": self.__evaluatedTermGroup__,
-            "implicitGroups": self.__implicitGroups__,
-            "generalGroups": self.__generalGroups__,
+            "implicitGroups": self.implicitGroups,
+            "generalGroups": self.generalGroups,
             "customNormConst": self.__customNormConst__.dict(),
             "timeSignalData": self.__timeSignalData__.dict(),
             "varData": self.__varData__.dict(),
@@ -405,28 +464,157 @@ class GeneralMatrixTerm:
         return gTerm
 
 
+class DerivationTerm(Term):
+    """Derivation-based explicit term options used to construct custom models. The result of evaluating a derivation term is the result of the derivation optionally multiplied by a modelbound variable. Does not support evolving distributions."""
+
+    def __init__(
+        self,
+        evolvedVar: str,
+        derivationRule: dict,
+        mbVar: Union[str, None] = None,
+        generalGroups=[1],
+    ) -> None:
+        """Derivation term constructor
+
+        Args:
+            evolvedVar (str): Name of the evolved variable. Distributions not supported.
+            derivationRule (dict): Derivation rule containing name and required variables.
+            mbVar (Union[str,None], optional): Optional modelbound variable. Defaults to None.
+            generalGroups (list, optional): General groups this term belongs to within its model. Defaults to [1].
+        """
+
+        super().__init__(evolvedVar, [], generalGroups)
+
+        self.__derivationRule__ = derivationRule
+        self.__mbVar__ = mbVar
+
+    def checkTerm(self, varCont: VariableContainer):
+        """Perform consistency check on term, including the required variables
+
+        Args:
+            varCont (VariableContainer): Variable container to be used with this term
+        """
+
+        super().checkTerm(varCont)
+
+        requiredVars = self.__derivationRule__["requiredVarNames"]
+
+        for name in requiredVars:
+            assert name in varCont.dataset.data_vars.keys(), (
+                "Required derivation variable "
+                + name
+                + " not registered in used variable container"
+            )
+
+    def dict(self):
+        """Returns dictionary form of DerivationTerm to be used in json output
+
+        Returns:
+            dict: Dictionary form of DerivationTerm to be used as individual custom term properties
+        """
+        gTerm = {
+            "termType": "derivationTerm",
+            "evolvedVar": self.evolvedVar,
+            "generalGroups": self.generalGroups,
+        }
+
+        if self.__mbVar__ is not None:
+            gTerm["requiredMBVarName"] = self.__mbVar__
+
+        gTerm.update(self.__derivationRule__)
+
+        return gTerm
+
+
+class TermGenerator:
+    """Term generator class used to track the term groups into which the generators will put their turns"""
+
+    def __init__(
+        self,
+        implicitGroups: List[int] = [1],
+        generalGroups: List[int] = [],
+        options: Dict[str, object] = {},
+    ) -> None:
+        self.__implicitGroups__ = implicitGroups
+        self.__generalGroups__ = generalGroups
+        self.__options__ = options
+
+    @property
+    def implicitGroups(self) -> List[int]:
+        return self.__implicitGroups__
+
+    @property
+    def generalGroups(self) -> List[int]:
+        return self.__generalGroups__
+
+    def dict(self) -> dict:
+        """Produce dictionary form of TermGenerator
+
+        Returns:
+            dict: Dictionary ready to be added to the config file
+        """
+        tgDict: Dict[str, object] = {
+            "implicitGroups": self.__implicitGroups__,
+            "generalGroups": self.__generalGroups__,
+        }
+
+        tgDict.update(self.__options__)
+
+        return tgDict
+
+
 class CustomModel:
     """Custom model object property container"""
 
     def __init__(self, modelTag: str) -> None:
         self.__modelTag__ = modelTag
         self.__termTags__: List[str] = []
-        self.__terms__: List[GeneralMatrixTerm] = []
+        self.__terms__: List[Term] = []
         self.__modelboundData__: Dict[str, object] = {}
         self.__termGeneratorTags__: List[str] = []
         self.__termGeneratorProperties__: Dict[str, object] = {}
+        self.__activeImplicitGroups__: List[int] = []
+        self.__activeGeneralGroups__: List[int] = []
 
     @property
     def mbData(self):
         return self.__modelboundData__
 
-    def addTerm(self, termTag: str, term: GeneralMatrixTerm):
+    @property
+    def activeImplicitGroups(self):
+        return self.__activeImplicitGroups__
+
+    @property
+    def activeGeneralGroups(self):
+        return self.__activeGeneralGroups__
+
+    def addTerm(self, termTag: str, term: Term):
         self.__termTags__.append(termTag)
         self.__terms__.append(term)
+        self.__activeImplicitGroups__ += term.implicitGroups
+        self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
+        self.__activeGeneralGroups__ += term.generalGroups
+        self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
 
-    def addTermGenerator(self, generatorTag: str, generatorProperties: dict):
+    def addTermGenerator(
+        self, generatorTag: str, generatorProperties: Union[dict, TermGenerator]
+    ):
         self.__termGeneratorTags__.append(generatorTag)
-        self.__termGeneratorProperties__[generatorTag] = generatorProperties
+
+        if isinstance(generatorProperties, dict):
+            propertiesDict = generatorProperties
+            warnings.warn(
+                "Adding term generator as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
+            )
+
+        if isinstance(generatorProperties, TermGenerator):
+            propertiesDict = generatorProperties.dict()
+            self.__activeImplicitGroups__ += generatorProperties.implicitGroups
+            self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
+            self.__activeGeneralGroups__ += generatorProperties.generalGroups
+            self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
+
+        self.__termGeneratorProperties__[generatorTag] = propertiesDict
 
     def setModelboundData(self, mbData: dict):
         self.__modelboundData__ = mbData
@@ -1155,7 +1343,11 @@ def groupEvaluatorManipulator(
 
 
 def termEvaluatorManipulator(
-    modelTermTags: List[Tuple[str, str]], resultVarName: str, priority=4
+    modelTermTags: List[Tuple[str, str]],
+    resultVarName: str,
+    priority=4,
+    accumulate=False,
+    update=False,
 ) -> dict:
     """Return manipulator properties for a term evaluator manipulator, which evaluates a set of model,term pairs and stores the result
     in a given variable
@@ -1164,6 +1356,8 @@ def termEvaluatorManipulator(
         modelTermTag (List[Tuple[str,str]]): Pairs of model,term tags to be evaluated
         resultVarName (str): Name of variable into which to store the evaluation
         priority (int, optional): Manipulator priority (0-4). Defaults to 4.
+        accumulate (bool, optional): If true, will accumulate the values into the result variable instead of overwriting. Defaults to False.
+        update (bool, optional): If true will independently request updates for the evaluated terms/models. Defaults to False.
 
     Returns:
         dict: Manipulator property dictionary
@@ -1176,6 +1370,8 @@ def termEvaluatorManipulator(
         "evaluatedTermNames": list(terms),
         "resultVarName": resultVarName,
         "priority": priority,
+        "update": update,
+        "accumulate": accumulate,
     }
 
     return manip
@@ -1206,32 +1402,6 @@ def extractorManipulator(
     }
 
     return manip
-
-
-def diagonalStencil(
-    evolvedXCells: List[int] = [],
-    evolvedHarmonics: List[int] = [],
-    evolvedVCells: List[int] = [],
-) -> dict:
-    """Return diagonal stencil properties
-
-    Args:
-        evolvedXCells (List[int], optional): List of evolved x cells. Defaults to [], resulting in all allowed cells.
-        evolvedHarmonics (List[int], optional): List of evolved harmonics, used only if the row variable is a distribution. Defaults to [], resulting in all harmonics.
-        evolvedVCells (List[int], optional): List of evolved velocity cells, used only if the row variable is a distribution. Defaults to [], resulting in all velocity cells.
-
-    Returns:
-        dict: Stencil property dictionary
-    """
-
-    stencil = {
-        "stencilType": "diagonalStencil",
-        "evolvedXCells": evolvedXCells,
-        "evolvedHarmonics": evolvedHarmonics,
-        "evolvedVCells": evolvedVCells,
-    }
-
-    return stencil
 
 
 def staggeredDivStencil() -> dict:
@@ -1666,11 +1836,15 @@ def customFluid1DStencil(
             xStencil
         ), "varContColumnVars must be of same length as xStencil in customFluid1DStencil"
         stencil.update({"columnVarContVars": varContColumnVars})
+    else:
+        stencil.update({"columnVarContVars": ["none" for _ in xStencil]})
     if mbDataColumnVars is not None:
         assert len(mbDataColumnVars) == len(
             xStencil
         ), "mbDataColumnVars must be of same length as xStencil in customFluid1DStencil"
         stencil.update({"columnMBDataVars": mbDataColumnVars})
+    else:
+        stencil.update({"columnMBDataVars": ["none" for _ in xStencil]})
 
     return stencil
 
@@ -1702,6 +1876,8 @@ def picardBDEIntegrator(
     stepMultiplier=2,
     stepDecrament=1,
     minNonlinIters=5,
+    maxBDERestarts=3,
+    relaxationWeight: float = 1.0,
 ) -> dict:
     """Return integrator properties for Backward Euler integrator with Picard (fixed point) iterations
 
@@ -1717,6 +1893,9 @@ def picardBDEIntegrator(
         stepMultiplier (int, optional): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
         stepDecrament (int, optional): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
         minNonlinIters (int, optional): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        maxBDERestarts (int, optional): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
+        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxatioWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+
 
     Returns:
         dict: Integrator property dictionary
@@ -1730,13 +1909,66 @@ def picardBDEIntegrator(
         "convergenceVars": convergenceVars,
         "associatedPETScGroup": associatedPETScGroup,
         "use2Norm": use2Norm,
+        "relaxationWeight": relaxationWeight,
         "internalStepControl": {
             "active": internalStepControl,
             "startingNumSteps": initialNumInternalSteps,
             "stepMultiplier": stepMultiplier,
             "stepDecrament": stepDecrament,
             "minNumNonlinIters": minNonlinIters,
+            "maxBDERestarts": maxBDERestarts,
         },
+    }
+
+    return integ
+
+
+def CVODEIntegrator(
+    relTol=1e-5,
+    absTol=1e-10,
+    maxGMRESRestarts=0,
+    CVODEBBDPreParams: List[int] = [0, 0, 0, 0],
+    useAdamsMoulton=False,
+    useStabLimitDet=False,
+    maxOrder=5,
+    maxInternalStep=500,
+    minTimestep: float = 0.0,
+    maxTimestep: float = 0.0,
+    initTimestep: float = 0.0,
+) -> dict:
+    """Return dictionary with CVODE integrator properties. See https://sundials.readthedocs.io/en/latest/index.html
+
+    Args:
+        relTol (float, optional): CVODE solver relative tolerance. Defaults to 1e-5.
+        absTol (float, optional): CVODE solver absolute tolerance. Defaults to 1e-10.
+        maxGMRESRestarts (int, optional): SPGMR maximum number of restarts. Defaults to 0.
+        CVODEBBDPreParams (List[int], optional): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
+        useAdamsMoulton (bool, optional): If true will use Adams Moulton method instead of the default BDF. Defaults to False.
+        useStabLimitDet (bool, optional): If true will use stability limit detection. Defaults to False.
+        maxOrder (int, optional): Maximum integrator order (set to BDF default, AM default is 12). Defaults to 5.
+        maxInternalStep (int, optional): Maximum number of internal CVODE steps per ReMKiT1D timestep. Defaults to 500.
+        minTimestep (float, optional): Minimum allowed internal timestep. Defaults to 0.0.
+        maxTimestep (float, optional): Maximum allowed internal timestep. Defaults to 0.0, resulting in no limit.
+        initTimestep (float, optional): Initial internal timestep. Defaults to 0.0, letting CVODE decide.
+
+    Returns:
+        dict: Integrator property dictionary
+    """
+
+    assert len(CVODEBBDPreParams) == 4, "CVODEBBDPreParams must be size 4"
+    integ = {
+        "type": "CVODE",
+        "relTol": relTol,
+        "absTol": absTol,
+        "maxRestarts": maxGMRESRestarts,
+        "CVODEPreBBDParams": CVODEBBDPreParams,
+        "CVODEUseAdamsMoulton": useAdamsMoulton,
+        "CVODEUseStabLimDet": useStabLimitDet,
+        "CVODEMaxOrder": maxOrder,
+        "CVODEMaxInternalSteps": maxInternalStep,
+        "CVODEMaxStepSize": maxTimestep,
+        "CVODEMinStepSize": minTimestep,
+        "CVODEInitStepSize": initTimestep,
     }
 
     return integ

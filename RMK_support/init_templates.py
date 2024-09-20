@@ -16,6 +16,8 @@ def addVarAndDual(
     units="normalized units",
     priority=0,
     dualSuffix="_dual",
+    normSI: float = 1.0,
+    unitSI: str = "",
 ) -> None:
     """Adds a variable (primary) and its dual (secondary) on the grid to given variable container. The secondary is initialized to 0
 
@@ -31,6 +33,8 @@ def addVarAndDual(
         units (str, optional): Units for both primary and secondary. Defaults to 'normalized units'.
         priority (int, optional): Variable priority for both primary and secondary. Defaults to 0 (highest priority).
         dualSuffix (str, optional): Suffix for the variable on the dual grid. Defaults to "_dual".
+        normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
+        unitSI (str, optional) Optional associated SI unit. Defaults to "".
     """
 
     primaryName = varName
@@ -55,6 +59,8 @@ def addVarAndDual(
         isOnDualGrid=onDualGrid,
         units=units,
         priority=priority,
+        normSI=normSI,
+        unitSI=unitSI,
     )
 
     secondaryDerivationRule = sc.derivationRule(
@@ -71,4 +77,6 @@ def addVarAndDual(
         isOnDualGrid=onDualGrid,
         units=units,
         priority=priority,
+        normSI=normSI,
+        unitSI=unitSI,
     )

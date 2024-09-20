@@ -34,7 +34,7 @@ def test_add_fluid_zeros(grid, vCont):
     testCont.setVariable("var")
 
     assert all(testCont.dataset["var"] == 0)
-    assert testCont.dataset["var"].attrs == {
+    assert testCont.getVarAttrs("var") == {
         "isDerived": False,
         "isDistribution": False,
         "units": "normalized units",
@@ -42,13 +42,28 @@ def test_add_fluid_zeros(grid, vCont):
         "isScalar": False,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 
 def test_add_fluid_nonzeros(grid, vCont):
     testCont = vCont
 
-    testCont.setVariable("var", np.ones(grid.numX()), isDerived=True, units="arb")
+    with pytest.warns(
+        UserWarning,
+        match="Variable on dual grid var has been initialised with non-zero data. Make sure that the rightmost cell is zeroed out or intentionally left as non-zero.",
+    ):
+        testCont.setVariable(
+            "var",
+            np.ones(grid.numX()),
+            isDerived=True,
+            units="arb",
+            isOnDualGrid=True,
+            normSI=2.0,
+            unitSI="a",
+        )
 
     assert all(testCont.dataset["var"] == np.ones(grid.numX()))
     assert testCont.dataset["var"].attrs == {
@@ -57,8 +72,11 @@ def test_add_fluid_nonzeros(grid, vCont):
         "units": "arb",
         "isStationary": False,
         "isScalar": False,
-        "isOnDualGrid": False,
+        "isOnDualGrid": True,
         "priority": 0,
+        "derivationRule": "none",
+        "normSI": 2.0,
+        "unitSI": "a",
     }
 
 
@@ -84,6 +102,9 @@ def test_add_dist_nonzeros(grid, vCont):
         "isScalar": False,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 
@@ -102,6 +123,9 @@ def test_add_scalar(grid, vCont):
         "isScalar": True,
         "isOnDualGrid": False,
         "priority": 0,
+        "derivationRule": "none",
+        "normSI": 1.0,
+        "unitSI": "",
     }
 
 

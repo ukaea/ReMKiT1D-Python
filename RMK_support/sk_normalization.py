@@ -130,6 +130,9 @@ def calculateNorms(Te: float, ne: float, Z: float) -> dict:
     """
 
     return {
+        "eVTemperature": Te,
+        "density": ne,
+        "referenceIonZ": Z,
         "time": collTimeei(Te, ne, Z),
         "velGrid": velNorm(Te),
         "speed": velNorm(Te),

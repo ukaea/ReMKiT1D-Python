@@ -27,7 +27,7 @@ It is possible to specify the 1D x and v grids both with cell centre coordinates
 
 ReMKiT1D generates both the spatial grid corresponding to the cell centres as well a dual/staggered grid, corresponding to the right cell faces.
 
-See :obj:`RMK_support.grid` for docstrings, as well as examples for how grids are set in practice.
+See :obj:`RMK_support.grid` for docstrings, as well as the many examples for how grids are set in practice.
 
 -----------------
 VariableContainer

@@ -33,18 +33,6 @@ def writeDictToJSON(
             json.dump(fileData, file, indent=4)
 
 
-def loadFromJSON(key, filepath="./config.json"):
-    """Loads the data under given key from JSON file
-
-    Args:
-        key (any): Dictionary key
-        filepath (str, optional): JSON file filepath. Defaults to "./config.json".
-    """
-
-    data = open(filepath)
-    return data["key"]
-
-
 def writeRMKHDF5(varCont: vc.VariableContainer, filepath="./ReMKiT1DVarInput.h5"):
     """Write a ReMKiT1D readable HDF5 file
 

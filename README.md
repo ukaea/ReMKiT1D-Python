@@ -79,9 +79,11 @@ Further development is planned to streamline data analysis, including improvemen
 
 For a high level explanation of both the framework and the interface the user is referred to the ReMKiT1D code paper, where the code design is explained and an example workflow with this Python package is explained. 
 
-The examples/tutorials in the examples folder supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) and [custom fluid](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_custom_fluid.ipynb) notebooks, which are documented in detail. 
+The examples/tutorials in the examples folder supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) and [custom fluid](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_custom_fluid.ipynb) notebooks, which are documented in detail. Note that these are now using many outdated features.
 
-Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/).
+For the list of the newest example notebooks, where new features are covered, see the CHANGELOG.
+
+Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/), where links to newer resources can be found.
 
 ## Licence
 
