@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## v1.2.1, 2024-09-30
+
+- New standard textbook option for logLei discontinuity fix
+
+### Breaking Changes
+
+- N/A
+
+### Deprecations
+
+- N/A
+
+### New Features
+
+- New standard textbook option to remove the discontinuity in the NRL formulary version of e-i Coulomb Log
+
+### Bug Fixes
+
+- N/A
+
+### New Notebooks 
+
+- N/A
+
 ## v1.2.0, 2024-09-19
 
 - Added CVODE integrator as an option
