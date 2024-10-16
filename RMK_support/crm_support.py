@@ -702,6 +702,7 @@ def addHSpontaneousEmissionToCRMData(
     """Adds hydrogen spontaneous emission transitions to CRM data based on passed dictionary.
 
     Args:
+        mbData (ModelboundCRMData): CRM model-bound data object to add transitions to
         transitionData (dict): Dictionary with keys of form (startState,endState), and with values in (s^-1)
         maxStartState (int): Highest starting state to add
         maxEndState (int): Highest final state to add
@@ -729,6 +730,16 @@ def addHSpontaneousEmissionToCRMData(
 
 
 def readNISTAkiCSV(filename: str) -> dict:
+    """Reads in the NIST Atomic Spectra Database file provided in this repository (data/Aki.csv) and returns the data as a dictionary.
+
+    Source: Kramida, A., Ralchenko, Yu., Reader, J., and NIST ASD Team (2021). DOI: https://doi.org/10.18434/T4W30F
+    
+    Args:
+        filename (str): Path to Aki.csv.
+    
+    Returns:
+        dict: Spontaneous hydrogen transmission data dictionary, for use with function "addHSpontaneousEmissionToCRMData".
+    """
     res = {}
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
