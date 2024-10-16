@@ -181,12 +181,15 @@ def derivedTransition(
     energyRuleName="none",
     energyRequiredVars: List[str] = [],
 ) -> dict:
-    """Return transition properties for a derived transition, where the rate is calculated using a derivation rule
-        Optionally can calculate momentum and energy rates using rules as well.
+    """Return transition properties for a derived transition, where the rate is calculated using a derivation rule.
+    Optionally, can calculate momentum and energy rates using rules as well.
 
+    If an energy derivation rule is not supplied, the energy rate is set to `transitionRate*transitionEnergy`.
+    
     Args:
-        inStates (List[int]): List of ingoing species IDs
-        outStates (List[int]): List of outgoing species IDs
+        inStates (List[int]): List of ingoing species IDs.
+            The last species ID's density is chosen to be the implicit variable in the resulting rate equation.
+        outStates (List[int]): List of outgoing species IDs.
         transitionEnergy (float): Fixed transition energy
         ruleName (str): Derivation rule name used for transition rate calculation
         requiredVars (List[str]): Names of required variables for transition rate calculation
