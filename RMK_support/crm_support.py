@@ -41,8 +41,9 @@ class ModelboundCRMData:
         self.__elStateID__ = elState
 
     def addTransitionEnergy(self, transitionEnergy: float):
-        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within
-        energyResolution of another value, it is not added"
+        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data.
+        
+        If the energy is within energyResolution of another value, it is not added"
 
         Args:
             transitionEnergy (float): Value of the energy to be added.
@@ -182,8 +183,8 @@ def derivedTransition(
     energyRequiredVars: List[str] = [],
 ) -> dict:
     """Return transition properties for a derived transition, where the rate is calculated using a derivation rule.
-    Optionally, can calculate momentum and energy rates using rules as well.
 
+    Optionally, can calculate momentum and energy rates using rules as well.
     If an energy derivation rule is not supplied, the energy rate is set to `transitionRate*transitionEnergy`.
     
     Args:
@@ -335,8 +336,9 @@ def detailedBalanceTransition(
     energyResolution: float = 1e-16,
     csUpdatePriority=0,
 ) -> dict:
-    """Return detailed balance transition property dictionary. Requires information on corresponding direct transition and is defined
-       for electron impact processes.
+    """Return detailed balance transition property dictionary.
+    
+    Requires information on corresponding direct transition and is defined for electron impact processes.
 
     Args:
         inStates (List[int]): List of ingoing species IDs (into this transition, not the corresponding direct transition)
@@ -796,8 +798,9 @@ def termGeneratorCRM(
     evolvedSpeciesIDs: List[int] = [],
     includedTransitionIndices: List[int] = [],
 ) -> TermGenerator:
-    """Return dictionary with implicit CRM density evolution term generator properties. The term generator must be added to a model
-        which has a CRM modelbound data object
+    """Return dictionary with implicit CRM density evolution term generator properties.
+    
+    The term generator must be added to a model which has a CRM modelbound data object.
 
     Args:
         implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
@@ -823,8 +826,9 @@ def termGeneratorCRMElEnergy(
     implicitTermGroups: List[int] = [1],
     includedTransitionIndices: List[int] = [],
 ) -> TermGenerator:
-    """Return dictionary with implicit CRM electron energy evolution term generator properties. The term generator must be added to a model
-        which has a CRM modelbound data object
+    """Return dictionary with implicit CRM electron energy evolution term generator properties.
+    
+    The term generator must be added to a model which has a CRM modelbound data object
 
     Args:
         electronEnergyDensVar (str): Name of the evolved electron energy variable
@@ -890,8 +894,9 @@ def termGeneratorCRMSecEl(
     includedTransitionIndices: List[int] = [],
     implicitTermGroups: List[int] = [1],
 ) -> TermGenerator:
-    """Return term generator property dictionary for secondary electron kinetic term generators, which put secondary electrons generated
-    in given transitions into the lowest energy cell
+    """Return term generator property dictionary for secondary electron kinetic term generators.
+     
+    This puts secondary electrons generated in given transitions into the lowest energy cell.
 
     Args:
         distributionVarName (str): Name of the evolved electron distribution variable
