@@ -1,8 +1,9 @@
 # CHANGELOG
 
-## v1.2.1, 2024-09-30
+## v1.2.1, 2024-10-21
 
 - New standard textbook option for logLei discontinuity fix
+- Support for changing BDE integrator consolidation interval
 
 ### Breaking Changes
 
@@ -15,6 +16,7 @@
 ### New Features
 
 - New standard textbook option to remove the discontinuity in the NRL formulary version of e-i Coulomb Log
+- The BDE integrator consolidation interval can now be set
 
 ### Bug Fixes
 

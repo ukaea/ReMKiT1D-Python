@@ -1876,6 +1876,7 @@ def picardBDEIntegrator(
     stepMultiplier=2,
     stepDecrament=1,
     minNonlinIters=5,
+    consolidationInterval=50,
     maxBDERestarts=3,
     relaxationWeight: float = 1.0,
 ) -> dict:
@@ -1893,8 +1894,9 @@ def picardBDEIntegrator(
         stepMultiplier (int, optional): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
         stepDecrament (int, optional): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
         minNonlinIters (int, optional): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        consolidationInterval (int, optional): Number of steps after which to attempt consolidating the number of substeps back to 1. Defaults to 50. 
         maxBDERestarts (int, optional): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
-        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxatioWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
 
 
     Returns:
@@ -1917,6 +1919,7 @@ def picardBDEIntegrator(
             "stepDecrament": stepDecrament,
             "minNumNonlinIters": minNonlinIters,
             "maxBDERestarts": maxBDERestarts,
+            "BDEConsolidationInterval":consolidationInterval
         },
     }
 
