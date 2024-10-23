@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v1.2.1, 2024-10-21
+
+- Docstring improvements
+
 ## v1.2.0, 2024-09-19
 
 - Added CVODE integrator as an option
