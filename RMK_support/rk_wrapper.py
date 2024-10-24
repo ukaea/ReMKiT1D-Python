@@ -200,6 +200,7 @@ class RKWrapper:
 
     def activeGroups(self, modelTag: str) -> List[int]:
         """Return list of active model term groups of given model.
+
         NOTE: Should only be called after all models have been added and global integrator data set.
 
         Args:
@@ -215,10 +216,11 @@ class RKWrapper:
 
     def modelTags(self, integrableOnly=False) -> List[str]:
         """Return the list of models registered in this wrapper
+        
         Args:
             integrableOnly (bool, optional): Only returns models marked as integrable. Defaults to False.
 
-         Returns:
+        Returns:
             List[str]: List of models
         """
 
@@ -326,22 +328,22 @@ class RKWrapper:
         """Add variable to the wrapper variable container
 
         Args:
-            name (str): Variable names
-            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
+            name (str): Name of variable
+            data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to [0].
             isDerived (bool, optional): True if the variable is treated as derived by ReMKiT1D. Defaults to False.
             isDistribution (bool, optional): True for distribution-like variables. Defaults to False.
-            units (str, optional): Variable units. Defaults to 'normalized units'.
+            units (str, optional): Variable units. Defaults to the placeholder string 'normalized units'.
             isStationary (bool, optional): True if the variable is stationary (d/dt = 0). Defaults to False.
-            isScalar (bool, optional): True if the variable is a scalar. Defaults to False.
-            isOnDualGrid (bool, optional): True if the variable is defined on dual grid. Defaults to False.
+            isScalar (bool, optional): True if the variable is a 0-dimensional, single-valued quantity. Defaults to False.
+            isOnDualGrid (bool, optional): True if the variable is defined on the dual grid (on cell edges). Defaults to False.
             priority (int, optional): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
-            derivationRule (Union[None,dict], optional) Optional derivation rule for derived variables. Defaults to None.
+            derivationRule (Union[None,dict], optional): Optional derivation rule for this variable if it is Derived. Defaults to None.
             outputVar (bool, optional): True if the variable should be added to the code output. Defaults to True.
             isCommunicated (bool, optional): True if the variable should be communicated. Defaults to False.
             hostScalarProcess (int, optional): Host process in case of a communicated scalar variable. Defaults to 0.
-            derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
-            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
-            unitSI (str, optional) Optional associated SI unit. Defaults to "".
+            derivOptions (Union[None,dict], optional): Optional properties for the derivationRule for this variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
+            normSI (float, optional): Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional): Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -413,10 +415,10 @@ class RKWrapper:
         normSI: float = 1.0,
         unitSI: str = "",
     ) -> None:
-        """Add variable and its dual
+        """Add variable and its dual-grid equivalent
 
         Args:
-            varName (str): Name of variable on regular grid
+            varName (str): Name of variable on regular grid. The name of the dual grid variable has an added suffix (see "dualSuffix").
             data (Union[numpy.ndarray,None], optional): Optional numpy array representing (initial) variable data. It should conform to the shape of the variable (i.e. 1D conforming to the grid for fluid variables, 3D (x,h,v) conforming to the grids for distributions, and an array of length 1 for scalars). Defaults to None, which initializes data to 0.
             isDerived (bool, optional): True if both the primary and secondary variable are derived. In that case the primary is calculated using the derivation rule, and the secondary is interpolated. Defaults to False.
             derivationRule (Union[None,dict], optional): Derivation rule for primary derived variable. Defaults to None.
@@ -430,8 +432,8 @@ class RKWrapper:
             isCommunicated (bool, optional): Set to true if primary variable should be communicated. Defaults to False.
             communicateSecondary (bool, optional): Set to true if secondary variable should be communicated (only if primary is communicated). Defaults to True.
             derivOptions (Union[None,dict], optional): Optional derivation options for derivation associated with a derived variable. If present, a custom derivation with the name of the derivation in the derivationRule will be added to the wrapper using these options. Defaults to None, not adding custom derivation.
-            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
-            unitSI (str, optional) Optional associated SI unit. Defaults to "".
+            normSI (float, optional): Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional): Optional associated SI unit. Defaults to "".
         """
 
         if self.__varCont__ is None:
@@ -784,7 +786,7 @@ class RKWrapper:
         """Sets timeloop mode to fixed number of timesteps and changes the number of timesteps
 
         Args:
-            numTimesteps (int): Number of timesteps to run the code fore
+            numTimesteps (int): Number of timesteps to run the code for
         """
 
         self.__timeloopData__["mode"] = "fixedNumSteps"
@@ -840,12 +842,16 @@ class RKWrapper:
     ) -> None:
         """Set restart options in timeloop object
 
+        NOTE: As of v1.2.0, loading restart files is performed BEFORE the loading of data from input HDF5 files.
+        
+        Ensure that the HDF5 input "loadInitValsFromHDF5" == False to avoid overwriting loaded restart data.
+
         Args:
             save (bool, optional): Set to true if the code should save restart data. Defaults to False.
             load (bool, optional): Set to true if the code should initialize from restart data. Defaults to False.
             frequency (int, optional): Frequency at which restart data is saved in timesteps. Defaults to 1.
-            resetTime (bool, optional): Set to true if the code should reset the time variable on restart. Defaults to False.
-            initialOutputIndex (int, optional): Sets the first output file index. Useful when avoiding overwriting files. Defaults to 0, outputting the initial value and grid.
+            resetTime (bool, optional): Set to true if the code should reset the time variable on restart. Used for extending an existing simulation to a higher target time. Defaults to False.
+            initialOutputIndex (int, optional): Sets the first output file index. Useful to avoid overwriting files. Defaults to 0, outputting the initial value and grid.
         """
 
         cast(Dict[str, object], self.__timeloopData__["restart"])["save"] = save
@@ -867,6 +873,8 @@ class RKWrapper:
         filename="ReMKiT1DVarInput",
     ) -> None:
         """Set HDF5 input options
+
+        NOTE: As of v1.2.0, loading from HDF5 data is performed AFTER loading from restart files (see "setRestartOptions").
 
         Args:
             inputVars (List[str], optional): Names of input variables to take from input file. Defaults to [].
@@ -997,7 +1005,9 @@ class RKWrapper:
                 )
 
     def addStationaryEvaluator(self, varName: str, priority=0) -> None:
-        """Add a cumulative term evaluator for all models/terms evolving a given variable. This will store the result in the evolved variable, and is useful when evaluating stationary variables of the first kind (where the equation is var = f(v) with v /= var).
+        """Add a cumulative term evaluator for all models/terms evolving a given variable.
+        
+        This will store the result in the evolved variable, and is useful when evaluating stationary variables of the first kind (where the equation is var = f(v) with v /= var).
 
         Args:
             varName (str): Evolved variable to store models and terms for
