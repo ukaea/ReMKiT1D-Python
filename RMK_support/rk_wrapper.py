@@ -216,7 +216,7 @@ class RKWrapper:
 
     def modelTags(self, integrableOnly=False) -> List[str]:
         """Return the list of models registered in this wrapper
-        
+
         Args:
             integrableOnly (bool, optional): Only returns models marked as integrable. Defaults to False.
 
@@ -843,7 +843,7 @@ class RKWrapper:
         """Set restart options in timeloop object
 
         NOTE: As of v1.2.0, loading restart files is performed BEFORE the loading of data from input HDF5 files.
-        
+
         Ensure that the HDF5 input "loadInitValsFromHDF5" == False to avoid overwriting loaded restart data.
 
         Args:
@@ -1006,7 +1006,7 @@ class RKWrapper:
 
     def addStationaryEvaluator(self, varName: str, priority=0) -> None:
         """Add a cumulative term evaluator for all models/terms evolving a given variable.
-        
+
         This will store the result in the evolved variable, and is useful when evaluating stationary variables of the first kind (where the equation is var = f(v) with v /= var).
 
         Args:

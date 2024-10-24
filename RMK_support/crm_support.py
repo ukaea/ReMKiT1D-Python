@@ -42,7 +42,7 @@ class ModelboundCRMData:
 
     def addTransitionEnergy(self, transitionEnergy: float):
         """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data.
-        
+
         If the energy is within energyResolution of another value, it is not added"
 
         Args:
@@ -186,7 +186,7 @@ def derivedTransition(
 
     Optionally, can calculate momentum and energy rates using rules as well.
     If an energy derivation rule is not supplied, the energy rate is set to `transitionRate*transitionEnergy`.
-    
+
     Args:
         inStates (List[int]): List of ingoing species IDs.
             The last species ID's density is chosen to be the implicit variable in the resulting rate equation.
@@ -337,7 +337,7 @@ def detailedBalanceTransition(
     csUpdatePriority=0,
 ) -> dict:
     """Return detailed balance transition property dictionary.
-    
+
     Requires information on corresponding direct transition and is defined for electron impact processes.
 
     Args:
@@ -733,10 +733,10 @@ def readNISTAkiCSV(filename: str) -> dict:
     """Reads in the NIST Atomic Spectra Database file provided in this repository (data/Aki.csv) and returns the data as a dictionary.
 
     Source: Kramida, A., Ralchenko, Yu., Reader, J., and NIST ASD Team (2021). DOI: https://doi.org/10.18434/T4W30F
-    
+
     Args:
         filename (str): Path to Aki.csv.
-    
+
     Returns:
         dict: Spontaneous hydrogen transmission data dictionary, for use with function "addHSpontaneousEmissionToCRMData".
     """
@@ -810,7 +810,7 @@ def termGeneratorCRM(
     includedTransitionIndices: List[int] = [],
 ) -> TermGenerator:
     """Return dictionary with implicit CRM density evolution term generator properties.
-    
+
     The term generator must be added to a model which has a CRM modelbound data object.
 
     Args:
@@ -838,7 +838,7 @@ def termGeneratorCRMElEnergy(
     includedTransitionIndices: List[int] = [],
 ) -> TermGenerator:
     """Return dictionary with implicit CRM electron energy evolution term generator properties.
-    
+
     The term generator must be added to a model which has a CRM modelbound data object
 
     Args:
@@ -906,7 +906,7 @@ def termGeneratorCRMSecEl(
     implicitTermGroups: List[int] = [1],
 ) -> TermGenerator:
     """Return term generator property dictionary for secondary electron kinetic term generators.
-     
+
     This puts secondary electrons generated in given transitions into the lowest energy cell.
 
     Args:
