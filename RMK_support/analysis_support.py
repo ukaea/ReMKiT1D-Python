@@ -55,7 +55,7 @@ def getSpatialIntegral(grid: Grid, dataset: xr.Dataset, varName: str) -> np.ndar
         grid (Grid): Grid class from an RKWrapper container
         dataset (xr.Dataset): Output data associated with this RKWrapper container
         varName (str): Name of the variable to integrate
-    
+
     Returns:
         integral (np.ndarray): Spatial integral of the variable over x
     """
