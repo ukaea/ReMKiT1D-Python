@@ -16,7 +16,9 @@ def collocatedAdvection(
     rightOutflow=False,
     centralDiff=False,
 ) -> sc.CustomModel:
-    """Create a collocated advection model (dn/dt = - div(n*u)) using matrix terms. Defaults to an upwinding stencil, but can be set to use central differencing, where the variables are interpolated to the cell edges.
+    """Create a collocated advection model (dn/dt = - div(n*u)) using matrix terms.
+
+    Defaults to an upwinding stencil, but can be set to use central differencing, where the variables are interpolated to the cell edges.
 
     Args:
         modelTag (str): Model tag
@@ -210,7 +212,13 @@ def staggeredAdvection(
     staggeredAdvectedVar=False,
     vData=sc.VarData(),
 ) -> sc.CustomModel:
-    """Create a staggered grid advection model (dn/dt = -div(G)) using matrix terms. Can handle advection of both cell centre and cell edge (dual) variables. When advecting cell centre variables, G is expected to live on cell edges, and when advecting cell edge variables G can be calculated as n*u, where u is the advection speed on cell edges, and the divergence is no longer staggered, but centered.
+    """Create a staggered grid advection model (dn/dt = -div(G)) using matrix terms.
+
+    Can handle advection of both cell centre and cell edge (dual) variables.
+
+    When advecting cell centre variables, G is expected to live on cell edges as a dual variable.
+
+    When advecting cell edge (dual) variables, G can be calculated as n*u, where u is the advection speed on cell edges, and the divergence is no longer staggered, but centered.
 
     Args:
         modelTag (str): Model tag
@@ -308,11 +316,15 @@ def staggeredPressureGrad(
     temperatureVar: str,
     speciesMass: float,
 ) -> sc.CustomModel:
-    """Create a staggered grid pressure gradient model (m*dG/dt = - grad(p)) for the momentum equation, assuming the flux is on the dual grid and using matrix terms. p is assumed to be n*k*T and normalization used is the default SOL-KiT-like normalization.
+    """Create a staggered grid pressure gradient model (m*dG/dt = - grad(p)) for the momentum equation.
+
+    Flux is assumed to be on the dual grid and using matrix terms.
+
+    p is assumed to be n*k*T and normalization used is the default SOL-KiT-like normalization.
 
     Args:
         modelTag (str): Model tag
-        fluxVar (str): Evolved flux variable name (G in the above equation)
+        fluxVar (str): Evolved flux dual variable name (G in the above equation)
         densityVar (str): Species density name factoring into pressure (n in the above equation)
         temperatureVar (str): Species temperature name factoring into pressure (T in the above equation)
         speciesMass (float): Species mass in kg
@@ -359,7 +371,9 @@ def ampereMaxwell(
     speciesFluxes: List[str],
     species: List[sc.Species],
 ) -> sc.CustomModel:
-    """Generate dE/dt = -j/epsilon0 matrix terms by calculating currents based on species fluxes and charges. Assumes default normalization.
+    """Generate dE/dt = -j/epsilon0 matrix terms by calculating currents based on species fluxes and charges.
+
+    Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -407,7 +421,9 @@ def lorentzForces(
     speciesDensities: List[str],
     species: List[sc.Species],
 ) -> sc.CustomModel:
-    """Generate Lorentz force matrix terms in the momentum equation for each species b: m_b*dG_b/dt = n_b*Z_b*e*E. Assumes default normalization.
+    """Generate Lorentz force matrix terms in the momentum equation for each species b: m_b*dG_b/dt = n_b*Z_b*e*E.
+
+    Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -466,7 +482,9 @@ def lorentzForceWork(
     speciesEnergies: List[str],
     species: List[sc.Species],
 ) -> sc.CustomModel:
-    """Generate Lorentz force work matrix terms in the energy density evolution equation for each species: dW_b/dt = Z_b * e * G_b * E. Assumes default normalization.
+    """Generate Lorentz force work matrix terms in the energy density evolution equation for each species: dW_b/dt = Z_b * e * G_b * E.
+
+    Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -529,7 +547,9 @@ def implicitTemperatures(
     ignoreKineticContribution=False,
     degreesOfFreedom: int = 3,
 ) -> sc.CustomModel:
-    """Generate implicit temperature derivation matrix terms for each species: d*n_b*k*T_b/2 + m_b*n_b*u_b**2/2 = W_b, where d is the number of degrees of freedom. Temperatures here are assumed to be stationary and implicit variables. The kinetic energy contribution uses interpolation, so should be used with care in regions of poorly resolved flow gradients. Assumes default normalization.
+    """Generate implicit temperature derivation matrix terms for each species: d*n_b*k*T_b/2 + m_b*n_b*u_b**2/2 = W_b, where d is the number of degrees of freedom. Temperatures here are assumed to be stationary and implicit variables. The kinetic energy contribution uses interpolation, so should be used with care in regions of poorly resolved flow gradients.
+
+    Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -542,6 +562,7 @@ def implicitTemperatures(
         evolvedXU2Cells (Union[List[int],None], optional): Optional list of evolved X cells in kinetic energy term. Can be used to remove the kinetic energy contribution in cells where it might be unphysical. Defaults to None, evolving all cells.
         ignoreKineticContribution (bool, optional): Ignores all kinetic contributions to the temperature. Defaults to False.
         degreesOfFreedom (int): Number of translational degrees of freedom going into temperature definition (d in above equation). Defaults to 3
+
     Returns:
         sc.CustomModel: CustomModel object ready for insertion into JSON config file
     """
@@ -635,7 +656,11 @@ def implicitTemperatures(
 def kinAdvX(
     modelTag: str, distFunName: str, gridObj: Grid, evolvedHarmonics: List[int] = []
 ) -> sc.CustomModel:
-    """Return kinetic advection model for electrons in x direction using matrix terms. This is the harmonic form of the vdf/dx term, coupling adjacent harmonics. Assumes default normalization.
+    """Return kinetic advection model for electrons in x direction using matrix terms.
+
+    This is the harmonic form of the vdf/dx term, coupling adjacent harmonics.
+
+    Assumes default normalization.
 
     Args:
         modelTag (str): Tag for the generated model
@@ -775,7 +800,11 @@ def advectionEx(
     wrapper: RKWrapper,
     dualDistFun: Union[str, None] = None,
 ) -> sc.CustomModel:
-    """Returns electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv. Adds necessary custom derivations to the wrapper. The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
+    """Returns electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv.
+
+    Adds necessary custom derivations to the wrapper.
+
+    The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
 
     Args:
         modelTag (str): Tag for the generated model
@@ -783,6 +812,9 @@ def advectionEx(
         eFieldName (str): Name of the implicit E-field variable
         wrapper (RKWrapper): Wrapper object to add custom derivations to
         dualDistFun (Union[str,None], optional): Optional distribution function to be used as the required variable in derivations (useful for staggered grids). Defaults to None.
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     numH = wrapper.grid.numH()
@@ -889,7 +921,11 @@ def addExAdvectionModel(
     wrapper: RKWrapper,
     dualDistFun: Union[str, None] = None,
 ) -> None:
-    """Adds electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv. Adds necessary custom derivations to the wrapper. The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
+    """Adds electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv.
+
+    Adds necessary custom derivations to the wrapper.
+
+    The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
 
     Args:
         modelTag (str): Tag for the generated model
@@ -906,7 +942,9 @@ def addExAdvectionModel(
 def eeCollIsotropic(
     modelTag: str, distFunName: str, elTempVar: str, elDensVar: str, wrapper: RKWrapper
 ) -> sc.CustomModel:
-    """Return e-e collision model for l=0 harmonic using matrix terms. Responsible for adding the derivations needed for its modelbound data. Assumes default normalization.
+    """Return e-e collision model for l=0 harmonic using matrix terms.
+
+    Responsible for adding the derivations needed for its modelbound data. Assumes default normalization.
 
     Args:
         modelTag (str): Tag of the model to be added
@@ -914,6 +952,9 @@ def eeCollIsotropic(
         elTempVar (str): Name of the electron temperature variable - should live in cell centres
         elDensVar (str): Name of the electron density variable - should live in cell centres
         wrapper (RKWrapper): Wrapper to add custom derivations to
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     if "f0Extraction" not in wrapper.customDerivs["tags"]:
@@ -990,7 +1031,9 @@ def eeCollIsotropic(
 def addEECollIsotropic(
     modelTag: str, distFunName: str, elTempVar: str, elDensVar: str, wrapper: RKWrapper
 ) -> None:
-    """Add e-e collision matrix terms for l=0 harmonic. Responsible for adding derivations needed for the model's data. Assumes default normalization.
+    """Add e-e collision matrix terms for l=0 harmonic.
+
+    Responsible for adding derivations needed for the model's data. Assumes default normalization.
 
     Args:
         modelTag (str): Tag of the model to be added
@@ -1016,7 +1059,9 @@ def eiCollIsotropic(
     ionEnVar: Union[str, None],
     wrapper: RKWrapper,
 ) -> sc.CustomModel:
-    """Return e-i collision model for l=0 harmonic using matrix terms. Responsible for adding derivations used in its modelbound data. Assumes default normalization.
+    """Return e-i collision model for l=0 harmonic using matrix terms.
+
+    Responsible for adding derivations used in its modelbound data. Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -1028,6 +1073,9 @@ def eiCollIsotropic(
         ionSpeciesName (str): Name of ion species colliding with the electrons - needed for the Coulomb logarithm
         ionEnVar (Union[str,None]): Name of the ion energy density variable (must be implicit). If present, the energy moment of the collision operator will be added to the equation evolving this variable. Defaults to None.
         wrapper (RKWrapper): Wrapper to add custom derivations to
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     elCharge = 1.60218e-19
@@ -1121,7 +1169,9 @@ def addEICollIsotropic(
     wrapper: RKWrapper,
     ionEnVar: Union[str, None] = None,
 ) -> None:
-    """Add e-i collision matrix terms for l=0 harmonic, as well as the corresponding ion energy matrix terms if ionEnVar is present. Responsible for adding derivations used in its modelbound data. Assumes default normalization.
+    """Add e-i collision matrix terms for l=0 harmonic, as well as the corresponding ion energy matrix terms if ionEnVar is present.
+
+    Responsible for adding derivations used in its modelbound data. Assumes default normalization.
 
     Args:
         modelTag (str): Model tag
@@ -1171,6 +1221,9 @@ def stationaryIonEIColl(
         ionSpeciesName (str): Name of ion species colliding with the electrons
         evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
         wrapper (RKWrapper): Wrapper to use
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     mbData = sc.VarlikeModelboundData()
@@ -1248,6 +1301,9 @@ def flowingIonEIColl(
         evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
         dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
         ionFluxVar (Union[str,None], optional): Ion flux variable (should be implicit) - when present generates ion friction terms corresponding to the electron-ion collision operators. Defaults to None.
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
     # NOTE: Needs a lot of work on optimization
     assert (
@@ -1869,6 +1925,9 @@ def eeCollHigherL(
         wrapper (RKWrapper): Wrapper to add derivations to
         evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
         dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     assert (
@@ -2276,7 +2335,9 @@ def diffusiveHeatingTerm(
     wrapper: RKWrapper,
     timeSignal=sc.TimeSignalData(),
 ) -> sc.GeneralMatrixTerm:
-    """Return diffusive kinetic electron heating matrix term with a given spatial heating profile. The term is proportional to 1/v**2 * d/dv(v**2 * df_0/dv) Assumes default normalization.
+    """Return diffusive kinetic electron heating matrix term with a given spatial heating profile.
+
+    The term is proportional to 1/v**2 * d/dv(v**2 * df_0/dv) Assumes default normalization.
 
     Args:
         distFunName (str): Name of distribution function variable
@@ -2329,7 +2390,9 @@ def lbcModel(
     leftBoundary=False,
     evolvedHarmonics: List[int] = [],
 ) -> sc.CustomModel:
-    """Return logical boundary condition model using matrix terms. Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
+    """Return logical boundary condition model using matrix terms.
+
+    Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
 
     Args:
         modelTag (str): Model tag of added model
@@ -2341,6 +2404,9 @@ def lbcModel(
         bisTol (float, optional): Bisection tolerance for calculating the cut-off velocity in the electron distribution function. Defaults to 1.0e-12.
         leftBoundary (bool, optional): True if model describes left boundary. Defaults to False.
         evolvedHarmonics (List[int], optional): List of evolved harmonic. Defaults to [], evolving all harmonics. Should be changed to only even l harmonics if staggered grid is used.
+
+    Returns:
+        sc.CustomModel: CustomModel ready for insertion into JSON config file
     """
 
     assert wrapper.grid.mMax == 0, "lbcModel assumes m=0 and cannot be used when m>0"
@@ -2476,7 +2542,9 @@ def addLBCModel(
     leftBoundary=False,
     evolvedHarmonics: List[int] = [],
 ) -> None:
-    """Add logical boundary condition model built with matrix terms to wrapper. Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
+    """Add logical boundary condition model built with matrix terms to wrapper.
+
+    Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
 
     Args:
         modelTag (str): Model tag of added model
@@ -2522,6 +2590,7 @@ def dvEnergyTerm(
         multConst (float, optional): Multiplicative constant for the normalization. Defaults to -1.0, which assumes that a positive rate is heating
         k (int, optional): Optional power for the drag coefficient (effectively multiplies by v**k). If not 0 varData should include the electron density divided by the k-th moment of f_0 (in the moment derivation sense). Defaults to 0.
         implicitGroups (list, optional): Implicit term groups of parent model to which this term belongs to. Defaults to [1].
+
     Returns:
         sc.GeneralMatrixTerm: Term object ready to be added into a model
     """
@@ -2937,7 +3006,9 @@ def addNodeMatrixTermModel(
     termDefs: List[Tuple[ct.Node, str]],
     stencilData: Union[List[dict], None] = None,
 ):
-    """Adds model with additive matrix terms of the form rowVar * implicitVar, where rowVar is a modelbound variable derived from a treeDerivation given a node. Optionally gives each matrix terms a different stencil.
+    """Adds model with additive matrix terms of the form rowVar * implicitVar, where rowVar is a modelbound variable derived from a treeDerivation given a node.
+
+    Optionally gives each matrix terms a different stencil.
 
     Args:
         wrapper (RKWrapper): Wrapper to add model to
