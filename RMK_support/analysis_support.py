@@ -49,6 +49,16 @@ def calculateFullF(data: xr.Dataset, dataName: str, Ntheta: int) -> xr.DataArray
 
 
 def getSpatialIntegral(grid: Grid, dataset: xr.Dataset, varName: str) -> np.ndarray:
+    """Calculate the spatial integral of a variable from a ReMKiT1D output file
+
+    Args:
+        grid (Grid): Grid class from an RKWrapper container
+        dataset (xr.Dataset): Output data associated with this RKWrapper container
+        varName (str): Name of the variable to integrate
+    
+    Returns:
+        integral (np.ndarray): Spatial integral of the variable over x
+    """
 
     data = dataset[varName].values
     integral = np.zeros(data.shape[0])  # array in time dimension
