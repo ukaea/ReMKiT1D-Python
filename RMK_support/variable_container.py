@@ -39,13 +39,13 @@ class VariableContainer:
             isDerived (bool, optional): True if the variable is treated as derived by ReMKiT1D. Defaults to False.
             isDistribution (bool, optional): True for distribution-like variables. Defaults to False.
             units (str, optional): Variable units. Defaults to 'normalized units'.
-            isStationary (bool, optional): True if the variable is stationary (d/dt = 0). Defaults to False.
+            isStationary (bool, optional): True if models should treat the variable's time derivative as zero (d/dt = 0). Defaults to False.
             isScalar (bool, optional): True if the variable is a scalar. Defaults to False.
             isOnDualGrid (bool, optional): True if the variable is defined on dual grid. Defaults to False.
             priority (int, optional): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
-            derivationRule (Union[None,dict], optional) Optional derivation rule for derived variables. Defaults to None.
-            normSI (float, optional) Optional normalisation constant for converting value to SI. Defaults to 1.0.
-            unitSI (str, optional) Optional associated SI unit. Defaults to "".
+            derivationRule (Union[None,dict], optional): Optional derivation rule for derived variables. Defaults to None.
+            normSI (float, optional): Optional normalisation constant for converting value to SI. Defaults to 1.0.
+            unitSI (str, optional): Optional associated SI unit. Defaults to "".
         """
 
         assert name not in ["x", "h", "v"], (

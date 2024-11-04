@@ -333,7 +333,7 @@ class RKWrapper:
             isDerived (bool, optional): True if the variable is treated as derived by ReMKiT1D. Defaults to False.
             isDistribution (bool, optional): True for distribution-like variables. Defaults to False.
             units (str, optional): Variable units. Defaults to the placeholder string 'normalized units'.
-            isStationary (bool, optional): True if the variable is stationary (d/dt = 0). Defaults to False.
+            isStationary (bool, optional): True if models should treat the variable's time derivative as zero (d/dt = 0). Defaults to False.
             isScalar (bool, optional): True if the variable is a 0-dimensional, single-valued quantity. Defaults to False.
             isOnDualGrid (bool, optional): True if the variable is defined on the dual grid (on cell edges). Defaults to False.
             priority (int, optional): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
