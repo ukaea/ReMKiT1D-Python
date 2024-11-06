@@ -1,9 +1,11 @@
 # CHANGELOG
 
-## v1.2.1, 2024-10-21
+## v1.2.1, 2024-11-06
 
 - New standard textbook option for logLei discontinuity fix
 - Support for changing BDE integrator consolidation interval
+- Support for ignoring Jacobians in the diffusion stencil
+- Begun refactor of CustomModel (now renamed Model, with CustomModel alias still available)
 
 ### Breaking Changes
 
@@ -17,6 +19,7 @@
 
 - New standard textbook option to remove the discontinuity in the NRL formulary version of e-i Coulomb Log
 - The BDE integrator consolidation interval can now be set
+- ignoreJacobian option in diffusion stencil
 
 ### Bug Fixes
 
