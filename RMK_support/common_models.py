@@ -1292,7 +1292,7 @@ def flowingIonEIColl(
     Args:
         modelTag (str): Tag of model to be added
         distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
+        ionDensVar (str): Name of the implicit ion density variable
         ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd

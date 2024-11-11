@@ -36,7 +36,6 @@ class RKWrapper:
             "electronPolytropicCoeff": 1.0,  # Electron polytropic coefficient
             "ionPolytropicCoeff": 1.0,  # Ion polytropic coefficient
             "electronSheathGammaIonSpeciesID": -1,  # ID of ions whose mass is used to calculate the electron sheath heat transmission coefficient (Defaults to -1)
-            "removeLogLeiDiscontinuity": False,  # If true, will remove the NRL plasma formulary logLei discontinuity at 10*Z**2 eV by moving the branch shift to e**2 * Z**2 eV
         }
 
         self.__species__: Dict[str, sc.Species] = {}
@@ -572,7 +571,6 @@ class RKWrapper:
         ePolyCoeff=1.0,
         ionPolyCoeff=1.0,
         electronSheathGammaIonSpeciesID=-1,
-        removeLogLeiDiscontinuity=False,
     ) -> None:
         """Set options used by the standard textbook object containing common derivations
 
@@ -581,7 +579,6 @@ class RKWrapper:
             ePolyCoeff (float, optional): Electron polytropic coefficient for sound speed calculations. Defaults to 1.0.
             ionPolyCoeff (float, optional): Ion polytropic coefficient for sound speed calculations. Defaults to 1.0.
             electronSheathGammaIonSpeciesID (int, optional): Ion species ID used for the default electron sheath heat transmission coefficient calculation. Defaults to -1.
-            removeLogLeiDiscontinuity (bool, optional): Remove the electron-ion Coulomb Log discontinuity at 10*Z**2 eV by moving the breakpoint to e**2 * Z**2 eV. Defaults to False.
         """
 
         self.__standardTextook__["temperatureDerivSpeciesIDs"] = tempDerivSpeciesIDs
@@ -589,9 +586,6 @@ class RKWrapper:
         self.__standardTextook__["ionPolytropicCoeff"] = ionPolyCoeff
         self.__standardTextook__["electronSheathGammaIonSpeciesID"] = (
             electronSheathGammaIonSpeciesID
-        )
-        self.__standardTextook__["removeLogLeiDiscontinuity"] = (
-            removeLogLeiDiscontinuity
         )
 
     def addCustomDerivation(self, derivName: str, derivOptions: dict) -> None:
