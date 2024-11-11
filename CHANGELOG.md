@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v1.2.1, 2024-11-11
+
+- Docstring improvements
+
 ## v1.2.1, 2024-11-06
 
 - New standard textbook option for logLei discontinuity fix
