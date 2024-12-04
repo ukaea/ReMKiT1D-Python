@@ -3,36 +3,77 @@ import holoviews as hv  # type: ignore
 import panel as pn
 import numpy as np
 from .grid import Grid
-from .variable_container import VariableContainer,Variable
+from .variable_container import VariableContainer, Variable
 from . import IO_support as io
-from typing import Union, List,Dict
+from typing import Union, List, Dict
 import param  # type: ignore
 
-class RMKExplorer: 
 
-    def __init__(self,variables:VariableContainer,runPaths:Dict[str,str],**kwargs):
+class RMKExplorer:
 
-        self.__variables__ = variables 
-        self.__runPaths__ = runPaths 
+    def __init__(
+        self, variables: VariableContainer, runPaths: Dict[str, str], **kwargs
+    ):
 
-        self.__runTimes__ ={run:io.loadVariableFromHDF5(self.__variables__["time"],filepaths=[path+file for file in io.getOutputFilenames(path)]).data for run,path in runPaths.items()}
+        self.__variables__ = variables
+        self.__runPaths__ = runPaths
 
-        self.__runMaxTime__ = max(np.max(self.__runTimes__[run]) for run in self.__runTimes__)
-        self.__runMinTime__ = min(np.min(self.__runTimes__[run]) for run in self.__runTimes__)
+        self.__runTimes__ = {
+            run: io.loadVariableFromHDF5(
+                self.__variables__["time"],
+                filepaths=[path + file for file in io.getOutputFilenames(path)],
+            ).data
+            for run, path in runPaths.items()
+        }
 
-        self.__timeResolution__ = kwargs.get("timeResolution",50)
+        self.__runMaxTime__ = max(
+            np.max(self.__runTimes__[run]) for run in self.__runTimes__
+        )
+        self.__runMinTime__ = min(
+            np.min(self.__runTimes__[run]) for run in self.__runTimes__
+        )
 
-        self.__datasets__ = {run:io.loadVarContFromHDF5(self.__variables__["time"],filepaths=[path+file for file in io.getOutputFilenames(path)]).dataset.interp(t=np.linspace(self.__runMinTime__,self.__runMaxTime__,self.__timeResolution__,endpoint=True)) for run,path in runPaths.items()}
+        self.__timeResolution__ = kwargs.get("timeResolution", 50)
 
-    def __load__(self,varName:str,run:str):
+        self.__datasets__ = {
+            run: io.loadVarContFromHDF5(
+                self.__variables__["time"],
+                filepaths=[path + file for file in io.getOutputFilenames(path)],
+            ).dataset.interp(
+                t=np.linspace(
+                    self.__runMinTime__,
+                    self.__runMaxTime__,
+                    self.__timeResolution__,
+                    endpoint=True,
+                )
+            )
+            for run, path in runPaths.items()
+        }
+
+    def __load__(self, varName: str, run: str):
         path = self.__runPaths__[run]
         if varName in self.__datasets__[run]:
-            return 
+            return
 
-        newVarCont = io.loadVarContFromHDF5(self.__variables__[varName],filepaths=[path+file for file in io.getOutputFilenames(path)])
-        self.__datasets__[run]=xr.merge([self.__datasets__[run],newVarCont.dataset.interp(t=np.linspace(self.__runMinTime__,self.__runMaxTime__,self.__timeResolution__,endpoint=True))],compat="override")
-            
-        
+        newVarCont = io.loadVarContFromHDF5(
+            self.__variables__[varName],
+            filepaths=[path + file for file in io.getOutputFilenames(path)],
+        )
+        self.__datasets__[run] = xr.merge(
+            [
+                self.__datasets__[run],
+                newVarCont.dataset.interp(
+                    t=np.linspace(
+                        self.__runMinTime__,
+                        self.__runMaxTime__,
+                        self.__timeResolution__,
+                        endpoint=True,
+                    )
+                ),
+            ],
+            compat="override",
+        )
+
 
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):
