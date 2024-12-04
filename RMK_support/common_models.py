@@ -1,484 +1,176 @@
-from . import simple_containers as sc
-from typing import Union, List, Tuple, cast
+from . import stencils
+from typing import Union, List, Tuple, cast,Optional,Dict
 import numpy as np
-from .grid import Grid
-from .rk_wrapper import RKWrapper
-from . import calculation_tree_support as ct
-from .sk_normalization import calculateNorms
-
-
-def collocatedAdvection(
-    modelTag: str,
-    advectedVar: str,
-    advectionSpeed: str,
-    lowerBoundVar: Union[str, None] = None,
-    leftOutflow=False,
-    rightOutflow=False,
-    centralDiff=False,
-) -> sc.CustomModel:
-    """Create a collocated advection model (dn/dt = - div(n*u)) using matrix terms. Defaults to an upwinding stencil, but can be set to use central differencing, where the variables are interpolated to the cell edges.
-
-    Args:
-        modelTag (str): Model tag
-        advectedVar (str): Name of advected variable (n in above equation), must be implicit
-        advectionSpeed (str): Name of advection speed variable (u in above equation)
-        lowerBoundVar (Union[str,None], optional): Name of outflow lower bound variable, can be None, which defaults to a fixed lower bound of zero. Defaults to None.
-        leftOutflow (bool, optional): If true left boundary is treated as outflow, otherwise it is reflective or periodic depending on the grid. Defaults to False.
-        rightOutflow (bool, optional): If true right boundary is treated as outflow, otherwise it is reflective or periodic depending on the grid. Defaults to False.
-        centralDiff (bool, optional): If true uses central difference stencil instead of upwinding. Defaults to False.
-
-    Returns:
-        sc.CustomModel: CustomModel ready for insertion into JSON config file
-    """
-
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
-
-    # Setting normalization constant calculation (here -u_0*t_0/x_0 - should be -1 with default normalization)
-    normConst = sc.CustomNormConst(
-        multConst=-1.0,
-        normNames=["speed", "time", "length"],
-        normPowers=[1.0, 1.0, -1.0],
-    )
-
-    evolvedVar = advectedVar
-    divStencil = sc.upwindedDiv(advectionSpeed)
-
-    if centralDiff:
-        divStencil = sc.centralDiffStencilDiv(advectionSpeed)
-
-    divFluxTerm = sc.GeneralMatrixTerm(
-        evolvedVar, customNormConst=normConst, stencilData=divStencil
-    )
-
-    newModel.addTerm("divFlux", divFluxTerm)
-
-    if leftOutflow:
-        # Add left boundary term
-
-        boundaryStencilLeft = sc.boundaryStencilDiv(
-            advectionSpeed, lowerBoundVar=lowerBoundVar, isLeft=True
-        )
-
-        leftBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar, customNormConst=normConst, stencilData=boundaryStencilLeft
-        )
-
-        newModel.addTerm("leftBC", leftBCTerm)
-
-    if rightOutflow:
-        boundaryStencilRight = sc.boundaryStencilDiv(
-            advectionSpeed, lowerBoundVar=lowerBoundVar
-        )
-
-        # Add Right boundary term
-
-        rightBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar, customNormConst=normConst, stencilData=boundaryStencilRight
-        )
-
-        newModel.addTerm("rightBC", rightBCTerm)
-
-    return newModel
-
-
-def collocatedPressureGrad(
-    modelTag: str,
-    fluxVar: str,
-    densityVar: str,
-    temperatureVar: str,
-    speciesMass: float,
-    addExtrapolatedBCs=True,
-) -> sc.CustomModel:
-    """Create a collocated pressure gradient model for the momentum equation using matrix terms.
-
-    Args:
-        modelTag (str): Model tag
-        fluxVar (str): Evolved flux variable name - must be implicit
-        densityVar (str): Species density name factoring into pressure - this will be the implicit variable in the matrix term
-        temperatureVar (str): Species temperature name factoring into pressure
-        speciesMass (float): Species mass in kg
-        addExtrapolatedBCs (bool, optional): If true will add extrapolated values as left and right boundary condition (set to False for periodic grids). Defaults to True
-
-    Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
-    """
-
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
-
-    elCharge = 1.60218e-19
-    # Setting normalization constant calculation
-    normConst = sc.CustomNormConst(
-        multConst=-elCharge / speciesMass,
-        normNames=["eVTemperature", "time", "length", "speed"],
-        normPowers=[1.0, 1.0, -1.0, -1.0],
-    )
-
-    evolvedVar = fluxVar
-    implicitVar = densityVar
-
-    # Central differenced gradient term
-
-    gradStencil = sc.centralDiffStencilGrad()
-
-    # Required variable data for electron pressure
-    vData = sc.VarData(reqColVars=[temperatureVar])
-
-    gradTerm = sc.GeneralMatrixTerm(
-        evolvedVar,
-        implicitVar=implicitVar,
-        customNormConst=normConst,
-        stencilData=gradStencil,
-        varData=vData,
-    )
-
-    newModel.addTerm("bulkGrad", gradTerm)
-
-    if addExtrapolatedBCs:
-        # Left boundary condition with extrapolation
-
-        boundaryStencilLeft_grad = sc.boundaryStencilGrad(isLeft=True)
-
-        # Right boundary condition with extrapolation
-
-        boundaryStencilRight_grad = sc.boundaryStencilGrad()
-
-        # Add left boundary term
-
-        leftBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar=implicitVar,
-            customNormConst=normConst,
-            stencilData=boundaryStencilLeft_grad,
-            varData=vData,
-        )
-
-        newModel.addTerm("leftBC", leftBCTerm)
-
-        # Add Right boundary term
-
-        rightBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar=implicitVar,
-            customNormConst=normConst,
-            stencilData=boundaryStencilRight_grad,
-            varData=vData,
-        )
-
-        newModel.addTerm("rightBC", rightBCTerm)
-
-    return newModel
-
+from .grid import Grid,Profile
+from .variable_container import Variable,MultiplicativeArgument
+from .derivations import Species
+from . import model_construction as mc
+from . import derivations
 
 def simpleSourceTerm(
-    evolvedVar: str, sourceProfile: np.ndarray, timeSignal=sc.TimeSignalData()
-) -> sc.GeneralMatrixTerm:
-    """Simple implicit source term with given source profile using matrix terms
+    dummyImplicitVar: Variable, sourceProfile: Profile, timeSignal=mc.TimeSignalData()
+) -> mc.MatrixTerm:
+    """Simple "implicit" source term with given source profile. Uses a dummy implicit variable to cast the term into an implicit form by taking the source profile and multiplying and dividing by the implicit variable.
 
     Args:
-        evolvedVar (str): Name of evolved variable - must be implicit
-        sourceProfile (np.ndarray): Spatial source profile
-        timeSignal (sc.TimeSignalData): Optional time signal component of source. Defaults to constant signal.
+        dummyImplicitVar (Variable): Dummy implicit variable
+        sourceProfile (Profile): Spatial source profile
+        timeSignal (TimeSignalData): Optional time signal component of source. Defaults to constant signal.
 
     Returns:
-        sc.GeneralMatrixTerm: Term ready for adding to a model
+        MatrixTerm: Term ready for adding to a model
     """
 
-    vData = sc.VarData(reqRowVars=[evolvedVar], reqRowPowers=[-1.0])
+    assert sourceProfile.dim == "X", "simpleSourceTerm requires a spatial source profile"
 
-    sourceTerm = sc.GeneralMatrixTerm(
-        evolvedVar,
-        spatialProfile=sourceProfile.tolist(),
-        varData=vData,
-        stencilData=sc.diagonalStencil(),
-        timeSignalData=timeSignal,
-    )
+    return timeSignal*(sourceProfile*(dummyImplicitVar**(-1)*mc.DiagonalStencil()(dummyImplicitVar))).rename("source_term")
 
-    return sourceTerm
-
-
-def staggeredAdvection(
-    modelTag: str,
-    advectedVar: str,
-    fluxVar: str,
-    advectionSpeed: Union[str, None] = None,
-    staggeredAdvectionSpeed: Union[str, None] = None,
-    lowerBoundVar: Union[str, None] = None,
-    leftOutflow=False,
-    rightOutflow=False,
-    staggeredAdvectedVar=False,
-    vData=sc.VarData(),
-) -> sc.CustomModel:
-    """Create a staggered grid advection model (dn/dt = -div(G)) using matrix terms. Can handle advection of both cell centre and cell edge (dual) variables. When advecting cell centre variables, G is expected to live on cell edges, and when advecting cell edge variables G can be calculated as n*u, where u is the advection speed on cell edges, and the divergence is no longer staggered, but centered.
+def advection(advectedVar:Variable,flux:Union[Variable,MultiplicativeArgument],outflow:Tuple[bool,bool]=(False,False),advectionSpeed:Optional[Variable]=None,outflowLowerBound:Optional[Variable]=None) -> mc.Model:
+    """Advection model with outflow, handling both simple and composite flux cases. If both the advected variable and the flux live on the same grid, the flux is interpolated on the corresponding cell boundaries and central differencing is used, otherwise staggered forward/backwards differencing is used.
 
     Args:
-        modelTag (str): Model tag
-        advectedVar (str): Name of advected (evolved) variable.
-        fluxVar (str): Name of flux variable - always on dual grid. Not used when staggeredAdvectedVar is True.
-        advectionSpeed (Union[str,None], optional): Name of advection speed variable - on regular grid - only required if there is outflow. Defaults to None.
-        staggeredAdvectionSpeed (Union[str,None], optional): Name of advection speed variable - on dual grid - required if staggeredAdvectedVar=True. Defaults to None.
-        lowerBoundVar (Union[str,None], optional): Name of outflow lower bound variable, can be None, which defaults to a fixed lower bound of zero. Defaults to None.
-        leftOutflow (bool, optional): If true left boundary is treated as outflow, otherwise it is reflective or periodic depending on the grid. Defaults to False.
-        rightOutflow (bool, optional): If true right boundary is treated as outflow, otherwise it is reflective or periodic depending on the grid. Defaults to False.
-        staggeredAdvectedVar (bool, optional): If true will construct the flux from the advectedVar and staggered advection speed. Defaults to False.
-        vData (sc.VarData, optional): Optional VarData object. Defaults to empty object.
+        advectedVar (Variable): The advected variable - must be implicit
+        flux (Union[Variable,MultiplicativeArgument]): The advective flux, if it is composed of multiple variables, the last one is implicit
+        outflow (Tuple[bool,bool], optional): Tuple representing whether there is outflow on the left/right side of the system (outflow[0] is left, [1] is right). Defaults to (False,False).
+        advectionSpeed (Optional[Variable], optional): Advection speed used to reconstruct the outflow flux on the boundary as advectionSpeed*advectedVar - must live on regular grid. Defaults to None.
+        outflowLowerBound (Optional[Variable], optional): Outflow lower bound variable. Defaults to None - setting the lower bound to 0, preventing inflow.
+
     Returns:
-        sc.CustomModel: CustomModel ready for insertion into JSON config file
+        Model: Advection model ready for adding to a ReMKiT1D contexts
     """
 
-    if staggeredAdvectedVar:
-        assert (
-            staggeredAdvectionSpeed is not None
-        ), "In staggeredAdvection if advected variable is staggered the staggered advection speed must be specified"
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
+    advModel = mc.Model("advection_"+advectedVar.name)
 
-    # Setting normalization constant calculation (here -u_0*t_0/x_0 - should be -1 with default normalization)
-    normConst = sc.CustomNormConst(
-        multConst=-1.0,
-        normNames=["speed", "time", "length"],
-        normPowers=[1.0, 1.0, -1.0],
-    )
+    div = stencils.StaggeredDivStencil()
 
-    evolvedVar = advectedVar
-    divStencil = sc.staggeredDivStencil()
-    implicitVar = fluxVar
+    fluxOnDualGrid = flux.isOnDualGrid if isinstance(flux,Variable) else flux.firstArg.isOnDualGrid
+    if isinstance(flux,MultiplicativeArgument):
+        assert flux.scalar == 1, "flux cannot have non-trivial scalar multiplier in advection"
+        assert all(arg.isOnDualGrid == flux.firstArg.isOnDualGrid for _,arg in flux.args.items() ), "If flux in advection is a MultiplicativeArgument all components must live on the same grid"
 
-    if staggeredAdvectedVar:
-        divStencil = sc.centralDiffStencilDiv(cast(str, staggeredAdvectionSpeed))
-        implicitVar = evolvedVar
+    if fluxOnDualGrid == advectedVar.isOnDualGrid:
+        div = stencils.CentralDiffDivStencil() #Here the flux jacobian is not separately interpolated
 
-    divFluxTerm = sc.GeneralMatrixTerm(
-        evolvedVar,
-        implicitVar,
-        customNormConst=normConst,
-        stencilData=divStencil,
-        varData=vData,
-    )
+    advModel.ddt[advectedVar] += - div(flux).rename("bulk_div")
 
-    newModel.addTerm("divFlux", divFluxTerm)
+    if any(outflow):
+        assert advectionSpeed is not None,"advectionSpeed on the regular grid must be provided to advection if there is any outflow"
+        assert not advectionSpeed.isOnDualGrid, "advectionSpeed in advection model must be on regular grid"
+        if outflow[0]:
+            divBC = stencils.BCDivStencil(advectionSpeed,outflowLowerBound,isLeft=True)
+            advModel.ddt[advectedVar] += -divBC(advectedVar).rename("div_BC_left")
+        if outflow[1]:
+            divBC = stencils.BCDivStencil(advectionSpeed,outflowLowerBound)
+            advModel.ddt[advectedVar] += -divBC(advectedVar).rename("div_BC_right")
 
-    if leftOutflow:
-        # Add left boundary term
+    return advModel
 
-        assert (
-            advectionSpeed is not None
-        ), "advectionSpeed must be passed to staggeredAdvection if there is outflow"
-        boundaryStencilLeft = sc.boundaryStencilDiv(
-            advectionSpeed, lowerBoundVar=lowerBoundVar, isLeft=True
-        )
-
-        leftBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            customNormConst=normConst,
-            stencilData=boundaryStencilLeft,
-            varData=vData,
-        )
-
-        newModel.addTerm("leftBC", leftBCTerm)
-
-    if rightOutflow:
-        assert (
-            advectionSpeed is not None
-        ), "advectionSpeed must be passed to staggeredAdvection if there is outflow"
-
-        boundaryStencilRight = sc.boundaryStencilDiv(
-            advectionSpeed, lowerBoundVar=lowerBoundVar
-        )
-
-        # Add Right boundary term
-
-        rightBCTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            customNormConst=normConst,
-            stencilData=boundaryStencilRight,
-            varData=vData,
-        )
-
-        newModel.addTerm("rightBC", rightBCTerm)
-
-    return newModel
-
-
-def staggeredPressureGrad(
-    modelTag: str,
-    fluxVar: str,
-    densityVar: str,
-    temperatureVar: str,
-    speciesMass: float,
-) -> sc.CustomModel:
-    """Create a staggered grid pressure gradient model (m*dG/dt = - grad(p)) for the momentum equation, assuming the flux is on the dual grid and using matrix terms. p is assumed to be n*k*T and normalization used is the default SOL-KiT-like normalization.
+def pressureGrad(fluxVar:Variable,pressure:Union[Variable,MultiplicativeArgument],normConst:float) -> mc.Model:
+    """Pressure gradient contribution to the momentum equation. Can handle both collocated and staggered fluxes, but the pressure must live on the regular grid. If collocated uses central differencing with interpolation. If the grid is not periodic linearly extrapolates pressure onto boundaries if the flux is on the regular grid.
 
     Args:
-        modelTag (str): Model tag
-        fluxVar (str): Evolved flux variable name (G in the above equation)
-        densityVar (str): Species density name factoring into pressure (n in the above equation)
-        temperatureVar (str): Species temperature name factoring into pressure (T in the above equation)
-        speciesMass (float): Species mass in kg
+        fluxVar (Variable): Implicit flux variable
+        pressure (Union[Variable,MultiplicativeArgument]): Pressure variable or composite varible (the last variable in the MultiplicativeArgument is taken to be the implicit variable)
+        normConst (float): Normalisation constant for the pressure gradient term
 
     Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
+        Model: Pressure gradient model ready for adding to a ReMKiT1D context
     """
 
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
+    pressureGradModel = mc.Model("pressure_grad_"+fluxVar.name)
 
-    elCharge = 1.60218e-19
-    # Setting normalization constant calculation
-    normConst = sc.CustomNormConst(
-        multConst=-elCharge / speciesMass,
-        normNames=["eVTemperature", "time", "length", "speed"],
-        normPowers=[1.0, 1.0, -1.0, -1.0],
-    )
+    grad = stencils.StaggeredGradStencil()
 
-    evolvedVar = fluxVar
-    implicitVar = densityVar
+    fluxOnDualGrid = fluxVar.isOnDualGrid 
+    if isinstance(pressure,Variable):
+        assert not pressure.isOnDualGrid, "pressure in pressureGrad must be on regular grid"
+    if isinstance(pressure,MultiplicativeArgument):
+        assert pressure.scalar == 1, "pressure cannot have non-trivial scalar multiplier in pressureGrad"
+        assert all(not arg.isOnDualGrid for _,arg in pressure.args.items()), "If pressure in pressureGrad is a MultiplicativeArgument all components must live on the regular grid"
 
-    gradStencil = sc.staggeredGradStencil()
+    if not fluxOnDualGrid:
+        grad = stencils.CentralDiffGradStencil() 
 
-    # Required variable data for pressure
-    vData = sc.VarData(reqColVars=[temperatureVar])
+    pressureGradModel.ddt[fluxVar] += - normConst * grad(pressure).rename("bulk_grad")
 
-    gradTerm = sc.GeneralMatrixTerm(
-        evolvedVar,
-        implicitVar=implicitVar,
-        customNormConst=normConst,
-        stencilData=gradStencil,
-        varData=vData,
-    )
+    if not fluxOnDualGrid: 
+        if not fluxVar.grid.isPeriodic:
+            pressureGradModel.ddt[fluxVar] += -normConst*stencils.BCGradStencil(True)(pressure).rename("grad_BC_left") -normConst*stencils.BCGradStencil()(pressure).rename("grad_BC_right")
 
-    newModel.addTerm("bulkGrad", gradTerm)
+    return pressureGradModel
 
-    return newModel
-
-
-def ampereMaxwell(
-    modelTag: str,
-    eFieldName: str,
-    speciesFluxes: List[str],
-    species: List[sc.Species],
-) -> sc.CustomModel:
-    """Generate dE/dt = -j/epsilon0 matrix terms by calculating currents based on species fluxes and charges. Assumes default normalization.
+def ampereMaxwell(eField:Variable,speciesFluxes:List[Variable],species:List[Species],norms:Dict[str,float]) -> mc.Model:
+    """Generate dE/dt = -j/epsilon0 matrix terms by calculating currents based on species fluxes and charges.
 
     Args:
-        modelTag (str): Model tag
-        eFieldName (str): Name of evolved electric field variable
-        speciesFluxes (List[str]): Names of species fluxes - implicit variables
-        species (list[sc.Species]): Species objects for each species
+        eField (Variable): Electric field variable
+        speciesFluxes (List[Variable]): List of fluxes associated with each of the passed species
+        species (List[Species]): List of species, must conform to list of fluxes
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
     Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
+        Model: Ampere-Maxwell model ready for addition to ReMKiT1D context
     """
-
     assert len(speciesFluxes) == len(
         species
     ), "speciesFluxes and species passed to ampereMaxwell model must be of same size"
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
 
     elCharge = 1.60218e-19
-    epsilon0 = 8.854188e-12  # vacuum permittivity
-    evolvedVar = eFieldName
+    epsilon0 = 8.854188e-12 
+    normConst = elCharge / epsilon0 *norms["density"]*norms["time"]*norms["speed"]/norms["EField"]
 
-    for i, flux in enumerate(speciesFluxes):
-        normConst = sc.CustomNormConst(
-            multConst=-species[i].charge * elCharge / epsilon0,
-            normNames=["density", "time", "speed", "EField"],
-            normPowers=[1.0, 1.0, 1.0, -1.0],
-        )
+    amModel = mc.Model("AM_model")
+    for i,flux in enumerate(speciesFluxes):
+        amModel.ddt[eField] += - species[i].charge *normConst * mc.DiagonalStencil()(flux).rename("current_"+flux.name)
 
-        newTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar=flux,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(),
-        )
+    return amModel
 
-        newModel.addTerm("current" + flux, newTerm)
-
-    return newModel
-
-
-def lorentzForces(
-    modelTag: str,
-    eFieldName: str,
-    speciesFluxes: List[str],
-    speciesDensities: List[str],
-    species: List[sc.Species],
-) -> sc.CustomModel:
-    """Generate Lorentz force matrix terms in the momentum equation for each species b: m_b*dG_b/dt = n_b*Z_b*e*E. Assumes default normalization.
-
+def lorentzForces(eField:Variable,speciesFluxes:List[Variable],speciesDensities:List[Variable],species:List[Species],norms:Dict[str,float]) -> mc.Model:
+    """Generate Lorentz force matrix terms in the momentum equation for each species b: m_b*dG_b/dt = n_b*Z_b*e*E. 
     Args:
-        modelTag (str): Model tag
-        eFieldName (str): Name of  electric field variable (E in above equation) - this will be the implicit variable
-        speciesFluxes (List[str]): Names of evolved species fluxes (G_b in above equation)- the evolved implicit variable
-        speciesDensities (List[str]): Names of species densities (n_b in above equation) - should live on the same grid as the electric field and fluxes
-        species (list[sc.Species]): Species objects for each species (supply m_b and Z_b in above equation)
+        eField (Variable): Electric field variable - implicit
+        speciesFluxes (List[Variable]): Evolved fluxes - implicit - should live on the same grid as eField
+        speciesDensities (List[Variable]): Species densities - should live on the same grid as eField
+        species (List[Species]): Species corresponding to densities and fluxes
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
     Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
+        Model: Lorentz Force model ready to be added to a ReMKiT1D context
     """
-
     assert len(speciesFluxes) == len(
-        species
-    ), "speciesFluxes and species passed to lorentzForces model must be of same size"
+            species
+        ), "speciesFluxes and species passed to lorentzForces model must be of same size"
     assert len(speciesDensities) == len(
-        species
-    ), "speciesDensities and species passed to lorentzForces model must be of same size"
-
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
+            species
+        ), "speciesDensities and species passed to lorentzForces model must be of same size"
 
     elCharge = 1.60218e-19
     amu = 1.6605390666e-27  # atomic mass unit
-    implicitVar = eFieldName
 
+    lForceModel = mc.Model("lorentz_forces")
     for i, flux in enumerate(speciesFluxes):
+    
         speciesMass = amu * species[i].atomicA
         speciesCharge = elCharge * species[i].charge
+        normConst = speciesCharge / speciesMass * norms["EField"] * norms["time"] / norms["speed"]
 
-        normConst = sc.CustomNormConst(
-            multConst=speciesCharge / speciesMass,
-            normNames=["EField", "time", "speed"],
-            normPowers=[1.0, 1.0, -1.0],
-        )
+        lForceModel.ddt[flux] = normConst * speciesDensities[i] * mc.DiagonalStencil()(eField).rename("lorentz_"+flux.name)
 
-        vData = sc.VarData(reqRowVars=[speciesDensities[i]])
+    return lForceModel
 
-        newTerm = sc.GeneralMatrixTerm(
-            flux,
-            implicitVar=implicitVar,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(),
-            varData=vData,
-        )
-
-        newModel.addTerm("lorentz" + flux, newTerm)
-
-    return newModel
-
-
-def lorentzForceWork(
-    modelTag: str,
-    eFieldName: str,
-    speciesFluxes: List[str],
-    speciesEnergies: List[str],
-    species: List[sc.Species],
-) -> sc.CustomModel:
-    """Generate Lorentz force work matrix terms in the energy density evolution equation for each species: dW_b/dt = Z_b * e * G_b * E. Assumes default normalization.
+def lorentzForceWork(eField:Variable,speciesFluxes:List[Variable],speciesEnergies:List[Variable],species:List[Species],norms:Dict[str,float]) -> mc.Model:
+    """Generate Lorentz force work matrix terms in the energy density evolution equation for each species: dW_b/dt = Z_b * e * G_b * E. Assumes default energy normalization (e*T_0[eV]).
 
     Args:
-        modelTag (str): Model tag
-        eFieldName (str): Name of  electric field variable (E in above equation) - this will be the implicit variable
-        speciesFluxes (List[str]): Names of evolved species fluxes (G_b in above equation) - these should live on the same grid as the implicit electric field
-        speciesEnergies (List[str]): Names of species energies (W_b in above equation)- the evolved variables
-        species (list[sc.Species]): Species objects for each species (th)
+        eField (Variable): Electric field variable - implicit
+        speciesFluxes (List[Variable]): Species fluxes - should live on the same grid as the eField
+        speciesEnergies (List[Variable]): Species energy densities - evolved variables
+        species (List[Species]): List of species corresponding to the evolved energy densities
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
     Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
+        Model: Lorentz Force Work model ready to be added to a ReMKiT1D context
     """
-
     assert len(speciesFluxes) == len(
         species
     ), "speciesFluxes and species passed to lorentzForces model must be of same size"
@@ -486,69 +178,37 @@ def lorentzForceWork(
         species
     ), "speciesEnergies and species passed to lorentzForces model must be of same size"
 
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
-
-    implicitVar = eFieldName
-
+    lFWModel = mc.Model("lorentz_force_work")
     for i, flux in enumerate(speciesFluxes):
         speciesCharge = species[i].charge
+        normConst = speciesCharge * norms["EField"] * norms["time"] * norms["speed"] / norms["eVTemperature"]
 
-        normConst = sc.CustomNormConst(
-            multConst=speciesCharge,
-            normNames=["EField", "time", "speed", "eVTemperature"],
-            normPowers=[1.0, 1.0, 1.0, -1.0],
-        )
+        lFWModel.ddt[speciesEnergies[i]] += normConst * mc.DiagonalStencil()(flux * eField).rename("lorentz_work_"+speciesEnergies[i].name)
 
-        vData = sc.VarData(reqColVars=[flux])
+    return lFWModel
 
-        evolvedVar = speciesEnergies[i]
-
-        workTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar=implicitVar,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(),
-            varData=vData,
-        )
-
-        newModel.addTerm("lorentzWork" + flux, workTerm)
-
-    return newModel
-
-
-def implicitTemperatures(
-    modelTag: str,
-    speciesFluxes: List[str],
-    speciesEnergies: List[str],
-    speciesDensities: List[str],
-    speciesTemperatures: List[str],
-    species: List[sc.Species],
-    speciesDensitiesDual: Union[List[str], None] = None,
-    evolvedXU2Cells: Union[List[int], None] = None,
-    ignoreKineticContribution=False,
-    degreesOfFreedom: int = 3,
-) -> sc.CustomModel:
+def implicitTemperatures(speciesEnergies:List[Variable],speciesDensities:List[Variable],speciesTemperatures:List[Variable],species:List[Species],norms:Dict[str,float],speciesFluxes:Optional[List[Variable]]=None,**kwargs) -> mc.Model:
     """Generate implicit temperature derivation matrix terms for each species: d*n_b*k*T_b/2 + m_b*n_b*u_b**2/2 = W_b, where d is the number of degrees of freedom. Temperatures here are assumed to be stationary and implicit variables. The kinetic energy contribution uses interpolation, so should be used with care in regions of poorly resolved flow gradients. Assumes default normalization.
 
     Args:
-        modelTag (str): Model tag
-        speciesFluxes (List[str]): Names of species fluxes (should be implicit)
-        speciesEnergies (List[str]): Names of species energies (should be implicit)
-        speciesDensities (List[str]): Names of species densities (n_b in the above equation, should be on the same grid as the energies)
-        speciesTemperatures (List[str]): Names of species temperature - these will be the evolved variables and should be stationary
-        species (list[sc.Species]): Species objects for each species (used to get species masses)
-        speciesDensitiesDual (Union[List[str],None], optional): Names of species densities on dual grid (use when fluxes are staggered). Defaults to None.
-        evolvedXU2Cells (Union[List[int],None], optional): Optional list of evolved X cells in kinetic energy term. Can be used to remove the kinetic energy contribution in cells where it might be unphysical. Defaults to None, evolving all cells.
-        ignoreKineticContribution (bool, optional): Ignores all kinetic contributions to the temperature. Defaults to False.
-        degreesOfFreedom (int): Number of translational degrees of freedom going into temperature definition (d in above equation). Defaults to 3
-    Returns:
-        sc.CustomModel: CustomModel object ready for insertion into JSON config file
-    """
+        speciesEnergies (List[Variable]): Species energy densities - implicit
+        speciesDensities (List[Variable]): Species densities
+        speciesTemperatures (List[Variable]): Species densities - implicit and stationary
+        species (List[Species]): Species corresponding to each temperature
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        speciesFluxes (Optional[List[Variable]], optional): Species fluxes - implicit - if not present kinetic contributions are ignored. Defaults to None
 
-    assert len(speciesFluxes) == len(
-        species
-    ), "speciesFluxes and species passed to implicitTemperatures model must be of same size"
+    kwargs: 
+        degreesOfFreedom (int): Number of degrees of freedom. Defaults to 3.
+        evolvedXU2Cells (List[int]): Optional spatial cell indices where the kinetic contribution is added. Defaults to None, including it everywhere if fluxes are passed.
+
+    Returns:
+        Model: Implicit temperature derivation model ready to be added into a ReMKiT1D context
+    """
+    if speciesFluxes is not None:
+        assert len(speciesFluxes) == len(
+            species
+        ), "speciesFluxes and species passed to implicitTemperatures model must be of same size"
     assert len(speciesEnergies) == len(
         species
     ), "speciesEnergies and species passed to implicitTemperatures model must be of same size"
@@ -559,1395 +219,544 @@ def implicitTemperatures(
         species
     ), "speciesEnergies and species passed to implicitTemperatures model must be of same size"
 
-    # Initializing model
-    newModel = sc.CustomModel(modelTag=modelTag)
-
+    tempModel = mc.Model("implicit_temperatures")
     elCharge = 1.60218e-19
     amu = 1.6605390666e-27  # atomic mass unit
-
-    normConstI = sc.CustomNormConst(multConst=-1.0)
-    normConstW = sc.CustomNormConst(multConst=2 / degreesOfFreedom)
-
+    normW = 2/kwargs.get("degreesOfFreedom",3)
     for i, temp in enumerate(speciesTemperatures):
+        assert temp.isStationary, "Temperatures in implicitTemperatures are expected to be stationary"
         speciesMass = amu * species[i].atomicA
+        normU2 = -speciesMass / (3 * elCharge) *norms["speed"]**2/norms["eVTemperature"]
+        diag = mc.DiagonalStencil()
 
-        # Setting normalization constant calculation
-        normConstU2 = sc.CustomNormConst(
-            multConst=-speciesMass / (3 * elCharge),
-            normNames=["speed", "eVTemperature"],
-            normPowers=[2.0, -1.0],
-        )
-
-        vDataW = sc.VarData(reqRowVars=[speciesDensities[i]], reqRowPowers=[-1.0])
-        colDensity = speciesDensities[i]
-        if speciesDensitiesDual is not None:
-            colDensity = speciesDensitiesDual[i]
-        # Kinetic energy term will be implicit in fluxes so need to be converted to speeds
-        vDataU2 = sc.VarData(
-            reqColVars=[speciesFluxes[i], colDensity], reqColPowers=[1.0, -2.0]
-        )
-
-        # Identity term
-
-        identityTerm = sc.GeneralMatrixTerm(
-            temp, customNormConst=normConstI, stencilData=sc.diagonalStencil()
-        )
-
-        newModel.addTerm("identityTerm" + temp, identityTerm)
-
-        # 2/3 W/n term
-
-        termW = sc.GeneralMatrixTerm(
-            temp,
-            implicitVar=speciesEnergies[i],
-            customNormConst=normConstW,
-            varData=vDataW,
-            stencilData=sc.diagonalStencil(),
-        )
-
-        newModel.addTerm("wTerm" + temp, termW)
-
-        if not ignoreKineticContribution:
-            # kinetic energy term
-
+        tempModel.ddt[temp] += - diag(temp).rename("identity_"+temp.name) + normW * speciesDensities[i]**(-1)* diag(speciesEnergies[i]).rename("W_term_"+temp.name)
+        
+        if speciesFluxes is not None:
+            colDensity = speciesDensities[i].dual if speciesFluxes[i].isOnDualGrid else speciesDensities[i]
+            evolvedXU2Cells = kwargs.get("evolvedXU2Cells",None)
             if evolvedXU2Cells is not None:
-                termU2 = sc.GeneralMatrixTerm(
-                    temp,
-                    implicitVar=speciesFluxes[i],
-                    customNormConst=normConstU2,
-                    varData=vDataU2,
-                    stencilData=sc.diagonalStencil(evolvedXCells=evolvedXU2Cells),
-                )
-            else:
-                termU2 = sc.GeneralMatrixTerm(
-                    temp,
-                    implicitVar=speciesFluxes[i],
-                    customNormConst=normConstU2,
-                    varData=vDataU2,
-                    stencilData=sc.diagonalStencil(),
-                )
+                diag = mc.DiagonalStencil(evolvedXU2Cells)
+                
+            tempModel.ddt[temp] += normU2 * speciesFluxes[i]/colDensity**2 * diag(speciesFluxes[i]).rename("U2_term_"+temp.name)
 
-            newModel.addTerm("u2Term" + temp, termU2)
+    return tempModel
 
-    return newModel
-
-
-def kinAdvX(
-    modelTag: str, distFunName: str, gridObj: Grid, evolvedHarmonics: List[int] = []
-) -> sc.CustomModel:
+def kinAdvX(distribution:Variable,grid:Grid,evolvedHarmonics:Optional[List[int]]=None) -> mc.Model:
     """Return kinetic advection model for electrons in x direction using matrix terms. This is the harmonic form of the vdf/dx term, coupling adjacent harmonics. Assumes default normalization.
 
     Args:
-        modelTag (str): Tag for the generated model
-        distFunName (str): Name of the advected distribution function - both the evolved and implicit variable
-        gridObj (Grid): Grid object used to get harmonic and velocity space information
-        evolvedHarmonics (List[int], optional): List of evolved harmonic indices (Fortran 1-indices!). Defaults to [], evolving all harmonics.
+        distribution (Variable): Electron distribution variable
+        grid (Grid): Used grid object
+        evolvedHarmonics (Optional[List[int]], optional): Optional subselection of evolved harmonics. Defaults to None, evolving all harmonics.
 
     Returns:
-        sc.CustomModel: CustomModel object ready to be converted into JSON input data
+        Model: Distribution x advection model ready for addition into a ReMKiT1D context
     """
+    assert distribution.isDistribution, "kinAdvX distribution must be a distribution variable"
+    usedHarmonics = list(range(1, grid.numH() + 1))
 
-    evolvedVar = distFunName
+    if evolvedHarmonics is not None:
+        usedHarmonics = evolvedHarmonics 
 
-    usedHarmonics = list(range(1, gridObj.numH() + 1))
-    if len(evolvedHarmonics) > 0:
-        usedHarmonics = evolvedHarmonics
-
-    lNums = [gridObj.lGrid[i - 1] for i in range(1, gridObj.numH() + 1)]
-    mNums = [gridObj.mGrid[i - 1] for i in range(1, gridObj.numH() + 1)]
-
-    newModel = sc.CustomModel(modelTag=modelTag)
+    advModel = mc.Model("kinetic_X_advection")
+    lNums = [grid.lGrid[i - 1] for i in range(1, grid.numH() + 1)]
+    mNums = [grid.mGrid[i - 1] for i in range(1, grid.numH() + 1)]
+    v = grid.profile(grid.vGrid,dim="V",latexName="v")
+    
     for harmonic in usedHarmonics:
         if lNums[harmonic - 1] > 0:
-            normConst = sc.CustomNormConst(
-                multConst=-(lNums[harmonic - 1] - mNums[harmonic - 1])
-                / (2.0 * lNums[harmonic - 1] - 1.0),
-                normNames=["time", "velGrid", "length"],
-                normPowers=[1.0, 1.0, -1.0],
-            )
-            newTerm = sc.GeneralMatrixTerm(
-                evolvedVar,
-                velocityProfile=gridObj.vGrid.tolist(),
-                customNormConst=normConst,
-                stencilData=sc.kineticSpatialDiffStencil(
-                    harmonic,
-                    gridObj.getH(
-                        lNum=lNums[harmonic - 1] - 1,
-                        mNum=mNums[harmonic - 1],
-                        im=gridObj.imaginaryHarmonic[harmonic - 1],
-                    ),
-                ),
-                fixedMatrix=True,
-            )
+            normConst = -(lNums[harmonic - 1] - mNums[harmonic - 1]) / (2.0 * lNums[harmonic - 1] - 1.0)
 
-            newModel.addTerm("adv_minus" + str(harmonic), newTerm)
+            stencil = stencils.DistGradStencil(harmonic,
+                                               grid.getH(lNum=lNums[harmonic - 1] - 1,
+                                                mNum=mNums[harmonic - 1],
+                                                im=grid.imaginaryHarmonic[harmonic - 1],
+                                            ))
+            advModel.ddt[distribution] += normConst * (v * stencil(distribution)).rename("adv_minus_"+str(harmonic)).withFixedMatrix()
 
-        if lNums[harmonic - 1] < gridObj.lMax:
-            normConst = sc.CustomNormConst(
-                multConst=-(lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0)
-                / (2.0 * lNums[harmonic - 1] + 3.0),
-                normNames=["time", "velGrid", "length"],
-                normPowers=[1.0, 1.0, -1.0],
-            )
-            newTerm = sc.GeneralMatrixTerm(
-                evolvedVar,
-                velocityProfile=gridObj.vGrid.tolist(),
-                customNormConst=normConst,
-                stencilData=sc.kineticSpatialDiffStencil(
-                    harmonic,
-                    gridObj.getH(
-                        lNum=lNums[harmonic - 1] + 1,
-                        mNum=mNums[harmonic - 1],
-                        im=gridObj.imaginaryHarmonic[harmonic - 1],
-                    ),
-                ),
-                fixedMatrix=True,
-            )
+        if lNums[harmonic - 1] < grid.lMax:
+            normConst=-(lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0) / (2.0 * lNums[harmonic - 1] + 3.0)
 
-            newModel.addTerm("adv_plus" + str(harmonic), newTerm)
+            stencil = stencils.DistGradStencil(harmonic,
+                                               grid.getH(lNum=lNums[harmonic - 1] + 1,
+                                                mNum=mNums[harmonic - 1],
+                                                im=grid.imaginaryHarmonic[harmonic - 1],
+                                            ))
 
-    return newModel
+            advModel.ddt[distribution] += normConst * (v * stencil(distribution)).rename("adv_plus_"+str(harmonic)).withFixedMatrix()
 
+    return advModel
 
-def ghDerivations(wrapper: RKWrapper) -> dict:
-    """Returns derivation collection dictionary for Gl and Hl derivations used for E-field terms
+def advectionEx(distribution:Variable,eField:Variable,grid:Grid,norms:Dict[str,float])->mc.Model:
+    """Returns electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv. Defines necessary custom derivations. The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
 
     Args:
-        wrapper (RKWrapper): Wrapper to use when building the derivations
+        distribution (Variable): Implicit electron distribution function
+        eField (Variable): Implicit electrix field
+        grid (Grid): Used grid object
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
     Returns:
-        dict: Derivation collection dictionary to be added to the wrapper
+        Model: Electric field velocity space advection model ready for adding to ReMKiT1D context
     """
-
-    vGrid = wrapper.grid.vGrid
+    numH = grid.numH()
+    derivReqFun = distribution.dual if distribution.isOnDualGrid else distribution
+    mbData = mc.VarlikeModelboundData()
+    vGrid = grid.vGrid
     dv: List[float] = []
 
     for v in vGrid:
         dv.append(2 * (v - sum(dv)))
 
     vBoundary = [vGrid[i] + dv[i] / 2 for i in range(len(dv))]
-    numH = wrapper.grid.numH()
-
-    derivCollection = {}
-    # Add custom derivations and modelbound data
+    G={}
+    H={}
     for harmonic in range(1, numH + 1):
-        lNum = wrapper.grid.lGrid[harmonic - 1]
-        innerV = [[v ** (-lNum) for v in vBoundary]]
-        innerV[0][-1] = 0
-        # Add G_l derivations
+        lNum = grid.lGrid[harmonic - 1]
+        # Add G_l variables
+        innerV = np.array([v ** (-lNum) for v in vBoundary])
+        innerV[-1] = 0 
+        iV = grid.profile(innerV,"V",latexName="v^{-"+str(lNum)+"}")
+        oV = grid.profile(np.array([v**lNum for v in vGrid.tolist()]),"V",latexName="v^{"+str(lNum)+"}")
         vifAtZero = (
-            [
-                [
+                (
                     1.0 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
                     -vGrid[0] ** 2
                     / vGrid[1] ** 2
                     / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
-                ]
-            ]
+                )
             if lNum == 0
-            else [[1.0 / vGrid[1] ** lNum, 0]]
+            else (1.0 / vGrid[1] ** lNum, 0)
         )
-        derivG = sc.ddvDerivation(
-            [harmonic],
-            innerV=innerV,
-            outerV=[[v**lNum for v in vGrid.tolist()]],
-            vifAtZero=vifAtZero,
-        )
-        derivCollection["G_h=" + str(harmonic)] = derivG
+        
+        derivG = derivations.DDVDerivation("G" + str(harmonic),grid,harmonic,iV,oV,vifAtZero)
+        G[harmonic] = derivG(derivReqFun)
+        mbData.addVar(G[harmonic])
 
-        innerV = [[v ** (lNum + 1) for v in vBoundary]]
-        innerV[0][-1] = 0
-        # Add H_l derivations
-        derivH = sc.ddvDerivation(
-            [harmonic],
-            innerV=innerV,
-            outerV=[[v ** (-lNum - 1) for v in vGrid.tolist()]],
-        )
-        derivCollection["H_h=" + str(harmonic)] = derivH
+        # Add H_l variables
+        
+        innerV = np.array([v ** (lNum + 1) for v in vBoundary])
+        innerV[-1] = 0
+        iV = grid.profile(innerV,"V",latexName="v^{"+str(lNum+1)+"}")
+        oV = grid.profile(np.array([v**(-lNum-1) for v in vGrid.tolist()]),"V",latexName="v^{"+str(-lNum-1)+"}")
 
-    return derivCollection
+        derivH = derivations.DDVDerivation("H" + str(harmonic),grid,harmonic,iV,oV)
+        H[harmonic] = derivH(derivReqFun)
+        mbData.addVar(H[harmonic])
 
 
-def advectionEx(
-    modelTag: str,
-    distFunName: str,
-    eFieldName: str,
-    wrapper: RKWrapper,
-    dualDistFun: Union[str, None] = None,
-) -> sc.CustomModel:
-    """Returns electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv. Adds necessary custom derivations to the wrapper. The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
-
-    Args:
-        modelTag (str): Tag for the generated model
-        distFunName (str): Name of the evolved distribution function
-        eFieldName (str): Name of the implicit E-field variable
-        wrapper (RKWrapper): Wrapper object to add custom derivations to
-        dualDistFun (Union[str,None], optional): Optional distribution function to be used as the required variable in derivations (useful for staggered grids). Defaults to None.
-    """
-
-    numH = wrapper.grid.numH()
-    derivReqFun = distFunName if dualDistFun is None else dualDistFun
-    mbData = sc.VarlikeModelboundData()
-    # Add custom derivations and modelbound data
-
-    wrapper.addDerivationCollection(ghDerivations(wrapper))
-    for harmonic in range(1, numH + 1):
-        mbData.addVariable(
-            "G_h=" + str(harmonic),
-            derivationRule=sc.derivationRule("G_h=" + str(harmonic), [derivReqFun]),
-            isSingleHarmonic=True,
-        )
-        mbData.addVariable(
-            "H_h=" + str(harmonic),
-            derivationRule=sc.derivationRule("H_h=" + str(harmonic), [derivReqFun]),
-            isSingleHarmonic=True,
-        )
-
-    newModel = sc.CustomModel(modelTag=modelTag)
-
-    newModel.setModelboundData(mbData.dict())
-
+    advExModel = mc.Model("advection_Ex")
+    advExModel.setModelboundData(mbData)
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
-
-    lNums = [wrapper.grid.lGrid[i] for i in range(numH)]
-    mNums = [wrapper.grid.mGrid[i] for i in range(numH)]
+    
+    lNums = [grid.lGrid[i] for i in range(numH)]
+    mNums = [grid.mGrid[i] for i in range(numH)]
 
     chargeMassRatio = elCharge / elMass
     for harmonic in range(1, numH + 1):
         # Add G terms
         if lNums[harmonic - 1] > 0:
-            normConst = sc.CustomNormConst(
-                multConst=chargeMassRatio
-                * (lNums[harmonic - 1] - mNums[harmonic - 1])
-                / (2.0 * lNums[harmonic - 1] - 1.0),
-                normNames=["EField", "time", "velGrid"],
-                normPowers=[1.0, 1.0, -1.0],
-            )
-            vData = sc.VarData(
-                reqMBRowVars=[
-                    "G_h="
-                    + str(
-                        wrapper.grid.getH(
+            multConst=chargeMassRatio * (lNums[harmonic - 1] - mNums[harmonic - 1]) / (2.0 * lNums[harmonic - 1] - 1.0) *norms["EField"] * norms["time"] / norms["velGrid"]
+            GHarmonic = grid.getH(
                             lNum=lNums[harmonic - 1] - 1,
                             mNum=mNums[harmonic - 1],
-                            im=wrapper.grid.imaginaryHarmonic[harmonic - 1],
+                            im=grid.imaginaryHarmonic[harmonic - 1],
                         )
-                    )
-                ]
-            )
-
-            newTerm = sc.GeneralMatrixTerm(
-                distFunName,
-                eFieldName,
-                customNormConst=normConst,
-                varData=vData,
-                stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            )
-
-            newModel.addTerm("eAdv_G" + str(harmonic), newTerm)
+            advExModel.ddt[distribution]+=multConst*G[GHarmonic] @ mc.DiagonalStencil(evolvedHarmonics=[harmonic])(eField).rename("eAdv_G_"+str(harmonic))
 
         # Add H terms
-        if lNums[harmonic - 1] < wrapper.grid.lMax:
-            normConst = sc.CustomNormConst(
-                multConst=chargeMassRatio
-                * (lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0)
-                / (2.0 * lNums[harmonic - 1] + 3.0),
-                normNames=["EField", "time", "velGrid"],
-                normPowers=[1.0, 1.0, -1.0],
-            )
-            vData = sc.VarData(
-                reqMBRowVars=[
-                    "H_h="
-                    + str(
-                        wrapper.grid.getH(
+        if lNums[harmonic - 1] < grid.lMax:
+            multConst = chargeMassRatio * (lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0) / (2.0 * lNums[harmonic - 1] + 3.0) *norms["EField"] * norms["time"] / norms["velGrid"]
+
+            HHarmonic = grid.getH(
                             lNum=lNums[harmonic - 1] + 1,
                             mNum=mNums[harmonic - 1],
-                            im=wrapper.grid.imaginaryHarmonic[harmonic - 1],
+                            im=grid.imaginaryHarmonic[harmonic - 1],
                         )
-                    )
-                ]
-            )
+            advExModel.ddt[distribution]+=multConst*H[HHarmonic] @ mc.DiagonalStencil(evolvedHarmonics=[harmonic])(eField).rename("eAdv_H_"+str(harmonic))
 
-            newTerm = sc.GeneralMatrixTerm(
-                distFunName,
-                eFieldName,
-                customNormConst=normConst,
-                varData=vData,
-                stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            )
+    return advExModel
 
-            newModel.addTerm("eAdv_H" + str(harmonic), newTerm)
-
-    return newModel
-
-
-def addExAdvectionModel(
-    modelTag: str,
-    distFunName: str,
-    eFieldName: str,
-    wrapper: RKWrapper,
-    dualDistFun: Union[str, None] = None,
-) -> None:
-    """Adds electric field advection matrix terms for electrons in x direction: the harmonic decomposition of E/m*df/dv. Adds necessary custom derivations to the wrapper. The electric field is taken to be implicit, so it will be interpolated implicitly onto cell centres for even l harmonics.
-
-    Args:
-        modelTag (str): Tag for the generated model
-        distFunName (str): Name of the evolved distribution function
-        eFieldName (str): Name of the implicit E-field variable
-        wrapper (RKWrapper): Wrapper object to add the model and add custom derivations to
-        dualDistFun (Union[str,None], optional): Optional distribution function to be used as the required variable in derivations (useful for staggered grids). Defaults to None.
-    """
-    newModel = advectionEx(modelTag, distFunName, eFieldName, wrapper, dualDistFun)
-
-    wrapper.addModel(newModel)
-
-
-def eeCollIsotropic(
-    modelTag: str, distFunName: str, elTempVar: str, elDensVar: str, wrapper: RKWrapper
-) -> sc.CustomModel:
+def eeCollIsotropic(distribution:Variable,elTemperature:Variable,elDensity:Variable,norms:Dict[str,float],grid:Grid,textbook:derivations.Textbook) -> mc.Model:
     """Return e-e collision model for l=0 harmonic using matrix terms. Responsible for adding the derivations needed for its modelbound data. Assumes default normalization.
 
     Args:
-        modelTag (str): Tag of the model to be added
-        distFunName (str): Name of the electron distribution function variable
-        elTempVar (str): Name of the electron temperature variable - should live in cell centres
-        elDensVar (str): Name of the electron density variable - should live in cell centres
-        wrapper (RKWrapper): Wrapper to add custom derivations to
-    """
+        distribution (Variable): Electron distribution variable - implicit
+        elTemperature (Variable): Electron temperature variable
+        elDensity (Variable): Electron density variable
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        grid (Grid): Used grid object
+        textbook (derivations.Textbook): Used textbook object - needed to retrieve built-in derivations
 
-    if "f0Extraction" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("f0Extraction", sc.harmonicExtractorDerivation(1))
-    mbData = sc.VarlikeModelboundData()
-    mbData.addVariable(
-        "f0", sc.derivationRule("f0Extraction", [distFunName]), isSingleHarmonic=True
-    )
-    mbData.addVariable(
-        "dragCCL",
-        sc.derivationRule("cclDragCoeff", ["f0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "diffCCL",
-        sc.derivationRule("cclDiffusionCoeff", ["f0", "weightCCL"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "weightCCL",
-        sc.derivationRule("cclWeight", ["dragCCL", "diffCCL"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable("logLee", sc.derivationRule("logLee", [elTempVar, elDensVar]))
+    Returns:
+        Model: Isotropic collision model for electrons ready for addition to ReMKiT1D context
+    """
+    mbData = mc.VarlikeModelboundData()
+    
+    mbData.addVar(derivations.HarmonicExtractorDerivation("f0",grid,1)(distribution)) 
+    
+    mbData.addVar(Variable("dragCCL",grid,derivation=textbook["cclDragCoeff"],derivationArgs=["f0"],isSingleHarmonic=True))
+    
+    mbData.addVar(Variable("diffCCL",grid,derivation=textbook["cclDiffusionCoeff"],derivationArgs=["f0","weightCCL"],isSingleHarmonic=True))
+    
+    mbData.addVar(Variable("weightCCL",grid,derivation=textbook["cclWeight"],derivationArgs=["dragCCL","diffCCL"],isSingleHarmonic=True))
+    
+    mbData.addVar(textbook["logLee"](elTemperature,elDensity))
+
+    eeModel = mc.Model("isotropic_ee")
+    eeModel.setModelboundData(mbData)
 
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
     epsilon0 = 8.854188e-12  # vacuum permittivity
 
-    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-    normConst = sc.CustomNormConst(
-        multConst=gamma0norm,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varData = sc.VarData(reqMBRowVars=["logLee"])
-    vOuter = [1.0 / v**2 for v in wrapper.grid.vGrid]
+    normConst = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2) * norms["density"] * norms["time"] / norms["velGrid"] ** 3
 
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData.dict())
+    vOuter = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]),dim="V",latexName="v^{-2}")
 
-    # Add drag term
+    #Drag term
+    eeModel.ddt[distribution] += normConst * mbData["logLee"] @ (vOuter * stencils.DDVStencil(1,1,CCoeff=mbData["dragCCL"],interpCoeffs=mbData["weightCCL"])(distribution)).rename("drag_term")
 
-    dragTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        velocityProfile=vOuter,
-        varData=varData,
-        stencilData=sc.ddvStencil(
-            1, 1, modelboundC="dragCCL", modelboundInterp="weightCCL"
-        ),
-    )
+    #Diffusion term
+    eeModel.ddt[distribution] += normConst * mbData["logLee"] @(vOuter * stencils.D2DV2Stencil(1,1,DiffCoeff=mbData["diffCCL"])(distribution)).rename("diff_term")
 
-    newModel.addTerm("dragTerm", dragTerm)
+    return eeModel
 
-    # Add diffusion term
-
-    diffTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        velocityProfile=vOuter,
-        varData=varData,
-        stencilData=sc.velDiffusionStencil(1, 1, modelboundA="diffCCL"),
-    )
-
-    newModel.addTerm("diffTerm", diffTerm)
-
-    return newModel
-
-
-def addEECollIsotropic(
-    modelTag: str, distFunName: str, elTempVar: str, elDensVar: str, wrapper: RKWrapper
-) -> None:
-    """Add e-e collision matrix terms for l=0 harmonic. Responsible for adding derivations needed for the model's data. Assumes default normalization.
-
-    Args:
-        modelTag (str): Tag of the model to be added
-        distFunName (str): Name of the electron distribution function variable
-        elTempVar (str): Name of the electron temperature variable - should live in cell centres
-        elDensVar (str): Name of the electron density variable - should live in cell centres
-        wrapper (RKWrapper): Wrapper to add the term to
-    """
-
-    newModel = eeCollIsotropic(modelTag, distFunName, elTempVar, elDensVar, wrapper)
-
-    wrapper.addModel(newModel)
-
-
-def eiCollIsotropic(
-    modelTag: str,
-    distFunName: str,
-    elTempVar: str,
-    elDensVar: str,
-    ionTempVar: str,
-    ionDensVar: str,
-    ionSpeciesName: str,
-    ionEnVar: Union[str, None],
-    wrapper: RKWrapper,
-) -> sc.CustomModel:
+def eiCollIsotropic(grid:Grid,textbook:derivations.Textbook,norms:Dict[str,float],distribution:Variable,elTemperature:Variable,elDensity:Variable,ionTemperature:Variable,ionDensity:Variable,ionSpecies:Species,ionEnVar:Optional[Variable]=None)->mc.Model:
     """Return e-i collision model for l=0 harmonic using matrix terms. Responsible for adding derivations used in its modelbound data. Assumes default normalization.
 
     Args:
-        modelTag (str): Model tag
-        distFunName (str): Name of the electron distribution function variable
-        elTempVar (str): Name of the electron temperature variable - should live in cell centres
-        elDensVar (str): Name of the electron density variable - should live in cell centres
-        ionTempVar (str): Name of the ion temperature variable - should live in cell centres
-        ionDensVar (str): Name of the ion density variable - should live in cell centres
-        ionSpeciesName (str): Name of ion species colliding with the electrons - needed for the Coulomb logarithm
-        ionEnVar (Union[str,None]): Name of the ion energy density variable (must be implicit). If present, the energy moment of the collision operator will be added to the equation evolving this variable. Defaults to None.
-        wrapper (RKWrapper): Wrapper to add custom derivations to
-    """
+        grid (Grid): Used grid object
+        textbook (Textbook): Textbook object used to retrieve built-in derivations
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        grid (Grid): Used grid object
+        distribution (Variable): Electron distribution function - implicit
+        elTemperature (Variable): Electron temperature variable
+        elDensity (Variable): Electron density variable
+        ionTemperature (Variable): Ion temperature variable
+        ionDensity (Variable): Ion density variable
+        ionSpecies (Species): Species object corresponding to the ions
+        ionEnVar (Optional[Variable], optional): Ion energy density to pass on the energy moment of the collision operator to - must be implicit. Defaults to None, excluding ion terms.
 
+    Returns:
+        Model: Ion-electron isotropic collision operator model ready for addition to a ReMKiT1D context
+    """
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
     epsilon0 = 8.854188e-12  # vacuum permittivity
     amu = 1.6605390666e-27  # atomic mass unit
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
 
-    ionSpecies = wrapper.getSpecies(ionSpeciesName)
     gamma0norm = gamma0norm * ionSpecies.charge**2 * elMass / (ionSpecies.atomicA * amu)
 
-    mbData = sc.VarlikeModelboundData()
-    mbData.addVariable(
-        "logLei", sc.derivationRule("logLei" + ionSpeciesName, [elTempVar, elDensVar])
-    )
+    mbData = mc.VarlikeModelboundData()
+    mbData.addVar(Variable("logLei",grid,derivation=textbook["logLei"+ionSpecies.name],derivationArgs=[elTemperature.name,elDensity.name]))
 
-    normConst = sc.CustomNormConst(
-        multConst=gamma0norm,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varDataDrag = sc.VarData(reqMBRowVars=["logLei"], reqRowVars=[ionDensVar])
-    varDataDiff = sc.VarData(
-        reqMBRowVars=["logLei"], reqRowVars=[ionDensVar, ionTempVar]
-    )
+    normConst = gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
 
-    vGrid = wrapper.grid.vGrid
-    dv = wrapper.grid.vWidths
+    vGrid = grid.vGrid
+    dv = grid.vWidths
     vBoundary = [vGrid[i] + dv[i] / 2 for i in range(len(dv))]
-    vOuter = [1.0 / v**2 for v in wrapper.grid.vGrid]
-    innerV = [1.0 / (2 * v) for v in vBoundary]
+    vOuter = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]),"V",latexName="v^{-2}")
+    innerV = grid.profile(np.array([1.0 / (2 * v) for v in vBoundary]),"V",latexName="\\frac{1}{2v}")
 
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData.dict())
+    eiModel = mc.Model("isotropic_ei")
+    eiModel.setModelboundData(mbData)
+    #drag term
+    eiModel.ddt[distribution] += normConst*ionDensity*(mbData["logLei"] @ (vOuter* stencils.DDVStencil(1,1)(distribution))).rename("drag_term")
 
-    # Add drag term
-    dragTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        velocityProfile=vOuter,
-        varData=varDataDrag,
-        stencilData=sc.ddvStencil(1, 1),
-    )  # No cfAtZero to make sure particles are conserved
-
-    newModel.addTerm("dragTerm", dragTerm)
-
-    # Add diffusion term
-
-    diffTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        velocityProfile=vOuter,
-        varData=varDataDiff,
-        stencilData=sc.velDiffusionStencil(1, 1, fixedA=innerV),
-    )
-
-    newModel.addTerm("diffTerm", diffTerm)
+    #diffusion term 
+    eiModel.ddt[distribution] += normConst*ionDensity*ionTemperature*(mbData["logLei"] @ (vOuter * stencils.D2DV2Stencil(1,1,DiffCoeff=innerV)(distribution))).rename("diff_term")
 
     if ionEnVar is not None:
-        normIon = sc.CustomNormConst(multConst=-1.0)
 
-        diffTermIon = sc.GeneralMatrixTerm(
-            ionEnVar,
-            distFunName,
-            customNormConst=normIon,
-            stencilData=sc.termMomentStencil(1, 2, "diffTerm"),
-        )
+        eiModel.ddt[ionEnVar] += - stencils.TermMomentStencil(1,2,"diff_term")(distribution).rename("diff_term_en") - stencils.TermMomentStencil(1,2,"drag_term")(distribution).rename("drag_term_en")
 
-        newModel.addTerm("diffTermIon", diffTermIon)
+    return eiModel
 
-        dragTermIon = sc.GeneralMatrixTerm(
-            ionEnVar,
-            distFunName,
-            customNormConst=normIon,
-            stencilData=sc.termMomentStencil(1, 2, "dragTerm"),
-        )
-
-        newModel.addTerm("dragTermIon", dragTermIon)
-
-    return newModel
-
-
-def addEICollIsotropic(
-    modelTag: str,
-    distFunName: str,
-    elTempVar: str,
-    elDensVar: str,
-    ionTempVar: str,
-    ionDensVar: str,
-    ionSpeciesName: str,
-    wrapper: RKWrapper,
-    ionEnVar: Union[str, None] = None,
-) -> None:
-    """Add e-i collision matrix terms for l=0 harmonic, as well as the corresponding ion energy matrix terms if ionEnVar is present. Responsible for adding derivations used in its modelbound data. Assumes default normalization.
+def stationaryIonEIColl(grid:Grid,textbook:derivations.Textbook,norms:Dict[str,float],distribution:Variable,ionDensity:Variable,elDensity:Variable,elTemperature:Variable,ionSpecies:Species,evolvedHarmonics:Optional[List[int]]=None) -> mc.Model:
+    """Return stationary ion electron-ion collision operator model using matrix terms. Assumes default normalization. NOTE: Must be called separately for odd and even harmonics if staggered, and the fluid quantities used must reflect that (dual for odd harmonics).
 
     Args:
-        modelTag (str): Model tag
-        distFunName (str): Name of the electron distribution function variable
-        elTempVar (str): Name of the electron temperature variable - should live in cell centres
-        elDensVar (str): Name of the electron density variable - should live in cell centres
-        ionTempVar (str): Name of the ion temperature variable - should live in cell centres
-        ionDensVar (str): Name of the ion density variable - should live in cell centres
-        ionSpeciesName (str): Name of ion species colliding with the electrons - needed for the Coulomb logarithm
-        wrapper (RKWrapper): Wrapper to add the terms to
-        ionEnVar (Union[str,None]): Name of the ion energy density variable (must be implicit). If present, the energy moment of the collision operator will be added to the equation evolving this variable. Defaults to None.
+        grid (Grid): Used grid object
+        textbook (derivations.Textbook): Textbook object used to retrieve built-in derivations
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        distribution (Variable): Electron distribution function - implicit
+        ionDensity (Variable): Ion density
+        elDensity (Variable): Electron density
+        elTemperature (Variable): Electron temperature
+        ionSpecies (Species): Ion species associated with the collision
+        evolvedHarmonics (Optional[List[int]], optional): List of evolved harmonics. Defaults to None- evolving all harmonics.
+
+    Returns:
+        Model: Electron-ion collision operator model for l>0 assuming stationary ions, ready for addition into a ReMKiT1D context
     """
-
-    newModel = eiCollIsotropic(
-        modelTag,
-        distFunName,
-        elTempVar,
-        elDensVar,
-        ionTempVar,
-        ionDensVar,
-        ionSpeciesName,
-        ionEnVar,
-        wrapper,
-    )
-
-    wrapper.addModel(newModel)
-
-
-def stationaryIonEIColl(
-    modelTag: str,
-    distFunName: str,
-    ionDensVar: str,
-    electronDensVar: str,
-    electronTempVar: str,
-    ionSpeciesName: str,
-    evolvedHarmonics: List[int],
-    wrapper: RKWrapper,
-) -> sc.CustomModel:
-    """Return stationary ion electron-ion collision operator model using matrix terms. Assumes default normalization.
-
-    Args:
-        modelTag (str): Tag of model to be added
-        distFunName (str): Name of electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionSpeciesName (str): Name of ion species colliding with the electrons
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        wrapper (RKWrapper): Wrapper to use
-    """
-
-    mbData = sc.VarlikeModelboundData()
-    mbData.addVariable(
-        "logLei",
-        sc.derivationRule(
-            "logLei" + ionSpeciesName, [electronTempVar, electronDensVar]
-        ),
-    )
-
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
     epsilon0 = 8.854188e-12  # vacuum permittivity
+    
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-
-    ionSpecies = wrapper.getSpecies(ionSpeciesName)
     gamma0norm = gamma0norm * ionSpecies.charge**2
+    normConst = -gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    
+    mbData = mc.VarlikeModelboundData()
+    mbData.addVar(Variable("logLei",grid,derivation=textbook["logLei"+ionSpecies.name],derivationArgs=[elTemperature.name,elDensity.name]))
 
-    varData = sc.VarData(reqRowVars=[ionDensVar], reqMBRowVars=["logLei"])
-
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData.dict())
-
-    normConst = sc.CustomNormConst(
-        multConst=-gamma0norm,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-
-    lNums = wrapper.grid.lGrid
+    lNums = grid.lGrid
     hProfile = []
     for l in lNums:
         hProfile.append(l * (l + 1.0) / 2.0)
 
-    vProfile = [1.0 / v**3 for v in wrapper.grid.vGrid]
+    h = grid.profile(np.array(hProfile),"H","\\frac{l(l+1)}{2}")
+    v = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]),"V","\\frac{1}{v^3}")
 
-    collTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        harmonicProfile=hProfile,
-        velocityProfile=vProfile,
-        customNormConst=normConst,
-        varData=varData,
-        stencilData=sc.diagonalStencil(evolvedHarmonics=evolvedHarmonics),
-    )
+    eiModel = mc.Model("ei_stationary_anisotropic")
+    eiModel.setModelboundData(mbData)
 
-    newModel.addTerm("eiCollStationaryIons", collTerm)
+    eiModel.ddt[distribution] += normConst * ionDensity * (mbData["logLei"] @ (h * (v * mc.DiagonalStencil(evolvedHarmonics=evolvedHarmonics)(distribution)))).rename("ei_colls_stationary")
 
-    return newModel
+    return eiModel
 
-
-def flowingIonEIColl(
-    modelTag: str,
-    distFunName: str,
-    ionDensVar: str,
-    ionFlowSpeedVar: str,
-    electronDensVar: str,
-    electronTempVar: str,
-    ionSpeciesName: str,
-    wrapper: RKWrapper,
-    evolvedHarmonics: List[int],
-    dualDistFun: Union[str, None] = None,
-    ionFluxVar: Union[str, None] = None,
-) -> sc.CustomModel:
-    """Return a flowing cold ion electron-ion collision model using matrix terms. Assumes default normalization.
+def flowingIonEIColl(grid:Grid,textbook:derivations.Textbook,norms:Dict[str,float],distribution:Variable,ionDensity:Variable,ionFlowSpeed:Variable,elDensity:Variable,elTemperature:Variable,ionSpecies:Variable,evolvedHarmonics:List[int],ionFlux:Optional[Variable]=None) -> mc.Model:
+    """Return a flowing cold ion electron-ion collision model using matrix terms. Assumes default normalization. NOTE: Must be called separately for odd and even harmonics if staggered, and the fluid quantities used must reflect that (dual for odd harmonics), except for the ion density, which must be implicit (its dual will be inferred)
 
     Args:
-        modelTag (str): Tag of model to be added
-        distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionSpeciesName (str): Name of the ion species
-        wrapper (RKWrapper): Wrapper to add custom derivations to
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
-        ionFluxVar (Union[str,None], optional): Ion flux variable (should be implicit) - when present generates ion friction terms corresponding to the electron-ion collision operators. Defaults to None.
+        grid (Grid): Used grid object
+        textbook (Textbook): Textbook object used to retrieve built-in derivations
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        distribution (Variable): Electron distribution function - implicit
+        ionDensity (Variable): Ion density - should live on the regular grid, i.e. be implicit
+        ionFlowSpeed (Variable): Ion flow speed - on the same grid as the evolved harmonics
+        elDensity (Variable): Electron density - on the same grid as the evolved harmonics
+        elTemperature (Variable): Electron temperature - on the same grid as the evolved harmonics
+        ionSpecies (Variable): Ion species corresponding to the cold ions
+        evolvedHarmonics (List[int]): List of evolved harmonics, must all correspond to either odd or even l numbers
+        ionFlux (Optional[Variable], optional): Ion flux variable (dual if harmonics staggered) used to pass the electron-ion friction terms to the ions (requires l=1 to be among the evolved harmonics). Defaults to None.
+
+    Returns:
+        Model: _description_
     """
     # NOTE: Needs a lot of work on optimization
     assert (
         1 not in evolvedHarmonics
     ), "flowingIonEIColl cannot be used to evolve harmonic with index 1"
 
-    vGrid = wrapper.grid.vGrid
-    lNums = wrapper.grid.lGrid
-    if "f0Extraction" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("f0Extraction", sc.harmonicExtractorDerivation(1))
+    vGrid = grid.vGrid
+    lNums = grid.lGrid
 
-    if "CII0" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("CII0", sc.coldIonIJIntegralDerivation(0))
-    if "CII2" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("CII2", sc.coldIonIJIntegralDerivation(2))
-    if "CIJ-1" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("CIJ-1", sc.coldIonIJIntegralDerivation(-1, True))
-    if "sumTerm" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation(
-            "sumTerm",
-            sc.polyDerivation(
-                0.0, polyPowers=[1.0, 1.0, 1.0], polyCoeffs=[-1.0, 2.0, 3.0]
-            ),
-        )
-        wrapper.addCustomDerivation(
-            "df0/dv",
-            sc.ddvDerivation(
-                [1],
-                vifAtZero=[
-                    [
+    derivReqFun = distribution.dual if ionFlowSpeed.isOnDualGrid is None else distribution
+
+    mbData = mc.VarlikeModelboundData()
+
+    mbData.addVar(Variable("CII0",grid,isDistribution=True,derivation=derivations.coldIonIDeriv("CII0",0),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+    mbData.addVar(Variable("CII2",grid,isDistribution=True,derivation=derivations.coldIonIDeriv("CII2",2),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+    mbData.addVar(Variable("CIJ-1",grid,isDistribution=True,derivation=derivations.coldIonJDeriv("CIJ-1",-1),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+    mbData.addVar(derivations.HarmonicExtractorDerivation("f0",grid,1)(mbData["CII0"]).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("CII0sh"))
+    mbData.addVar(derivations.HarmonicExtractorDerivation("f0",grid,1)(mbData["CII2"]).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("CII2sh"))
+    mbData.addVar(derivations.HarmonicExtractorDerivation("f0",grid,1)(mbData["CIJ-1"]).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("CIJ-1sh"))
+
+    polyDeriv1 = derivations.PolynomialDerivation("sumTerm",0.0,polyPowers=np.array([1.0,1.0,1.0]),polyCoeffs=np.array([-1.0,2.0,3.0]))
+    polyDeriv2 = derivations.PolynomialDerivation("sumTerm2",0.0,polyPowers=np.array([1.0,1.0]),polyCoeffs=np.array([-1.0,2.0]))
+    mbData.addVar(polyDeriv1(mbData["CII2sh"],mbData["CIJ-1sh"],mbData["CII0sh"]).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("IJSum"))
+    mbData.addVar(polyDeriv2(mbData["CII2sh"],mbData["CIJ-1sh"]).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("IJSum2"))
+
+    df0 = derivations.DDVDerivation("df0/dv",grid,1,vifAtZero=(
                         1.0 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
                         -vGrid[0] ** 2
                         / vGrid[1] ** 2
                         / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
-                    ]
-                ],
-            ),
-        )
-        wrapper.addCustomDerivation("d2f0/dv2", sc.d2dv2Derivation([1]))
-    if "sumTerm2" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation(
-            "sumTerm2",
-            sc.polyDerivation(0.0, polyPowers=[1.0, 1.0], polyCoeffs=[-1.0, 2.0]),
-        )
+                    ))
+    ddf0 = derivations.D2DV2Derivation("d2f0/dv2",grid,1)
 
-    derivReqFun = distFunName if dualDistFun is None else dualDistFun
-
-    mbData = sc.VarlikeModelboundData()
-    mbData.addVariable(
-        "CII0", sc.derivationRule("CII0", [ionFlowSpeedVar]), isDistribution=True
-    )
-    mbData.addVariable(
-        "CII2", sc.derivationRule("CII2", [ionFlowSpeedVar]), isDistribution=True
-    )
-    mbData.addVariable(
-        "CIJ-1", sc.derivationRule("CIJ-1", [ionFlowSpeedVar]), isDistribution=True
-    )
-    mbData.addVariable(
-        "CII0sh",
-        sc.derivationRule("f0Extraction", ["CII0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "CII2sh",
-        sc.derivationRule("f0Extraction", ["CII2"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "CIJ-1sh",
-        sc.derivationRule("f0Extraction", ["CIJ-1"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "IJSum",
-        sc.derivationRule("sumTerm", ["CII2sh", "CIJ-1sh", "CII0sh"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "IJSum2",
-        sc.derivationRule("sumTerm2", ["CII2sh", "CIJ-1sh"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "logLei",
-        sc.derivationRule(
-            "logLei" + ionSpeciesName, [electronTempVar, electronDensVar]
-        ),
-    )
-    mbData.addVariable(
-        "df0", sc.derivationRule("df0/dv", [derivReqFun]), isSingleHarmonic=True
-    )
-    mbData.addVariable(
-        "ddf0", sc.derivationRule("d2f0/dv2", [derivReqFun]), isSingleHarmonic=True
-    )
-
+    mbData.addVar(df0(derivReqFun).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("df0"))
+    mbData.addVar(ddf0(derivReqFun).onDualGrid(ionFlowSpeed.isOnDualGrid).rename("ddf0"))
+    mbData.addVar(Variable("logLei",grid,derivation=textbook["logLei"+ionSpecies.name],derivationArgs=[elTemperature.name,elDensity.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+    
     for h in evolvedHarmonics:
         l = lNums[h - 1]
-        if "CII" + str(l) not in wrapper.customDerivs["tags"]:
-            wrapper.addCustomDerivation(
-                "CII" + str(l), sc.coldIonIJIntegralDerivation(l)
-            )
-            mbData.addVariable(
-                "CII" + str(l),
-                sc.derivationRule("CII" + str(l), [ionFlowSpeedVar]),
-                isDistribution=True,
-            )
-        if "CII" + str(l + 2) not in wrapper.customDerivs["tags"]:
-            wrapper.addCustomDerivation(
-                "CII" + str(l + 2), sc.coldIonIJIntegralDerivation(l + 2)
-            )
-            mbData.addVariable(
-                "CII" + str(l + 2),
-                sc.derivationRule("CII" + str(l + 2), [ionFlowSpeedVar]),
-                isDistribution=True,
-            )
-        if "CIJ" + str(-l - 1) not in wrapper.customDerivs["tags"]:
-            wrapper.addCustomDerivation(
-                "CIJ" + str(-l - 1), sc.coldIonIJIntegralDerivation(-l - 1, True)
-            )
-            mbData.addVariable(
-                "CIJ" + str(-l - 1),
-                sc.derivationRule("CIJ" + str(-l - 1), [ionFlowSpeedVar]),
-                isDistribution=True,
-            )
-        if "CIJ" + str(1 - l) not in wrapper.customDerivs["tags"]:
-            wrapper.addCustomDerivation(
-                "CIJ" + str(1 - l), sc.coldIonIJIntegralDerivation(1 - l, True)
-            )
-            mbData.addVariable(
-                "CIJ" + str(1 - l),
-                sc.derivationRule("CIJ" + str(1 - l), [ionFlowSpeedVar]),
-                isDistribution=True,
-            )
+        if "CII"+str(l) not in mbData.varNames:
+            mbData.addVar(Variable("CII"+str(l),grid,isDistribution=True,derivation=derivations.coldIonIDeriv("CII"+str(l),l),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
 
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData.dict())
+        if "CII"+str(l+2) not in mbData.varNames:
+            mbData.addVar(Variable("CII"+str(l+2),grid,isDistribution=True,derivation=derivations.coldIonIDeriv("CII"+str(l+2),l+2),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
 
+        if "CIJ" + str(-l - 1) not in mbData.varNames:
+            mbData.addVar(Variable("CIJ"+ str(-l - 1),grid,isDistribution=True,derivation=derivations.coldIonJDeriv("CIJ"+ str(-l - 1),-l-1),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+            
+        if "CIJ" + str(1 - l) not in mbData.varNames:
+            mbData.addVar(Variable("CIJ"+ str(1-l),grid,isDistribution=True,derivation=derivations.coldIonJDeriv("CIJ"+ str(1-l),1-l),derivationArgs=[ionFlowSpeed.name]).onDualGrid(ionFlowSpeed.isOnDualGrid))
+            
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
     epsilon0 = 8.854188e-12  # vacuum permittivity
     amu = 1.6605390666e-27  # atomic mass unit
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-    ionSpecies = wrapper.getSpecies(ionSpeciesName)
     gamma0norm = gamma0norm * ionSpecies.charge**2
     elIonMassRatio = elMass / (ionSpecies.atomicA * amu)
 
-    normIonFriction = sc.CustomNormConst(
-        multConst=-elIonMassRatio / 3,
-        normNames=["velGrid", "speed"],
-        normPowers=[
-            1.0,
-            -1.0,
-        ],
-    )
+    normIonFriction = -elIonMassRatio / 3
+
+    eiColl = mc.Model("cold_ion_ei_colls")
+    eiColl.setModelboundData(mbData)
 
     for harmonic in evolvedHarmonics:
         l = lNums[harmonic - 1]
 
+        usedDensity = ionDensity.dual if ionFlowSpeed.isOnDualGrid else ionDensity
         # velocity diffusion terms with fl
 
-        vProfile = [1 / v for v in vGrid]
-        normConst = sc.CustomNormConst(
-            multConst=gamma0norm / 3,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        varDataI = sc.VarData(reqMBRowVars=["logLei", "CII2sh"])
-        varDataJ = sc.VarData(reqMBRowVars=["logLei", "CIJ-1sh"])
+        v1 = grid.profile(np.array([1 / v for v in vGrid]),"V","\\frac{1}{v}")
+        
+        normConst = gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"]**3
 
-        adfdvAtZero = [0, 0] if l > 1 else [1.0 / vGrid[1], 0]
-        termI = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varDataI,
-            stencilData=sc.velDiffusionStencil(
-                harmonic, harmonic, adfAtZero=cast(List[float], adfdvAtZero)
-            ),
-        )
-        newModel.addTerm("diffTermI" + str(harmonic), termI)
+        velDiff = stencils.D2DV2Stencil(harmonic,harmonic,adfAtZero=(0,0) if l>1 else (1/vGrid[1],0))
 
-        termJ = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varDataJ,
-            stencilData=sc.velDiffusionStencil(
-                harmonic, harmonic, adfAtZero=cast(List[float], adfdvAtZero)
-            ),
-        )
-        newModel.addTerm("diffTermJ" + str(harmonic), termJ)
+        eiColl.ddt[distribution] += normConst*(mbData["logLei"]*mbData["CII2sh"]) @ (usedDensity*(v1 * velDiff(distribution))).rename("diffTermI" + str(harmonic))
+
+        eiColl.ddt[distribution] += normConst * (mbData["logLei"]*mbData["CIJ-1sh"]) @ (usedDensity*(v1 * velDiff(distribution))).rename("diffTermJ" + str(harmonic))
 
         # velocity deriv terms with fl
 
-        vProfile = [1 / v**2 for v in vGrid]
-        normConst = sc.CustomNormConst(
-            multConst=gamma0norm / 3,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        varData = sc.VarData(reqMBRowVars=["logLei", "IJSum2"])
+        v2 = grid.profile(np.array([1 / v **2 for v in vGrid]),"V","\\frac{1}{v^2}")
 
-        termdfldv = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varData,
-            stencilData=sc.ddvStencil(harmonic, harmonic),
-        )
-        newModel.addTerm("dfdv" + str(harmonic), termdfldv)
+        ddv = stencils.DDVStencil(harmonic,harmonic)
+
+        eiColl.ddt[distribution] += normConst * (mbData["logLei"]*mbData["IJSum2"]) @(usedDensity* (v2 * ddv(distribution))).rename("dfdv"+str(harmonic))
+        
 
         # -l(l+1)/2 terms
 
-        vProfile = [1 / v**3 for v in vGrid]
-        normConst = sc.CustomNormConst(
-            multConst=-(l * (l + 1.0) / 2.0) * gamma0norm / 3,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        varData = sc.VarData(reqMBRowVars=["logLei", "IJSum"])
+        v3 = grid.profile(np.array([1 / v **3 for v in vGrid]),"V","\\frac{1}{v^3}")
 
-        termll = sc.GeneralMatrixTerm(
-            distFunName,
-            customNormConst=normConst,
-            varData=varData,
-            velocityProfile=vProfile,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-        )
-        newModel.addTerm("termLL" + str(harmonic), termll)
+        diag = mc.DiagonalStencil(evolvedHarmonics=[harmonic])
+
+        eiColl.ddt[distribution] += -(l * (l + 1.0) / 2.0) * normConst * (mbData["logLei"]*mbData["IJSum"]) @ (usedDensity*(v3 * diag(distribution))).rename("termLL"+str(harmonic))
 
         # I/J(f_l) terms
 
         # d2f0/dv2 terms
-        vProfile = [1 / v for v in vGrid]
         # C1*I_{l+2} term
-        varData = sc.VarData(reqMBRowVars=["logLei", "ddf0", "CII" + str(l + 2)])
+        MBVars = mbData["logLei"]*mbData["ddf0"]*mbData["CII"+str(l+2)]
         C = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))  # C1
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm / 2,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
+        normConst =C * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"]**3
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-        )
-
-        newModel.addTerm("C1Il+2_h=" + str(harmonic), newTerm)
+        eiColl.ddt[distribution] += normConst *( MBVars @ (v1 * diag(ionDensity)).rename("C1Il+2_h="+str(harmonic)))
 
         # C1*J_{-l-1} term
-        varData = sc.VarData(reqMBRowVars=["logLei", "ddf0", "CIJ" + str(-1 - l)])
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
+        MBVars = mbData["logLei"]*mbData["ddf0"]*mbData["CIJ"+str(-1-l)]
 
-        newModel.addTerm("C1J-l-1_h=" + str(harmonic), newTerm)
+        eiColl.ddt[distribution] += normConst *( MBVars @ (v1 * diag(ionDensity)).rename("C1J-l-1_h=" + str(harmonic)).withSkippingPattern())
+
 
         # C2*I_l term
-        varData = sc.VarData(reqMBRowVars=["logLei", "ddf0", "CII" + str(l)])
         C = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))  # C2
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm / 2,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
+        normConst =C * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"]**3
+        MBVars = mbData["logLei"]*mbData["ddf0"]*mbData["CII"+str(l)]
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
+        eiColl.ddt[distribution] += normConst * (MBVars @ (v1 * diag(ionDensity)).rename("C2Il_h=" + str(harmonic)).withSkippingPattern())
 
-        newModel.addTerm("C2Il_h=" + str(harmonic), newTerm)
 
         # C2*J1-l term
-        varData = sc.VarData(reqMBRowVars=["logLei", "ddf0", "CIJ" + str(1 - l)])
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
+        MBVars = mbData["logLei"]*mbData["ddf0"]*mbData["CIJ"+str(1-l)]
 
-        newModel.addTerm("C2J1-l_h=" + str(harmonic), newTerm)
+        eiColl.ddt[distribution] += normConst * (MBVars @ (v1 * diag(ionDensity))).rename("C2J1-l_h=" + str(harmonic)).withSkippingPattern()
 
         # df0/dv terms
 
-        vProfile = [1 / v**2 for v in vGrid]
-
         # C3*I_{l+2} term
-        varData = sc.VarData(reqMBRowVars=["logLei", "df0", "CII" + str(l + 2)])
+        MBVars = mbData["logLei"]*mbData["df0"]*mbData["CII"+str(l+2)]
         C = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))  # C3
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
+        normConst =C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"]**3
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C3Il+2_h=" + str(harmonic), newTerm)
+        eiColl.ddt[distribution] += normConst * MBVars @ (v2 * diag(ionDensity)).rename("C3Il+2_h=" + str(harmonic)).withSkippingPattern()
 
         # C4*J_{-l-1} term
-        varData = sc.VarData(reqMBRowVars=["logLei", "df0", "CIJ" + str(-1 - l)])
+        MBVars = mbData["logLei"]*mbData["df0"]*mbData["CIJ"+str(-1-l)]
         C = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3)) + l / (
             2 * l + 1
         )  # C4 + l/(2l+1)
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
+        normConst =C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"]**3
 
-        newModel.addTerm("C4J-l-1_h=" + str(harmonic), newTerm)
+        eiColl.ddt[distribution] += normConst * MBVars @ (v2 * diag(ionDensity)).rename("C4J-l-1_h=" + str(harmonic)).withSkippingPattern()
 
         # C5*I_l term
-        varData = sc.VarData(reqMBRowVars=["logLei", "df0", "CII" + str(l)])
+        MBVars = mbData["logLei"]*mbData["df0"]*mbData["CII"+str(l)]
+        
         C = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1)) - (l + 1) / (
             2 * l + 1
         )  # C5 -(l+1)/(2l+1)
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C5Il_h=" + str(harmonic), newTerm)
+        normConst =C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"]**3
+        eiColl.ddt[distribution] += normConst * MBVars @ (v2 * diag(ionDensity)).rename("C5Il_h=" + str(harmonic)).withSkippingPattern()
 
         # C6*J1-l term
-        varData = sc.VarData(reqMBRowVars=["logLei", "df0", "CIJ" + str(1 - l)])
+        MBVars = mbData["logLei"]*mbData["df0"]*mbData["CIJ"+str(1-l)]
+        
         C = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            implicitVar=ionDensVar,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.diagonalStencil(evolvedHarmonics=[harmonic]),
-            skipPattern=True,
-        )
+        normConst =C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"]**3
+        eiColl.ddt[distribution] += normConst * MBVars @ (v2 * diag(ionDensity)).rename("C6J1-l_h=" + str(harmonic)).withSkippingPattern()
 
-        newModel.addTerm("C6J1-l_h=" + str(harmonic), newTerm)
+    # Add ion friction terms if ionFlux is passed
+    if 2 in evolvedHarmonics and ionFlux is not None:
 
-    # Add ion friction terms if ionFluxVar is passed
-    if 2 in evolvedHarmonics and ionFluxVar is not None:
-        diffTermIIon = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            distFunName,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "diffTermI2"),
-        )
+        for term in ["diffTermI2","diffTermJ2","dfdv2","termLL2"]:
 
-        newModel.addTerm("diffTermIIon", diffTermIIon)
+            eiColl.ddt[ionFlux] += normIonFriction * stencils.TermMomentStencil(2,1,term)(distribution).rename(term+"Ion")
 
-        diffTermJIon = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            distFunName,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "diffTermJ2"),
-            skipPattern=True,
-        )
+        for term in ["C1Il+2_h=2","C1J-l-1_h=2","C2Il_h=2","C2J1-l_h=2","C3Il+2_h=2","C4J-l-1_h=2","C5Il_h=2","C6J1-l_h=2"]:
 
-        newModel.addTerm("diffTermJIon", diffTermJIon)
+            eiColl.ddt[ionFlux] += normIonFriction * stencils.TermMomentStencil(2,1,term)(ionDensity).rename(term+"Ion")
 
-        dfdvTermIon = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            distFunName,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "dfdv2"),
-            skipPattern=True,
-        )
+    return eiColl
 
-        newModel.addTerm("dfdvTermIon", dfdvTermIon)
-
-        llTermIon = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            distFunName,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "termLL2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("llTermIon", llTermIon)
-
-        ddf0TermIon1 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C1Il+2_h=2"),
-        )
-
-        newModel.addTerm("ddf0TermIon1", ddf0TermIon1)
-
-        ddf0TermIon2 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C1J-l-1_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("ddf0TermIon2", ddf0TermIon2)
-
-        ddf0TermIon3 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C2Il_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("ddf0TermIon3", ddf0TermIon3)
-
-        ddf0TermIon4 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C2J1-l_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("ddf0TermIon4", ddf0TermIon4)
-
-        df0TermIon1 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C3Il+2_h=2"),
-        )
-
-        newModel.addTerm("df0TermIon1", df0TermIon1)
-
-        df0TermIon2 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C4J-l-1_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("df0TermIon2", df0TermIon2)
-
-        df0TermIon3 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C5Il_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("df0TermIon3", df0TermIon3)
-
-        df0TermIon4 = sc.GeneralMatrixTerm(
-            ionFluxVar,
-            ionDensVar,
-            customNormConst=normIonFriction,
-            stencilData=sc.termMomentStencil(2, 1, "C6J1-l_h=2"),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("df0TermIon4", df0TermIon4)
-
-    return newModel
-
-
-def addStationaryIonEIColl(
-    modelTag: str,
-    distFunName: str,
-    ionDensVar: str,
-    electronDensVar: str,
-    electronTempVar: str,
-    ionSpeciesName: str,
-    evolvedHarmonics: List[int],
-    wrapper: RKWrapper,
-) -> None:
-    """Add stationary ion electron-ion collision operator model to wrapper using matrix terms. Assumes default normalization.
-
-    Args:
-        modelTag (str): Tag of model to be added
-        distFunName (str): Name of electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionSpeciesName (str): Name of ion species colliding with the electrons
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        wrapper (RKWrapper): Wrapper to add the model to
-    """
-
-    newModel = stationaryIonEIColl(
-        modelTag,
-        distFunName,
-        ionDensVar,
-        electronDensVar,
-        electronTempVar,
-        ionSpeciesName,
-        evolvedHarmonics,
-        wrapper,
-    )
-
-    wrapper.addModel(newModel)
-
-
-def addFlowingIonEIColl(
-    modelTag: str,
-    distFunName: str,
-    ionDensVar: str,
-    ionFlowSpeedVar: str,
-    electronDensVar: str,
-    electronTempVar: str,
-    ionSpeciesName: str,
-    wrapper: RKWrapper,
-    evolvedHarmonics: List[int],
-    dualDistFun: Union[str, None] = None,
-    ionFluxVar: Union[str, None] = None,
-) -> None:
-    """Add a flowing cold ion electron-ion collision model using matrix terms. Assumes default normalization.
-
-    Args:
-        modelTag (str): Tag of model to be added
-        distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        ionSpeciesName (str): Name of the ion species
-        wrapper (RKWrapper): Wrapper to add model to
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
-        ionFluxVar (Union[str,None], optional): Ion flux variable (should be implicit) - when present generates ion friction terms corresponding to the electron-ion collision operators. Defaults to None.
-    """
-    newModel = flowingIonEIColl(
-        modelTag,
-        distFunName,
-        ionDensVar,
-        ionFlowSpeedVar,
-        electronDensVar,
-        electronTempVar,
-        ionSpeciesName,
-        wrapper,
-        evolvedHarmonics,
-        dualDistFun,
-        ionFluxVar,
-    )
-
-    wrapper.addModel(newModel)
-
-
-def eeCollHigherL(
-    modelTag: str,
-    distFunName: str,
-    elTempVar: str,
-    elDensVar: str,
-    wrapper: RKWrapper,
-    evolvedHarmonics: List[int],
-    dualDistFun: Union[str, None] = None,
-) -> sc.CustomModel:
+def eeCollHigherL(grid:Grid,textbook:derivations.Textbook,norms:Dict[str,float],distribution:Variable,elTemperature:Variable,elDensity:Variable,evolvedHarmonics:List[int]) -> mc.Model: 
     """Return e-e collision model for l>0 using matrix terms. Assumes default normalization.
+    NOTE: Must be called separately for odd and even harmonics if staggered, and the fluid quantities used must reflect that (dual for odd harmonics).
 
     Args:
-        modelTag (str): Tag of created model
-        distFunName (str): Name of the electron distribution function variable - this is the evolved variable
-        elTempVar (str): Name of the electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        elDensVar (str): Name of the electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        wrapper (RKWrapper): Wrapper to add derivations to
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
-    """
+        grid (Grid): Used grid object
+        textbook (Textbook): Textbook object used to retrieve built-in derivations
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        distribution (Variable): Electron distribution function - implicit
+        elTemperature (Variable): Electron temperature - should live on the same grid as the evolved harmonics
+        elDensity (Variable): Electron density - should live on the same grid as the evolved harmonics
+        evolvedHarmonics (List[int]): List of evolved harmonics, must all correspond to either odd or even l numbers
 
+    Returns:
+        Model: Electron-electron collision operator model for l>0, ready for addition into a ReMKiT1D context
+    """
     assert (
         1 not in evolvedHarmonics
     ), "addEECollHigherL cannot be used to evolve harmonic with index 1"
 
-    vGrid = wrapper.grid.vGrid
-    lNums = wrapper.grid.lGrid
-    derivReqFun = distFunName if dualDistFun is None else dualDistFun
-    if "f0Extraction" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("f0Extraction", sc.harmonicExtractorDerivation(1))
-    if "I0" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("I0", sc.ijIntegralDerivation(0))
-    if "I2" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("I2", sc.ijIntegralDerivation(2))
-    if "J-1" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation("J-1", sc.ijIntegralDerivation(-1, True))
-    if "sumTerm" not in wrapper.customDerivs["tags"]:
-        wrapper.addCustomDerivation(
-            "sumTerm",
-            sc.polyDerivation(
-                0.0, polyPowers=[1.0, 1.0, 1.0], polyCoeffs=[-1.0, 2.0, 3.0]
-            ),
-        )
-        wrapper.addCustomDerivation(
-            "df0/dv",
-            sc.ddvDerivation(
-                [1],
-                vifAtZero=[
-                    [
+    vGrid = grid.vGrid
+    lNums = grid.lGrid
+
+    mbData = mc.VarlikeModelboundData()
+    derivDistribution = distribution.dual if elDensity.isOnDualGrid else distribution
+    mbData.addVar(derivations.HarmonicExtractorDerivation("f0",grid,1)(derivDistribution)) 
+
+    mbData.addVar(Variable("I0",grid,isSingleHarmonic=True,derivation=derivations.shkarofskyIIntegralDeriv("I0",0),derivationArgs=["f0"]).onDualGrid(elDensity.onDualGrid))
+    mbData.addVar(Variable("I2",grid,isSingleHarmonic=True,derivation=derivations.shkarofskyIIntegralDeriv("I2",2),derivationArgs=["f0"]).onDualGrid(elDensity.onDualGrid))
+    mbData.addVar(Variable("J-1",grid,isSingleHarmonic=True,derivation=derivations.shkarofskyJIntegralDeriv("J-1",-1),derivationArgs=["f0"]).onDualGrid(elDensity.onDualGrid))
+
+    polyDeriv1 = derivations.PolynomialDerivation("sumTerm",0.0,polyPowers=np.array([1.0,1.0,1.0]),polyCoeffs=np.array([-1.0,2.0,3.0]))
+    mbData.addVar(polyDeriv1(mbData["I2"],mbData["J-1"],mbData["I0"]).onDualGrid(elDensity.isOnDualGrid).rename("IJSum"))
+    mbData.addVar(textbook["logLee"](elTemperature,elDensity))
+
+    df0 = derivations.DDVDerivation("df0/dv",grid,1,vifAtZero=(
                         1.0 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
                         -vGrid[0] ** 2
                         / vGrid[1] ** 2
                         / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
-                    ]
-                ],
-            ),
-        )
-        wrapper.addCustomDerivation("d2f0/dv2", sc.d2dv2Derivation([1]))
+                    ))
+    ddf0 = derivations.D2DV2Derivation("d2f0/dv2",grid,1)
 
-    mbData = sc.VarlikeModelboundData()
-    mbData.addVariable(
-        "f0", sc.derivationRule("f0Extraction", [derivReqFun]), isSingleHarmonic=True
-    )
-    mbData.addVariable(
-        "I0",
-        sc.derivationRule("I0", ["f0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "I2",
-        sc.derivationRule("I2", ["f0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "J-1",
-        sc.derivationRule("J-1", ["f0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable(
-        "IJSum",
-        sc.derivationRule("sumTerm", ["I2", "J-1", "I0"]),
-        isSingleHarmonic=True,
-        isDerivedFromOtherData=True,
-    )
-    mbData.addVariable("logLee", sc.derivationRule("logLee", [elTempVar, elDensVar]))
-    mbData.addVariable(
-        "df0", sc.derivationRule("df0/dv", [derivReqFun]), isSingleHarmonic=True
-    )
-    mbData.addVariable(
-        "ddf0", sc.derivationRule("d2f0/dv2", [derivReqFun]), isSingleHarmonic=True
-    )
-
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData.dict())
-
+    mbData.addVar(df0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("df0"))
+    mbData.addVar(ddf0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("ddf0"))
+    
+    eeModel = mc.Model("e-e_coll_l>0")
+    eeModel.setModelboundData(mbData)
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
     epsilon0 = 8.854188e-12  # vacuum permittivity
@@ -1955,408 +764,185 @@ def eeCollHigherL(
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
 
     # 8*pi*f0*fl term
-    normConst = sc.CustomNormConst(
-        multConst=8 * np.pi * gamma0norm,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varData = sc.VarData(reqMBRowVars=["logLee", "f0"])
-    termf0fl = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        varData=varData,
-        stencilData=sc.diagonalStencil(evolvedHarmonics=evolvedHarmonics),
-    )
-    newModel.addTerm("8pi*f0*fl", termf0fl)
 
-    # velocity diffusion terms with fl
+    normConst = 8 * np.pi * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
 
-    vProfile = [1 / v for v in vGrid]
-    normConst = sc.CustomNormConst(
-        multConst=gamma0norm / 3,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varDataI = sc.VarData(reqMBRowVars=["logLee", "I2"])
-    varDataJ = sc.VarData(reqMBRowVars=["logLee", "J-1"])
-    for harmonic in evolvedHarmonics:
-        adfdvAtZero = [0, 0] if lNums[harmonic - 1] > 1 else [1.0 / vGrid[1], 0]
-        termI = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varDataI,
-            stencilData=sc.velDiffusionStencil(
-                harmonic, harmonic, adfAtZero=cast(List[float], adfdvAtZero)
-            ),
-        )
-        newModel.addTerm("diffTermI" + str(harmonic), termI)
-
-        termJ = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varDataJ,
-            stencilData=sc.velDiffusionStencil(
-                harmonic, harmonic, adfAtZero=cast(List[float], adfdvAtZero)
-            ),
-        )
-        newModel.addTerm("diffTermJ" + str(harmonic), termJ)
-
-    # velocity deriv terms with fl
-
-    vProfile = [1 / v**2 for v in vGrid]
-    normConst = sc.CustomNormConst(
-        multConst=gamma0norm / 3,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varData = sc.VarData(reqMBRowVars=["logLee", "IJSum"])
+    diag = mc.DiagonalStencil(evolvedHarmonics=evolvedHarmonics)
+    eeModel.ddt[distribution] += normConst* (mbData["f0"]*mbData["logLee"]) @ diag(distribution).rename("8pif0fl")
 
     for harmonic in evolvedHarmonics:
-        termdfldv = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            customNormConst=normConst,
-            varData=varData,
-            stencilData=sc.ddvStencil(harmonic, harmonic),
-        )
-        newModel.addTerm("dfdv" + str(harmonic), termdfldv)
+        l = lNums[harmonic - 1]
 
+        # velocity diffusion terms with fl
+
+        v1 = grid.profile(np.array([1 / v for v in vGrid]),"V","\\frac{1}{v}")
+        
+        normConst = gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"]**3
+
+        velDiff = stencils.D2DV2Stencil(harmonic,harmonic,adfAtZero=(0,0) if l>1 else (1/vGrid[1],0))
+
+        eeModel.ddt[distribution] += normConst*(mbData["logLee"]*mbData["I2"]) @ (v1 * velDiff(distribution)).rename("diffTermI" + str(harmonic))
+
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["J-1"]) @ (v1 * velDiff(distribution)).rename("diffTermJ" + str(harmonic))
+
+        # velocity deriv terms with fl
+
+        v2 = grid.profile(np.array([1 / v **2 for v in vGrid]),"V","\\frac{1}{v^2}")
+
+        ddv = stencils.DDVStencil(harmonic,harmonic)
+
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["IJSum"]) @(v2 * ddv(distribution)).rename("dfdv"+str(harmonic))
+      
     # -l(l+1)/2 terms
     hProfile = []
     for l in lNums:
         hProfile.append(l * (l + 1.0) / 2.0)
+    h = grid.profile(np.array(hProfile),"H","\\frac{l(l+1)}{2}")
+    v3 = grid.profile(np.array([1 / v **3 for v in vGrid]),"V","\\frac{1}{v^3}")
+    normConst = -gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"]**3
 
-    vProfile = [1 / v**3 for v in vGrid]
-    normConst = sc.CustomNormConst(
-        multConst=-gamma0norm / 3,
-        normNames=["density", "time", "velGrid"],
-        normPowers=[1.0, 1.0, -3.0],
-    )
-    varData = sc.VarData(reqMBRowVars=["logLee", "IJSum"])
+    eeModel.ddt[distribution] += normConst*(mbData["logLee"]*mbData["IJSum"]) @ (h*(v3*diag(distribution))).rename("termLL")
 
-    termll = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        varData=varData,
-        velocityProfile=vProfile,
-        harmonicProfile=hProfile,
-        stencilData=sc.diagonalStencil(evolvedHarmonics=evolvedHarmonics),
-    )
-    newModel.addTerm("termLL", termll)
-
-    # I/J(f_l) terms
+#     # I/J(f_l) terms
 
     for harmonic in evolvedHarmonics:
         l = lNums[harmonic - 1]
 
         # d2f0/dv2 terms
-        vProfile = [1 / v for v in vGrid]
-        varData = sc.VarData(reqMBRowVars=["logLee", "ddf0"])
         # C1*I_{l+2} term
         C = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))  # C1
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm / 2,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(harmonic, harmonic, l + 2),
-        )
+        normConst = C * gamma0norm / 2 * norms["density"]*norms["time"]/norms["velGrid"]**3
 
-        newModel.addTerm("C1Il+2_h=" + str(harmonic), newTerm)
+        Il2 = stencils.ShkarofskyIStencil(harmonic,harmonic,l+2)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["ddf0"]) @ (v1*Il2(distribution)).rename("C1Il+2_h="+str(harmonic))
 
         # C1*J_{-l-1} term
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(
-                harmonic, harmonic, -l - 1, isJIntegral=True
-            ),
-        )
+        Jl1 = stencils.ShkarofskyJStencil(harmonic,harmonic,-l-1)
 
-        newModel.addTerm("C1J-l-1_h=" + str(harmonic), newTerm)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["ddf0"]) @ (v1*Jl1(distribution)).rename("C1J-l-1_h="+str(harmonic))
 
         # C2*I_l term
         C = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))  # C2
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm / 2,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
+        normConst = C * gamma0norm / 2 * norms["density"]*norms["time"]/norms["velGrid"]**3
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(harmonic, harmonic, l),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C2Il_h=" + str(harmonic), newTerm)
+        Il = stencils.ShkarofskyIStencil(harmonic,harmonic,l)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["ddf0"]) @ (v1*Il(distribution)).rename("C2Il_h="+str(harmonic))
 
         # C2*J1-l term
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(
-                harmonic, harmonic, 1 - l, isJIntegral=True
-            ),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C2J1-l_h=" + str(harmonic), newTerm)
+        J1l = stencils.ShkarofskyJStencil(harmonic,harmonic,1-l)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["ddf0"]) @ (v1*J1l(distribution)).rename("C2J1-l_h="+str(harmonic))
 
         # df0/dv terms
-
-        vProfile = [1 / v**2 for v in vGrid]
-        varData = sc.VarData(reqMBRowVars=["logLee", "df0"])
-
+        
         # C3*I_{l+2} term
         C = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))  # C3
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(harmonic, harmonic, l + 2),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C3Il+2_h=" + str(harmonic), newTerm)
+        normConst = C * gamma0norm * norms["density"]*norms["time"]/norms["velGrid"]**3
+        
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["df0"]) @ (v2*Il2(distribution)).rename("C3Il+2_h="+str(harmonic)).withSkippingPattern()
 
         # C4*J_{-l-1} term
         C = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3))  # C4
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(
-                harmonic, harmonic, -l - 1, isJIntegral=True
-            ),
-            skipPattern=True,
-        )
+        normConst = C * gamma0norm * norms["density"]*norms["time"]/norms["velGrid"]**3
 
-        newModel.addTerm("C4J-l-1_h=" + str(harmonic), newTerm)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["df0"]) @ (v2*Jl1(distribution)).rename("C4J-l-1_h="+str(harmonic)).withSkippingPattern()
 
         # C5*I_l term
         C = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1))  # C5
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
+        normConst = C * gamma0norm * norms["density"]*norms["time"]/norms["velGrid"]**3
 
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(harmonic, harmonic, l),
-            skipPattern=True,
-        )
-
-        newModel.addTerm("C5Il_h=" + str(harmonic), newTerm)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["df0"]) @ (v2*Il(distribution)).rename("C5Il_h="+str(harmonic)).withSkippingPattern()
 
         # C6*J1-l term
         C = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
-        normConst = sc.CustomNormConst(
-            multConst=C * gamma0norm,
-            normNames=["density", "time", "velGrid"],
-            normPowers=[1.0, 1.0, -3.0],
-        )
-        newTerm = sc.GeneralMatrixTerm(
-            distFunName,
-            velocityProfile=vProfile,
-            varData=varData,
-            customNormConst=normConst,
-            stencilData=sc.ijIntegralStencil(
-                harmonic, harmonic, 1 - l, isJIntegral=True
-            ),
-            skipPattern=True,
-        )
+        normConst = C * gamma0norm * norms["density"]*norms["time"]/norms["velGrid"]**3
 
-        newModel.addTerm("C6J1-l_h=" + str(harmonic), newTerm)
+        eeModel.ddt[distribution] += normConst * (mbData["logLee"]*mbData["df0"]) @ (v2*J1l(distribution)).rename("C6J1-l_h="+str(harmonic)).withSkippingPattern()
+    
+    return eeModel
 
-    return newModel
-
-
-def addEECollHigherL(
-    modelTag: str,
-    distFunName: str,
-    elTempVar: str,
-    elDensVar: str,
-    wrapper: RKWrapper,
-    evolvedHarmonics: List[int],
-    dualDistFun: Union[str, None] = None,
-) -> None:
-    """Add e-e collision model for l>0 using matrix terms. Assumes default normalization.
-
-    Args:
-        modelTag (str): Tag of model to be added
-        distFunName (str): Name of the electron distribution function variable - this is the evolved variable
-        elTempVar (str): Name of the electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        elDensVar (str): Name of the electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
-        wrapper (RKWrapper): Wrapper to add derivations to
-        evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
-        dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
-    """
-
-    newModel = eeCollHigherL(
-        modelTag,
-        distFunName,
-        elTempVar,
-        elDensVar,
-        wrapper,
-        evolvedHarmonics,
-        dualDistFun,
-    )
-    wrapper.addModel(newModel)
-
-
-def ampereMaxwellKineticElTerm(
-    distFunName: str, eFieldName: str
-) -> sc.GeneralMatrixTerm:
+def ampereMaxwellKineticElTerm(distribution:Variable,norms:Dict[str,float]) -> mc.MatrixTerm:
     """Return kinetic electron contribution matrix term to Ampere-Maxwell equation for E-field. This uses a moment stencil, taking the appropriate moment of the l=1 harmonic. Assumes default normalization.
 
     Args:
-        distFunName (str): Name of distribution function variable - this is the implicit variable
-        eFieldName (str): Name of evolved E-field variable
+        distribution (Variable): Electron distribution - implicit
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
     Returns:
-        sc.GeneralMatrixTerm: Term object ready to be added into a model
+        MatrixTerm: Matrix term to be added to a model object
     """
-
     elCharge = 1.60218e-19
     epsilon0 = 8.854188e-12  # vacuum permittivity
+    normConst = elCharge/(3*epsilon0) * norms["density"] * norms["time"] / norms["EField"]
+    
+    return normConst * stencils.MomentStencil(1,2)(distribution).rename("kin_AM_term")
 
-    normConst = sc.CustomNormConst(
-        multConst=elCharge / (3 * epsilon0),
-        normNames=["density", "time", "velGrid", "EField"],
-        normPowers=[1.0, 1.0, 1.0, -1.0],
-    )
-
-    newTerm = sc.GeneralMatrixTerm(
-        eFieldName,
-        implicitVar=distFunName,
-        customNormConst=normConst,
-        stencilData=sc.momentStencil(1, 2),
-    )
-
-    return newTerm
-
-
-def diffusiveHeatingTerm(
-    distFunName: str,
-    densityName: str,
-    heatingProfile: List[float],
-    wrapper: RKWrapper,
-    timeSignal=sc.TimeSignalData(),
-) -> sc.GeneralMatrixTerm:
+def diffusiveHeatingTerm(grid:Grid,norms:Dict[str,float],distribution:Variable,density:Variable,heatingProfile:Profile,timeSignal:mc.TimeSignalData =mc.TimeSignalData()) -> mc.MatrixTerm:
     """Return diffusive kinetic electron heating matrix term with a given spatial heating profile. The term is proportional to 1/v**2 * d/dv(v**2 * df_0/dv) Assumes default normalization.
 
     Args:
-        distFunName (str): Name of distribution function variable
-        densityName (str): Name of electron density variable
-        heatingProfile (List[float]): Heating profile in normalized units of density*temperature/time
-        wrapper (RKWrapper): Wrapper used to retrieve velocity grid info
-        timeSignal (sc.TimeSignalData): Optional time signal component of heating. Defaults to constant signal.
+        grid (Grid): Used grid object
+        norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
+        distribution (Variable): Electron distribution - implicit
+        density (Variable): Electron density
+        heatingProfile (Profile): Spatial heating profile
+        timeSignal (mc.TimeSignalData, optional): Optional time signal component. Defaults to mc.TimeSignalData() - constant signal.
 
     Returns:
-        sc.GeneralMatrixTerm: Term object ready to be added into a model
+        MatrixTerm: Heating matrix term ready for addition to ReMKiT1D model object
     """
 
+    assert heatingProfile.dim =="X","heatingProfile in diffusiveHeatingTerm must be a spatial profile"
     elCharge = 1.60218e-19
     elMass = 9.10938e-31
 
-    vGrid = wrapper.grid.vGrid
-    dv = wrapper.grid.vWidths
+    vGrid = grid.vGrid
+    dv = grid.vWidths
     vBoundary = [vGrid[i] + dv[i] / 2 for i in range(len(dv))]
 
-    vProfile = [1 / v**2 for v in vGrid]
-    varData = sc.VarData(reqRowVars=[densityName], reqRowPowers=[-1.0])
+    v2 = grid.profile(np.array([1 / v**2 for v in vGrid]),"V","\\frac{1}{v^2}")
+    v2b = grid.profile(np.array([ v**2 for v in vBoundary]),"V","v^2")
 
-    normConst = sc.CustomNormConst(
-        multConst=elCharge / (3 * elMass),
-        normNames=["eVTemperature", "velGrid"],
-        normPowers=[1.0, -2.0],
-    )
+    normConst = elCharge/(3*elMass) * norms["eVTemperature"] / norms["velGrid"]**2
 
-    newTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        customNormConst=normConst,
-        spatialProfile=heatingProfile,
-        velocityProfile=vProfile,
-        varData=varData,
-        stencilData=sc.velDiffusionStencil(1, 1, [v**2 for v in vBoundary]),
-        timeSignalData=timeSignal,
-    )
+    stencil = stencils.D2DV2Stencil(1,1,diffCoeff=v2b)
 
-    return newTerm
+    return normConst*density**(-1)*(timeSignal*(heatingProfile*(v2 * stencil(distribution)))).rename("diff_heating")
 
-
-def lbcModel(
-    modelTag: str,
-    distFunName: str,
-    wrapper: RKWrapper,
-    distExtRule: dict,
-    ionCurrentVar: str,
-    totalCurrentVar: str = "none",
-    bisTol: float = 1.0e-12,
-    leftBoundary=False,
-    evolvedHarmonics: List[int] = [],
-) -> sc.CustomModel:
-    """Return logical boundary condition model using matrix terms. Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
+def logicalBCModel(grid:Grid,distribution:Variable,ionCurrent:Variable,
+                    density:Variable,
+                    densityDual:Union[Variable,None]=None,
+                    densityOnBoundary:Union[Variable,None]=None,
+                    totalCurrent:Union[Variable,None]=None,
+                    bisTol: float=1e-12,
+                    leftBoundary=False,
+                    evolvedHarmonics:Optional[List[int]]=None) -> mc.Model:
+    """Return logical boundary condition model using matrix terms. Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath. Should not be called to evolve odd harmonics if the distribution is staggered.
 
     Args:
-        modelTag (str): Model tag of added model
-        distFunName (str): Name of electron distribution function - this is the evolved variable
-        wrapper (RKWrapper): Wrapper to use
-        distExtRule (dict): Distribution extrapolation derivation rule - see for example distScalingExtrapolationDerivation in simple_containers.py
-        ionCurrentVar (str): Name of ion current variable at boundary - scalar variable
-        totalCurrentVar (str, optional): Name of total current variable at boundary - scalar variable. Defaults to "none", resulting in 0 total current.
-        bisTol (float, optional): Bisection tolerance for calculating the cut-off velocity in the electron distribution function. Defaults to 1.0e-12.
-        leftBoundary (bool, optional): True if model describes left boundary. Defaults to False.
-        evolvedHarmonics (List[int], optional): List of evolved harmonic. Defaults to [], evolving all harmonics. Should be changed to only even l harmonics if staggered grid is used.
+        grid (Grid): Used grid object
+        distribution (Variable): Electron distribution - implicit
+        ionCurrent (Variable): Scalar ion current variable at the boundary (used to match ion and electron fluxes)
+        density (Variable): Density variable
+        densityDual (Union[Variable,None], optional): Dual density variable. Defaults to None, assuming non-staggered variables.
+        densityOnBoundary (Union[Variable,None], optional): Density on the boundary used for extrapolation. Defaults to None - extrapolating to the last cell centre before the boundary.
+        totalCurrent (Union[Variable,None], optional): Total current variable. Defaults to None, setting the current to 0.
+        bisTol (float, optional): Bisection tolerance for determining the cut-off velocity. Defaults to 1e-12.
+        leftBoundary (bool, optional): Set to true if this is the left boundary. Defaults to False.
+        evolvedHarmonics (Optional[List[int]], optional): List of evolved harmonics. Defaults to None, evolving all harmonics.
+
+    Returns:
+        Model: Logical boundary condition model ready for addition into a ReMKiT1D context
     """
+    mbData = mc.LBCModelboundData(grid,ionCurrent,distribution,density,densityDual,densityOnBoundary,totalCurrent,bisTol,leftBoundary)
+    lbcModel = mc.Model("lbc_"+("L" if leftBoundary else "R"))
+    lbcModel.setModelboundData(mbData)
 
-    assert wrapper.grid.mMax == 0, "lbcModel assumes m=0 and cannot be used when m>0"
+    usedHarmonics = list(range(1, grid.numH() + 1))
+    if evolvedHarmonics is not None:
+        usedHarmonics = evolvedHarmonics 
 
-    mbData = sc.modelboundLBCData(
-        ionCurrentVar, distExtRule, totalCurrentVar, bisTol, leftBoundary
-    )
-
-    newModel = sc.CustomModel(modelTag=modelTag)
-    newModel.setModelboundData(mbData)
-
-    usedHarmonics = evolvedHarmonics
-    if len(usedHarmonics) == 0:
-        usedHarmonics = list(range(1, wrapper.grid.numH() + 1))
-
-    lGrid = wrapper.grid.lGrid
+    lGrid = grid.lGrid
 
     oddL = [l % 2 == 1 for l in lGrid]
     oddLHarmonics = [i + 1 for i, x in enumerate(oddL) if x]
@@ -2369,168 +955,69 @@ def lbcModel(
 
         if l > 0:
             if leftBoundary:
-                normConst = sc.CustomNormConst(multConst=l / ((2 * l - 1)))
+                normConst = l / ((2 * l - 1))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l - 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                    ),
-                )
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l - 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True)
 
-                newModel.addTerm("lbcMinus" + str(h), newTerm)
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcMinus" + str(h))
+
             else:
-                normConst = sc.CustomNormConst(multConst=-l / ((2 * l - 1)))
+                normConst = -l / ((2 * l - 1))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l - 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                        decompHarmonics=cast(List, oddLHarmonics),
-                    ),
-                )
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l - 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True,decompHarmonics=cast(List, oddLHarmonics))
 
-                newModel.addTerm("lbcMinus_odd" + str(h), newTerm)
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcMinus_odd" + str(h))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l - 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                        decompHarmonics=cast(List[float], evenLHarmonics),
-                    ),
-                )
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l - 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True,decompHarmonics=cast(List, evenLHarmonics))
 
-                newModel.addTerm("lbcMinus_even" + str(h), newTerm)
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcMinus_even" + str(h))
+
 
         # l+1 harmonic
         if l < max(lGrid):
             if leftBoundary:
-                normConst = sc.CustomNormConst(multConst=(l + 1) / ((2 * l + 3)))
+                normConst = (l + 1) / ((2 * l + 3))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l + 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                    ),
-                )
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l + 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True)
+                
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcPlus" + str(h))
 
-                newModel.addTerm("lbcPlus" + str(h), newTerm)
             else:
-                normConst = sc.CustomNormConst(multConst=-(l + 1) / ((2 * l + 3)))
+                normConst = -(l + 1) / ((2 * l + 3))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l + 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                        decompHarmonics=cast(List[float], oddLHarmonics),
-                    ),
-                )
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l + 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True,decompHarmonics=cast(List, oddLHarmonics))
+                
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcPlus_odd" + str(h))
 
-                newModel.addTerm("lbcPlus_odd" + str(h), newTerm)
+                stencil = stencils.LBCStencil(h,
+                        grid.getH(l + 1),distribution,density,densityDual,densityOnBoundary,leftBoundary=True,decompHarmonics=cast(List, evenLHarmonics))
 
-                newTerm = sc.GeneralMatrixTerm(
-                    distFunName,
-                    customNormConst=normConst,
-                    stencilData=sc.scalingLBCStencil(
-                        h,
-                        wrapper.grid.getH(l + 1, 0),
-                        distExtRule,
-                        leftBoundary=leftBoundary,
-                        decompHarmonics=cast(List, evenLHarmonics),
-                    ),
-                )
+                lbcModel.ddt[distribution] += normConst*stencil(distribution).rename("lbcPlus_even" + str(h))
 
-                newModel.addTerm("lbcPlus_even" + str(h), newTerm)
+    return lbcModel
 
-    return newModel
-
-
-def addLBCModel(
-    modelTag: str,
-    distFunName: str,
-    wrapper: RKWrapper,
-    distExtRule: dict,
-    ionCurrentVar: str,
-    totalCurrentVar: str = "none",
-    bisTol: float = 1.0e-12,
-    leftBoundary=False,
-    evolvedHarmonics: List[int] = [],
-) -> None:
-    """Add logical boundary condition model built with matrix terms to wrapper. Assumes default normalization. Extrapolates the distribution function to the boundary using a supplied extrapolation rule, and allows for a non-zero current through the sheath.
+def dvEnergyTerm(grid:Grid,distribution:Variable,k:int =0) -> mc.MatrixTerm:
+    """Return velocity space drag-like heating/cooling matrix term: proportional to 1/v**2 * d/dv(Df) where D is a velocity space vector proportional to v**k * dv, with k set by the user, controlling which velocity cells get the bulk of the energy source. Assumes default normalization. In order to use this term, it needs to be multiplied by the heating/cooling rate. **NOTE**: The rate should be positive for cooling and negative for heating
 
     Args:
-        modelTag (str): Model tag of added model
-        distFunName (str): Name of electron distribution function - this is the evolved variable
-        wrapper (RKWrapper): Wrapper to add the model to
-        distExtRule (dict): Distribution extrapolation derivation rule - see for example distScalingExtrapolationDerivation in simple_containers.py
-        ionCurrentVar (str): Name of ion current variable at boundary - scalar variable
-        totalCurrentVar (str, optional): Name of total current variable at boundary - scalar variable. Defaults to "none", resulting in 0 total current.
-        bisTol (float, optional): Bisection tolerance for calculating the cut-off velocity in the electron distribution function. Defaults to 1.0e-12.
-        leftBoundary (bool, optional): True if model describes left boundary. Defaults to False.
-        evolvedHarmonics (List[int], optional): List of evolved harmonic. Defaults to [], evolving all harmonics. Should be changed to only even l harmonics if staggered grid is used.
-    """
+        grid (Grid): Used grid object.
+        distribution (Variable): Distribution variable - implicit
+        k (int, optional): Diffusion coefficient velocity power. Defaults to 0.
 
-    newModel = lbcModel(
-        modelTag,
-        distFunName,
-        wrapper,
-        distExtRule,
-        ionCurrentVar,
-        totalCurrentVar,
-        bisTol,
-        leftBoundary,
-        evolvedHarmonics,
-    )
-
-    wrapper.addModel(newModel)
-
-
-def dvEnergyTerm(
-    distFunName: str,
-    varData: sc.VarData,
-    wrapper: RKWrapper,
-    multConst: float = -1.0,
-    k: int = 0,
-    implicitGroups=[1],
-) -> sc.GeneralMatrixTerm:
-    """Return velocity space drag-like heating/cooling matrix term: proportional to 1/v**2 * d/dv(Df) where D is a velocity space vector proportional to v**k * dv, with k set by the user, controlling which velocity cells get the bulk of the energy source. Assumes default normalization.
-
-    Args:
-        distFunName (str): Name of distribution function variable - both the evolved and implicit variable
-        varData (sc.VarData): Required variable data used to customize the rate (should result in something normalized to temperature/time, assuming velocity is normalized to thermal velocity)
-        wrapper (RKWrapper): Wrapper used to retrieve velocity grid info
-        multConst (float, optional): Multiplicative constant for the normalization. Defaults to -1.0, which assumes that a positive rate is heating
-        k (int, optional): Optional power for the drag coefficient (effectively multiplies by v**k). If not 0 varData should include the electron density divided by the k-th moment of f_0 (in the moment derivation sense). Defaults to 0.
-        implicitGroups (list, optional): Implicit term groups of parent model to which this term belongs to. Defaults to [1].
     Returns:
-        sc.GeneralMatrixTerm: Term object ready to be added into a model
+        MatrixTerm: Kinetic drag-like energy source/sing term (needs to be multiplied by the rate)
     """
 
-    vGrid = wrapper.grid.vGrid
-    dv = wrapper.grid.vWidths
-    interp = np.zeros(len(dv)).tolist()
+    vGrid = grid.vGrid
+    dv = grid.vWidths
+    interp = grid.profile(np.zeros(len(dv)),"V")
 
-    vProfile = [1 / (v**2) for v in vGrid]
+    vProfile = grid.profile(np.array([1 / (v**2) for v in vGrid]),"V","\\frac{1}{v^2}")
 
     drag = dv * np.ones(len(vGrid))
     vSum = vGrid**k * np.zeros(
@@ -2538,447 +1025,687 @@ def dvEnergyTerm(
     )  # ones if exact energy source is required, 0 if exactly no particle source is required (either way the error is negligible)
     vSum[:-1] = vGrid[:-1] ** (2 + k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
     drag = drag * vSum
-    normConst = sc.CustomNormConst(multConst=multConst)
 
-    newTerm = sc.GeneralMatrixTerm(
-        distFunName,
-        implicitGroups=implicitGroups,
-        customNormConst=normConst,
-        velocityProfile=vProfile,
-        varData=varData,
-        stencilData=sc.ddvStencil(1, 1, drag.tolist(), interp),
-    )
+    ddv =  stencils.DDVStencil(1,1,grid.profile(drag,"V"),interpCoeffs=interp)
+    
+    return vProfile * ddv(distribution).rename("drag_heating")
 
-    return newTerm
+def standardBaseFluid(species:Species,density:Variable,flux:Variable,flowSpeed:Variable,temperature:Variable,eField:Variable,energyDensity:Optional[Variable]=None,heatflux:Optional[Variable]=None,viscosity:Optional[Variable]=None,viscosityLimitMult:Optional[Variable]=None) -> mc.Model:
+    """Generates a standard base fluid model for a species with given variables (on regular grid, assumes duals are defined).
 
+    The model will include the continuity equation, momentum equation, and energy equation (if energyDensity present), with the default reflective boundary conditions (should be specified in a separate model).
 
-def standardBaseFluid(
-    speciesName: str,
-    densName: str,
-    fluxName: str,
-    flowSpeedName: str,
-    energyName: str,
-    tempName: str,
-    electricFieldName: str,
-    speciesMass: float,
-    speciesCharge: float,
-    heatfluxVar: Union[str, None] = None,
-    viscVar: Union[str, None] = None,
-    viscosityLimitMultName: Union[str, None] = None,
-) -> sc.CustomModel:
-    """Generates a standard base fluid model for a species with given variable names (on regular grid, assumes staggered grid is used).
-
-    The model will include the continuity equation, momentum equation, and energy equation, with the default reflective boundary conditions (should be specified in a separate model).
-
-    The implicit temperature calculation is also added.
+    The implicit temperature calculation is also added if the energyDensity is present.
 
     No heat flux, viscosity, or sources are added.
 
     If the heatflux variable is present it will be assumed to be stationary and will have its identity term and the corresponding bulk divergence terms in the energy equation added.
 
-    If the viscosity variable is present it will be assumed to be stationary and will have its identity term and the corresponding bulk divergence terms in the momentum and energy equation added.
+    If the viscosity variable is present it will be assumed to be stationary and will have its identity term and the corresponding bulk divergence terms in the momentum and energy equation added. If viscosity limiter is present it is assumed to simply multiply the viscosity.
+
+    Assumes default norms.
+
 
     Args:
-        speciesName (str): Name of the species. Used to name the model
-        densName (str): Name of the density variable associated to the species
-        fluxName (str): Name of the flux variable associated to the species
-        flowSpeedName (str): Name of the flow speed variable associated to the species
-        energyName (str): Name of the energy variable associated to the species
-        tempName (str): Name of the temperature variable associated with the species
-        electricFieldName (str): Name of the implicit electric field variable
-        speciesMass (float): Species mass in kg
-        speciesCharge (float): Species charge in e
-        heatfluxVar (Union[str,None], optional): Name of the stationary heat flux variable associated with the species. Defaults to None, not building any related terms.
-        viscVar (Union[str,None], optional): Name of the stationary viscosity variable (unlimited) associated with the species. Defaults to None, not building any related terms.
-        viscosityLimitMultName (Union[str,None], optional): Viscosity limitation multiplier (applied directly in relevant terms). Defaults to None, removing the limit.
+        species (Species): Species for which the base model is generated
+        density (Variable): Density variable
+        flux (Variable): Particle flux variable
+        flowSpeed (Variable): Flow speed variable corresponding to flux/density
+        temperature (Variable): Temperature variable
+        eField (Variable): Electric field (used only for charged particles)
+        energyDensity (Optional[Variable], optional): Energy density variable (total). Defaults to None, not adding the energy equation.
+        heatflux (Optional[Variable], optional): Heatflux variable, if present adds its identity term. Defaults to None.
+        viscosity (Optional[Variable], optional): Viscosity variable, if present adds its identity term. Defaults to None.
+        viscosityLimitMult (Optional[Variable], optional): Multiplicative variable for the viscosity limiter. Defaults to None.
 
     Returns:
-        sc.CustomModel: Model object holding the base fluid terms for a given species
+        Model: Base fluid model ready to be extended or added to ReMKiT1D context
     """
-
-    newModel = sc.CustomModel(modelTag="fluidBase_" + speciesName + "_")
-
+    newModel = mc.Model("fluidBase_" + species.name)
     elMass = 9.10938e-31
+    amu = 1.6605390666e-27  # atomic mass unit
+    speciesMass = species.atomicA * amu
     massRatio = elMass / speciesMass
 
     # Continuity equation flux divergence
-    contDivFluxTerm = sc.GeneralMatrixTerm(
-        densName,
-        fluxName + "_dual",
-        customNormConst=-1,
-        stencilData=sc.staggeredDivStencil(),
-    )
-
-    newModel.addTerm("cont_divFlux", contDivFluxTerm)
+    newModel.ddt[density] += - stencils.StaggeredDivStencil()(flux.dual).rename("cont_divFlux")
 
     # Momentum equation pressure gradient
 
-    vDataPressure = sc.VarData(reqColVars=[tempName])
-
-    pressureFradTerm = sc.GeneralMatrixTerm(
-        fluxName + "_dual",
-        implicitVar=densName,
-        customNormConst=-massRatio / 2,
-        stencilData=sc.staggeredGradStencil(),
-        varData=vDataPressure,
-    )
-
-    newModel.addTerm("momentum_gradPressure", pressureFradTerm)
+    newModel.ddt[flux.dual] += -massRatio/2 * stencils.StaggeredGradStencil()(temperature * density).rename("momentum_gradPressure")
 
     # Momentum advection
 
-    momentumDivFluxTerm = sc.GeneralMatrixTerm(
-        fluxName + "_dual",
-        fluxName + "_dual",
-        customNormConst=-1,
-        stencilData=sc.centralDiffStencilDiv(cast(str, flowSpeedName + "_dual")),
-    )
+    newModel.ddt[flux.dual] += - stencils.CentralDiffDivStencil(flowSpeed.dual)(flux.dual).rename("momentum_divFlux")
 
-    newModel.addTerm("momentum_divFlux", momentumDivFluxTerm)
-
+    diag = mc.DiagonalStencil()
     # Lorentz force
-    if abs(speciesCharge) > 1e-6:  # Species effectively neutral
-        vDataLorentzForce = sc.VarData(reqRowVars=[densName + "_dual"])
+    if abs(species.charge) > 1e-6:  # Species effectively neutral below this 
 
-        lorentzForceTerm = sc.GeneralMatrixTerm(
-            fluxName + "_dual",
-            implicitVar=electricFieldName + "_dual",
-            customNormConst=speciesCharge * massRatio,
-            stencilData=sc.diagonalStencil(),
-            varData=vDataLorentzForce,
-        )
+        newModel.ddt[flux.dual] += species.charge * massRatio *density.dual * diag(eField.dual).rename("momentum_lorentzForce")
 
-        newModel.addTerm("momentum_lorentzForce", lorentzForceTerm)
+    if energyDensity is not None:
+        # Implicit temperature calculation
 
-    # Implicit temperature calculation
-
-    # Identity term
-
-    identityTermT = sc.GeneralMatrixTerm(
-        tempName, customNormConst=-1, stencilData=sc.diagonalStencil()
-    )
-
-    newModel.addTerm("temperature_identity", identityTermT)
-
-    # 2/3 W/n term
-
-    vDataW = sc.VarData(reqRowVars=[densName], reqRowPowers=[-1.0])
-
-    termW = sc.GeneralMatrixTerm(
-        tempName,
-        implicitVar=energyName,
-        customNormConst=2 / 3,
-        varData=vDataW,
-        stencilData=sc.diagonalStencil(),
-    )
-
-    newModel.addTerm("temperature_w", termW)
-
-    # kinetic energy term
-
-    vDataU2 = sc.VarData(
-        reqColVars=[fluxName + "_dual", densName + "_dual"], reqColPowers=[1.0, -2.0]
-    )
-
-    termU2 = sc.GeneralMatrixTerm(
-        tempName,
-        implicitVar=fluxName + "_dual",
-        customNormConst=-2 / (3 * massRatio),
-        varData=vDataU2,
-        stencilData=sc.diagonalStencil(),
-    )
-
-    newModel.addTerm("temperature_U2", termU2)
-
-    # Energy advection
-
-    vDataWAdv = sc.VarData(
-        reqColVars=[energyName + "_dual", densName + "_dual"], reqColPowers=[1.0, -1.0]
-    )
-
-    wAdvFluxDiv = sc.GeneralMatrixTerm(
-        energyName,
-        fluxName + "_dual",
-        customNormConst=-1,
-        stencilData=sc.staggeredDivStencil(),
-        varData=vDataWAdv,
-    )
-
-    newModel.addTerm("energy_wAdv", wAdvFluxDiv)
-
-    # Pressure advection
-
-    vDataPAdv = sc.VarData(reqColVars=[tempName + "_dual"])
-
-    pAdvFluxDiv = sc.GeneralMatrixTerm(
-        energyName,
-        fluxName + "_dual",
-        customNormConst=-1,
-        stencilData=sc.staggeredDivStencil(),
-        varData=vDataPAdv,
-    )
-
-    newModel.addTerm("energy_pAdv", pAdvFluxDiv)
-
-    # Lorentz Force work
-    if abs(speciesCharge) > 1e-6:  # Species effectively neutral
-        vDataLorentzWork = sc.VarData(reqColVars=[fluxName + "_dual"])
-
-        workTerm = sc.GeneralMatrixTerm(
-            energyName,
-            implicitVar=electricFieldName + "_dual",
-            customNormConst=2 * speciesCharge,
-            stencilData=sc.diagonalStencil(),
-            varData=vDataLorentzWork,
-        )
-
-        newModel.addTerm("energy_lorentzWork", workTerm)
-
-    # Heatflux terms
-
-    if heatfluxVar is not None:
         # Identity term
+        newModel.ddt[temperature] += - diag(temperature).rename("temperature_identity")
 
-        identityTermQ = sc.GeneralMatrixTerm(
-            cast(str, heatfluxVar) + "_dual",
-            customNormConst=-1,
-            stencilData=sc.diagonalStencil(),
-        )
+        # 2/3 W/n term
 
-        newModel.addTerm("heatflux_identity", identityTermQ)
+        newModel.ddt[temperature] += 2/3 * density**(-1) * diag(energyDensity).rename("temperature_w")
 
-        # Heatflux divergence in energy equation
+        # kinetic energy term
 
-        divq = sc.GeneralMatrixTerm(
-            energyName,
-            implicitVar=cast(str, heatfluxVar) + "_dual",
-            customNormConst=-1,
-            stencilData=sc.staggeredDivStencil(),
-        )
+        newModel.ddt[temperature] += -2/(3*massRatio) * diag(flux.dual ** 2 / density.dual ** 2).rename("temperature_U2")
 
-        newModel.addTerm("energy_divq", divq)
+        # Energy advection
+
+        newModel.ddt[energyDensity] += - stencils.StaggeredDivStencil()(energyDensity.dual * flux.dual / density.dual).rename("energy_wAdv")
+
+        # Pressure advection
+
+        newModel.ddt[energyDensity] += - stencils.StaggeredDivStencil()(temperature.dual * flux.dual).rename("energy_pAdv")
+
+        # Lorentz Force work
+        if abs(species.charge) > 1e-6:  # Species effectively neutral below this charge
+
+            newModel.ddt[energyDensity] += 2*species.charge * diag(flux.dual * eField.dual).rename("energy_lorentzWork")
+
+        # Heatflux terms
+
+        if heatflux is not None:
+            # Identity term
+
+            newModel.ddt[heatflux.dual] += - diag(heatflux.dual).rename("heatflux_identity")
+
+            # Heatflux divergence in energy equation
+
+            newModel.ddt[energyDensity] += - stencils.StaggeredDivStencil()(heatflux.dual).rename("energy_divq")
 
     # Viscosity
-    if viscVar is not None:
+    if viscosity is not None:
         # Identity term
 
-        identityTermPI = sc.GeneralMatrixTerm(
-            cast(str, viscVar), customNormConst=-1, stencilData=sc.diagonalStencil()
-        )
-
-        newModel.addTerm("viscosity_identity", identityTermPI)
+        newModel.ddt[viscosity] += -diag(viscosity).rename("viscosity_identity")
 
         # Viscosity divergence in momentum equation
 
-        vData = sc.VarData()
-        if viscosityLimitMultName is not None:
-            vData = sc.VarData(reqColVars=[viscosityLimitMultName])
+        if viscosityLimitMult is not None: 
 
-        divpi = sc.GeneralMatrixTerm(
-            fluxName + "_dual",
-            implicitVar=viscVar,
-            customNormConst=-massRatio / 2,
-            stencilData=sc.staggeredDivStencil(),
-            varData=vData,
-        )
+            newModel.ddt[flux.dual] += - massRatio/2 * stencils.StaggeredDivStencil()(viscosityLimitMult*viscosity).rename("momentum_divpi")
 
-        newModel.addTerm("momentum_divpi", divpi)
+        else:
 
-        # Viscosity advection/heating in energy equation
+            newModel.ddt[flux.dual] += - massRatio/2 * stencils.StaggeredDivStencil()(viscosity).rename("momentum_divpi")
 
-        vData = sc.VarData(
-            reqColVars=[viscVar + "_dual", densName + "_dual"], reqColPowers=[1.0, -1.0]
-        )
-        if viscosityLimitMultName is not None:
-            vData = sc.VarData(
-                reqColVars=[
-                    viscosityLimitMultName + "_dual",
-                    viscVar + "_dual",
-                    densName + "_dual",
-                ],
-                reqColPowers=[1.0, 1.0, -1.0],
-            )
 
-        divpiu = sc.GeneralMatrixTerm(
-            energyName,
-            implicitVar=fluxName + "_dual",
-            customNormConst=-1,
-            stencilData=sc.staggeredDivStencil(),
-            varData=vData,
-        )
+        if energyDensity is not None:
+            # Viscosity advection/heating in energy equation
 
-        newModel.addTerm("energy_divpiu", divpiu)
+            if viscosityLimitMult is not None: 
+            
+                newModel.ddt[energyDensity] += - stencils.StaggeredDivStencil()(viscosityLimitMult.dual*viscosity.dual*flux.dual/density.dual).rename("energy_divpiu")
 
+            else:
+
+                newModel.ddt[energyDensity] += - stencils.StaggeredDivStencil()(viscosity.dual*flux.dual/density.dual).rename("energy_divpiu")
+            
     return newModel
 
-
-def bohmBoundaryModel(
-    speciesName: str,
-    densityName: str,
-    fluxName: str,
-    flowSpeedName: str,
-    energyName: str,
-    temperatureName: str,
-    sonicSpeed: str,
-    speciesMass: float,
-    sheathGamma: str,
-    boundaryFlowSpeed: Union[str, None] = None,
-    viscosityName: Union[str, None] = None,
-    viscosityLimitMultName: Union[str, None] = None,
-    leftBoundary=False,
-) -> sc.CustomModel:
-    """Adds Bohm outflow boundary conditions on the continuity, momentum, and energy equations for a given species.
+def bohmBoundaryModel(species:Species,density:Variable,flux:Variable,flowSpeed:Variable,temperature:Variable,sonicSpeed:Variable,energyDensity:Optional[Variable]=None,sheathGamma:Optional[Variable]=None,boundaryFlowSpeed:Optional[Variable]=None,viscosity:Optional[Variable]=None,viscosityLimitMult:Optional[Variable]=None,leftBoundary=False) -> mc.Model:
+    """Adds Bohm outflow boundary conditions on the continuity, momentum, and energy equations for a given species. Assumes default norms.
 
     Args:
-        speciesName (str): Name of the species. Used to name the model
-        densName (str): Name of the density variable associated to the species
-        fluxName (str): Name of the flux variable associated to the species
-        flowSpeedName (str): Name of the flow speed variable associated to the species
-        energyName (str): Name of the energy variable associated to the species
-        tempName (str): Name of the temperature variable associated with the species
-        sonicSpeed (str): Name of the sonic speed variable used to get the Bohm speed at the boundary
-        speciesMass (float): Species mass in kg
-        sheathGamma (str): Sheath gamma (scalar) at the boundary
-        boundaryFlowSpeed (Union[str,None], optional): Flow speed at the boundary (scalar) used to calculate the kinetic energy outflow. Defaults to None, excluding this term.
-        viscosityName (Union[str,None], optional): Viscosity used to calculate the boundary component of div(u*pi) heating. Defaults to None, excluding this term.
-        viscosityLimitMultName (Union[str,None], optional): Viscosity limitation multiplier used to calculate the boundary component of div(u*pi) heating. Defaults to None, removing the limit.
-        leftBoundary (bool, optional): If true will treat the boundary conditions as if they were at the left boundary of the domain. Defaults to False.
+        species (Species): Species for which the model is generated
+        density (Variable): Density variable
+        flux (Variable): Particle flux variable
+        flowSpeed (Variable): Flow speed variable corresponding to flux/density
+        temperature (Variable): Temperature variable
+        sonicSpeed (Variable): Sonic speed corresponding to the outflow Bohm speed
+        energyDensity (Optional[Variable], optional): Energy density variable (total). Defaults to None, not adding the energy equation contribution.
+        sheathGamma (Optional[Variable], optional): Sheath heat transmission coefficient. Defaults to None, but is required if energyDensity is not None.
+        boundaryFlowSpeed (Optional[Variable], optional): Boundary flow speed (scalar) used for kinetic energy outflow BC. Defaults to None, omitting the explicit kinetic energy outflow.
+        viscosity (Optional[Variable], optional): Viscosity variable, if present adds viscous heating due to the viscosity boundary condition. Defaults to None.
+        viscosityLimitMult (Optional[Variable], optional): Multiplicative viscosity limiter. Defaults to None, omitting the limiter.
+        leftBoundary (bool, optional): Set to true if this is the left boundary. Defaults to False.
 
     Returns:
-        sc.CustomModel: Model object containing boundary conditions on the fluid equations of given species
+        Model: Bohm boundary condition model for the given species
     """
-
+    newModel = mc.Model("bohmBoundary_" + species.name)
     elMass = 9.10938e-31
+    amu = 1.6605390666e-27  # atomic mass unit
+    speciesMass = species.atomicA * amu
     massRatio = elMass / speciesMass
 
-    newModel = sc.CustomModel(modelTag="bohmBoundary_" + speciesName + "_")
-
     # Continuity BC
-    bcCont = sc.GeneralMatrixTerm(
-        densityName,
-        customNormConst=-1.0,
-        stencilData=sc.boundaryStencilDiv(
-            flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
-        ),
-    )
 
-    newModel.addTerm("continuity_Bohm", bcCont)
+    bcDiv = stencils.BCDivStencil(flowSpeed,sonicSpeed,isLeft=leftBoundary)
+
+    newModel.ddt[density] += - bcDiv(density).rename("continuity_Bohm")
 
     # Momentum BC
-    bcMom = sc.GeneralMatrixTerm(
-        fluxName + "_dual",
-        customNormConst=-1.0,
-        stencilData=sc.boundaryStencilDiv(
-            flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
-        ),
-    )
 
-    newModel.addTerm("momentum_Bohm", bcMom)
+    newModel.ddt[flux.dual] += - bcDiv(flux.dual).rename("momentum_Bohm")
 
+    if energyDensity is not None:
+
+        assert sheathGamma is not None, "sheathGamma must be present in bohmBoundaryModel if energyDensity is evolved"
     # Energy BC
 
-    vDataBC = sc.VarData(reqRowVars=[sheathGamma], reqColVars=[temperatureName])
+        newModel.ddt[energyDensity] += - sheathGamma * bcDiv(temperature*density).rename("energy_BCGamma")
 
-    energyBCGamma = sc.GeneralMatrixTerm(
-        energyName,
-        implicitVar=densityName,
-        customNormConst=-1.0,
-        varData=vDataBC,
-        stencilData=sc.boundaryStencilDiv(
-            flowSpeedName, sonicSpeed, isLeft=leftBoundary
-        ),
-    )
+        # Kinetic energy BC
 
-    newModel.addTerm("energy_BCGamma", energyBCGamma)
+        if boundaryFlowSpeed is not None:
 
-    # Kinetic energy BC
+            newModel.ddt[energyDensity] += - massRatio**(-1) * boundaryFlowSpeed**2 * bcDiv(density).rename("energy_BCKin")
 
-    if boundaryFlowSpeed is not None:
-        vDataBCKin = sc.VarData(
-            reqRowVars=[cast(str, boundaryFlowSpeed)], reqRowPowers=[2.0]
-        )
+        # Viscous heating BC
 
-        energyBCU = sc.GeneralMatrixTerm(
-            energyName,
-            implicitVar=densityName,
-            customNormConst=-1 / massRatio,
-            varData=vDataBCKin,
-            stencilData=sc.boundaryStencilDiv(
-                flowSpeedName, sonicSpeed, isLeft=leftBoundary
-            ),
-        )
-        newModel.addTerm("energy_BCKin", energyBCU)
+        if viscosity is not None:
 
-    # Viscous heating BC
+            if viscosityLimitMult is not None: 
 
-    if viscosityName is not None:
-        vData = sc.VarData()
-        if viscosityLimitMultName is not None:
-            vData = sc.VarData(reqColVars=[viscosityLimitMultName])
+                newModel.ddt[energyDensity] += - bcDiv(viscosityLimitMult*viscosity).rename("energy_BCVisc")
 
-        energyBCVisc = sc.GeneralMatrixTerm(
-            energyName,
-            implicitVar=viscosityName,
-            customNormConst=-1.0,
-            stencilData=sc.boundaryStencilDiv(
-                flowSpeedName, sonicSpeed, isLeft=leftBoundary
-            ),
-            varData=vData,
-        )
-        newModel.addTerm("energy_BCVisc", energyBCVisc)
+            else:
+
+                newModel.ddt[energyDensity] += - bcDiv(viscosity).rename("energy_BCVisc")
 
     return newModel
 
 
-def addNodeMatrixTermModel(
-    wrapper: RKWrapper,
-    modelTag: str,
-    evolvedVar: str,
-    termDefs: List[Tuple[ct.Node, str]],
-    stencilData: Union[List[dict], None] = None,
-):
-    """Adds model with additive matrix terms of the form rowVar * implicitVar, where rowVar is a modelbound variable derived from a treeDerivation given a node. Optionally gives each matrix terms a different stencil.
+# def bohmBoundaryModel(
+#     speciesName: str,
+#     densityName: str,
+#     fluxName: str,
+#     flowSpeedName: str,
+#     energyName: str,
+#     temperatureName: str,
+#     sonicSpeed: str,
+#     speciesMass: float,
+#     sheathGamma: str,
+#     boundaryFlowSpeed: Union[str, None] = None,
+#     viscosityName: Union[str, None] = None,
+#     viscosityLimitMultName: Union[str, None] = None,
+#     leftBoundary=False,
+# ) -> sc.CustomModel:
+#     """Adds Bohm outflow boundary conditions on the continuity, momentum, and energy equations for a given species.
 
-    Args:
-        wrapper (RKWrapper): Wrapper to add model to
-        modelTag (str): Model tag for model to be added
-        evolvedVar (str): Evolved variable for all matrix terms
-        termDefs (List[Tuple[ct.Node,str]]): Term definitions. A list of (Node,implicitVarName) tuples, such that each matrix term is given by the variable calulated using the corresponding tuple's first component (the Node) and with the implicit variable name given by the second component
-        stencilData (Union[List[dict, optional): Optional list of stencil data for each matrix term. Defaults to None.
-    """
+#     Args:
+#         speciesName (str): Name of the species. Used to name the model
+#         densName (str): Name of the density variable associated to the species
+#         fluxName (str): Name of the flux variable associated to the species
+#         flowSpeedName (str): Name of the flow speed variable associated to the species
+#         energyName (str): Name of the energy variable associated to the species
+#         tempName (str): Name of the temperature variable associated with the species
+#         sonicSpeed (str): Name of the sonic speed variable used to get the Bohm speed at the boundary
+#         speciesMass (float): Species mass in kg
+#         sheathGamma (str): Sheath gamma (scalar) at the boundary
+#         boundaryFlowSpeed (Union[str,None], optional): Flow speed at the boundary (scalar) used to calculate the kinetic energy outflow. Defaults to None, excluding this term.
+#         viscosityName (Union[str,None], optional): Viscosity used to calculate the boundary component of div(u*pi) heating. Defaults to None, excluding this term.
+#         viscosityLimitMultName (Union[str,None], optional): Viscosity limitation multiplier used to calculate the boundary component of div(u*pi) heating. Defaults to None, removing the limit.
+#         leftBoundary (bool, optional): If true will treat the boundary conditions as if they were at the left boundary of the domain. Defaults to False.
 
-    newModel = sc.CustomModel(modelTag)
+#     Returns:
+#         sc.CustomModel: Model object containing boundary conditions on the fluid equations of given species
+#     """
 
-    mbData = sc.VarlikeModelboundData()
+#     elMass = 9.10938e-31
+#     massRatio = elMass / speciesMass
 
-    if stencilData is not None:
-        assert len(stencilData) == len(
-            termDefs
-        ), "If provided, stencilData in addNodeMatrixTermModel must conform to length of termDefs"
+#     newModel = sc.CustomModel(modelTag="bohmBoundary_" + speciesName + "_")
 
-    for i, term in enumerate(termDefs):
-        wrapper.addCustomDerivation(
-            "nodeModelDeriv_" + modelTag + "_" + str(i), ct.treeDerivation(term[0])
-        )
-        mbData.addVariable(
-            "nodeVar_" + str(i),
-            sc.derivationRule(
-                "nodeModelDeriv_" + modelTag + "_" + str(i), ct.getLeafVars(term[0])
-            ),
-        )
+#     # Continuity BC
+#     bcCont = sc.GeneralMatrixTerm(
+#         densityName,
+#         customNormConst=-1.0,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
 
-        usedStencilData = sc.diagonalStencil()
-        if stencilData is not None:
-            usedStencilData = stencilData[i]
+#     newModel.addTerm("continuity_Bohm", bcCont)
 
-        newTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            term[1],
-            varData=sc.VarData(reqMBRowVars=["nodeVar_" + str(i)]),
-            stencilData=usedStencilData,
-        )
+#     # Momentum BC
+#     bcMom = sc.GeneralMatrixTerm(
+#         fluxName + "_dual",
+#         customNormConst=-1.0,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
 
-        newModel.addTerm("nodeTerm_" + str(i), newTerm)
+#     newModel.addTerm("momentum_Bohm", bcMom)
 
-    newModel.setModelboundData(mbData.dict())
-    wrapper.addModel(newModel)
+#     # Energy BC
+
+#     vDataBC = sc.VarData(reqRowVars=[sheathGamma], reqColVars=[temperatureName])
+
+#     energyBCGamma = sc.GeneralMatrixTerm(
+#         energyName,
+#         implicitVar=densityName,
+#         customNormConst=-1.0,
+#         varData=vDataBC,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
+
+#     newModel.addTerm("energy_BCGamma", energyBCGamma)
+
+#     # Kinetic energy BC
+
+#     if boundaryFlowSpeed is not None:
+#         vDataBCKin = sc.VarData(
+#             reqRowVars=[cast(str, boundaryFlowSpeed)], reqRowPowers=[2.0]
+#         )
+
+#         energyBCU = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=densityName,
+#             customNormConst=-1 / massRatio,
+#             varData=vDataBCKin,
+#             stencilData=sc.boundaryStencilDiv(
+#                 flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#             ),
+#         )
+#         newModel.addTerm("energy_BCKin", energyBCU)
+
+#     # Viscous heating BC
+
+#     if viscosityName is not None:
+#         vData = sc.VarData()
+#         if viscosityLimitMultName is not None:
+#             vData = sc.VarData(reqColVars=[viscosityLimitMultName])
+
+#         energyBCVisc = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=viscosityName,
+#             customNormConst=-1.0,
+#             stencilData=sc.boundaryStencilDiv(
+#                 flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#             ),
+#             varData=vData,
+#         )
+#         newModel.addTerm("energy_BCVisc", energyBCVisc)
+
+#     return newModel
+
+# def standardBaseFluid(
+#     speciesName: str,
+#     densName: str,
+#     fluxName: str,
+#     flowSpeedName: str,
+#     energyName: str,
+#     tempName: str,
+#     electricFieldName: str,
+#     speciesMass: float,
+#     speciesCharge: float,
+#     heatfluxVar: Union[str, None] = None,
+#     viscVar: Union[str, None] = None,
+#     viscosityLimitMultName: Union[str, None] = None,
+# ) -> sc.CustomModel:
+#     """Generates a standard base fluid model for a species with given variable names (on regular grid, assumes staggered grid is used).
+
+#     The model will include the continuity equation, momentum equation, and energy equation, with the default reflective boundary conditions (should be specified in a separate model).
+
+#     The implicit temperature calculation is also added.
+
+#     No heat flux, viscosity, or sources are added.
+
+#     If the heatflux variable is present it will be assumed to be stationary and will have its identity term and the corresponding bulk divergence terms in the energy equation added.
+
+#     If the viscosity variable is present it will be assumed to be stationary and will have its identity term and the corresponding bulk divergence terms in the momentum and energy equation added.
+
+#     Args:
+#         speciesName (str): Name of the species. Used to name the model
+#         densName (str): Name of the density variable associated to the species
+#         fluxName (str): Name of the flux variable associated to the species
+#         flowSpeedName (str): Name of the flow speed variable associated to the species
+#         energyName (str): Name of the energy variable associated to the species
+#         tempName (str): Name of the temperature variable associated with the species
+#         electricFieldName (str): Name of the implicit electric field variable
+#         speciesMass (float): Species mass in kg
+#         speciesCharge (float): Species charge in e
+#         heatfluxVar (Union[str,None], optional): Name of the stationary heat flux variable associated with the species. Defaults to None, not building any related terms.
+#         viscVar (Union[str,None], optional): Name of the stationary viscosity variable (unlimited) associated with the species. Defaults to None, not building any related terms.
+#         viscosityLimitMultName (Union[str,None], optional): Viscosity limitation multiplier (applied directly in relevant terms). Defaults to None, removing the limit.
+
+#     Returns:
+#         sc.CustomModel: Model object holding the base fluid terms for a given species
+#     """
+
+#     newModel = sc.CustomModel(modelTag="fluidBase_" + speciesName + "_")
+
+#     elMass = 9.10938e-31
+#     massRatio = elMass / speciesMass
+
+#     # Continuity equation flux divergence
+#     contDivFluxTerm = sc.GeneralMatrixTerm(
+#         densName,
+#         fluxName + "_dual",
+#         customNormConst=-1,
+#         stencilData=sc.staggeredDivStencil(),
+#     )
+
+#     newModel.addTerm("cont_divFlux", contDivFluxTerm)
+
+#     # Momentum equation pressure gradient
+
+#     vDataPressure = sc.VarData(reqColVars=[tempName])
+
+#     pressureFradTerm = sc.GeneralMatrixTerm(
+#         fluxName + "_dual",
+#         implicitVar=densName,
+#         customNormConst=-massRatio / 2,
+#         stencilData=sc.staggeredGradStencil(),
+#         varData=vDataPressure,
+#     )
+
+#     newModel.addTerm("momentum_gradPressure", pressureFradTerm)
+
+#     # Momentum advection
+
+#     momentumDivFluxTerm = sc.GeneralMatrixTerm(
+#         fluxName + "_dual",
+#         fluxName + "_dual",
+#         customNormConst=-1,
+#         stencilData=sc.centralDiffStencilDiv(cast(str, flowSpeedName + "_dual")),
+#     )
+
+#     newModel.addTerm("momentum_divFlux", momentumDivFluxTerm)
+
+#     # Lorentz force
+#     if abs(speciesCharge) > 1e-6:  # Species effectively neutral
+#         vDataLorentzForce = sc.VarData(reqRowVars=[densName + "_dual"])
+
+#         lorentzForceTerm = sc.GeneralMatrixTerm(
+#             fluxName + "_dual",
+#             implicitVar=electricFieldName + "_dual",
+#             customNormConst=speciesCharge * massRatio,
+#             stencilData=sc.diagonalStencil(),
+#             varData=vDataLorentzForce,
+#         )
+
+#         newModel.addTerm("momentum_lorentzForce", lorentzForceTerm)
+
+#     # Implicit temperature calculation
+
+#     # Identity term
+
+#     identityTermT = sc.GeneralMatrixTerm(
+#         tempName, customNormConst=-1, stencilData=sc.diagonalStencil()
+#     )
+
+#     newModel.addTerm("temperature_identity", identityTermT)
+
+#     # 2/3 W/n term
+
+#     vDataW = sc.VarData(reqRowVars=[densName], reqRowPowers=[-1.0])
+
+#     termW = sc.GeneralMatrixTerm(
+#         tempName,
+#         implicitVar=energyName,
+#         customNormConst=2 / 3,
+#         varData=vDataW,
+#         stencilData=sc.diagonalStencil(),
+#     )
+
+#     newModel.addTerm("temperature_w", termW)
+
+#     # kinetic energy term
+
+#     vDataU2 = sc.VarData(
+#         reqColVars=[fluxName + "_dual", densName + "_dual"], reqColPowers=[1.0, -2.0]
+#     )
+
+#     termU2 = sc.GeneralMatrixTerm(
+#         tempName,
+#         implicitVar=fluxName + "_dual",
+#         customNormConst=-2 / (3 * massRatio),
+#         varData=vDataU2,
+#         stencilData=sc.diagonalStencil(),
+#     )
+
+#     newModel.addTerm("temperature_U2", termU2)
+
+#     # Energy advection
+
+#     vDataWAdv = sc.VarData(
+#         reqColVars=[energyName + "_dual", densName + "_dual"], reqColPowers=[1.0, -1.0]
+#     )
+
+#     wAdvFluxDiv = sc.GeneralMatrixTerm(
+#         energyName,
+#         fluxName + "_dual",
+#         customNormConst=-1,
+#         stencilData=sc.staggeredDivStencil(),
+#         varData=vDataWAdv,
+#     )
+
+#     newModel.addTerm("energy_wAdv", wAdvFluxDiv)
+
+#     # Pressure advection
+
+#     vDataPAdv = sc.VarData(reqColVars=[tempName + "_dual"])
+
+#     pAdvFluxDiv = sc.GeneralMatrixTerm(
+#         energyName,
+#         fluxName + "_dual",
+#         customNormConst=-1,
+#         stencilData=sc.staggeredDivStencil(),
+#         varData=vDataPAdv,
+#     )
+
+#     newModel.addTerm("energy_pAdv", pAdvFluxDiv)
+
+#     # Lorentz Force work
+#     if abs(speciesCharge) > 1e-6:  # Species effectively neutral
+#         vDataLorentzWork = sc.VarData(reqColVars=[fluxName + "_dual"])
+
+#         workTerm = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=electricFieldName + "_dual",
+#             customNormConst=2 * speciesCharge,
+#             stencilData=sc.diagonalStencil(),
+#             varData=vDataLorentzWork,
+#         )
+
+#         newModel.addTerm("energy_lorentzWork", workTerm)
+
+#     # Heatflux terms
+
+#     if heatfluxVar is not None:
+#         # Identity term
+
+#         identityTermQ = sc.GeneralMatrixTerm(
+#             cast(str, heatfluxVar) + "_dual",
+#             customNormConst=-1,
+#             stencilData=sc.diagonalStencil(),
+#         )
+
+#         newModel.addTerm("heatflux_identity", identityTermQ)
+
+#         # Heatflux divergence in energy equation
+
+#         divq = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=cast(str, heatfluxVar) + "_dual",
+#             customNormConst=-1,
+#             stencilData=sc.staggeredDivStencil(),
+#         )
+
+#         newModel.addTerm("energy_divq", divq)
+
+#     # Viscosity
+#     if viscVar is not None:
+#         # Identity term
+
+#         identityTermPI = sc.GeneralMatrixTerm(
+#             cast(str, viscVar), customNormConst=-1, stencilData=sc.diagonalStencil()
+#         )
+
+#         newModel.addTerm("viscosity_identity", identityTermPI)
+
+#         # Viscosity divergence in momentum equation
+
+#         vData = sc.VarData()
+#         if viscosityLimitMultName is not None:
+#             vData = sc.VarData(reqColVars=[viscosityLimitMultName])
+
+#         divpi = sc.GeneralMatrixTerm(
+#             fluxName + "_dual",
+#             implicitVar=viscVar,
+#             customNormConst=-massRatio / 2,
+#             stencilData=sc.staggeredDivStencil(),
+#             varData=vData,
+#         )
+
+#         newModel.addTerm("momentum_divpi", divpi)
+
+#         # Viscosity advection/heating in energy equation
+
+#         vData = sc.VarData(
+#             reqColVars=[viscVar + "_dual", densName + "_dual"], reqColPowers=[1.0, -1.0]
+#         )
+#         if viscosityLimitMultName is not None:
+#             vData = sc.VarData(
+#                 reqColVars=[
+#                     viscosityLimitMultName + "_dual",
+#                     viscVar + "_dual",
+#                     densName + "_dual",
+#                 ],
+#                 reqColPowers=[1.0, 1.0, -1.0],
+#             )
+
+#         divpiu = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=fluxName + "_dual",
+#             customNormConst=-1,
+#             stencilData=sc.staggeredDivStencil(),
+#             varData=vData,
+#         )
+
+#         newModel.addTerm("energy_divpiu", divpiu)
+
+#     return newModel
+
+
+# def bohmBoundaryModel(
+#     speciesName: str,
+#     densityName: str,
+#     fluxName: str,
+#     flowSpeedName: str,
+#     energyName: str,
+#     temperatureName: str,
+#     sonicSpeed: str,
+#     speciesMass: float,
+#     sheathGamma: str,
+#     boundaryFlowSpeed: Union[str, None] = None,
+#     viscosityName: Union[str, None] = None,
+#     viscosityLimitMultName: Union[str, None] = None,
+#     leftBoundary=False,
+# ) -> sc.CustomModel:
+#     """Adds Bohm outflow boundary conditions on the continuity, momentum, and energy equations for a given species.
+
+#     Args:
+#         speciesName (str): Name of the species. Used to name the model
+#         densName (str): Name of the density variable associated to the species
+#         fluxName (str): Name of the flux variable associated to the species
+#         flowSpeedName (str): Name of the flow speed variable associated to the species
+#         energyName (str): Name of the energy variable associated to the species
+#         tempName (str): Name of the temperature variable associated with the species
+#         sonicSpeed (str): Name of the sonic speed variable used to get the Bohm speed at the boundary
+#         speciesMass (float): Species mass in kg
+#         sheathGamma (str): Sheath gamma (scalar) at the boundary
+#         boundaryFlowSpeed (Union[str,None], optional): Flow speed at the boundary (scalar) used to calculate the kinetic energy outflow. Defaults to None, excluding this term.
+#         viscosityName (Union[str,None], optional): Viscosity used to calculate the boundary component of div(u*pi) heating. Defaults to None, excluding this term.
+#         viscosityLimitMultName (Union[str,None], optional): Viscosity limitation multiplier used to calculate the boundary component of div(u*pi) heating. Defaults to None, removing the limit.
+#         leftBoundary (bool, optional): If true will treat the boundary conditions as if they were at the left boundary of the domain. Defaults to False.
+
+#     Returns:
+#         sc.CustomModel: Model object containing boundary conditions on the fluid equations of given species
+#     """
+
+#     elMass = 9.10938e-31
+#     massRatio = elMass / speciesMass
+
+#     newModel = sc.CustomModel(modelTag="bohmBoundary_" + speciesName + "_")
+
+#     # Continuity BC
+#     bcCont = sc.GeneralMatrixTerm(
+#         densityName,
+#         customNormConst=-1.0,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
+
+#     newModel.addTerm("continuity_Bohm", bcCont)
+
+#     # Momentum BC
+#     bcMom = sc.GeneralMatrixTerm(
+#         fluxName + "_dual",
+#         customNormConst=-1.0,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, lowerBoundVar=sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
+
+#     newModel.addTerm("momentum_Bohm", bcMom)
+
+#     # Energy BC
+
+#     vDataBC = sc.VarData(reqRowVars=[sheathGamma], reqColVars=[temperatureName])
+
+#     energyBCGamma = sc.GeneralMatrixTerm(
+#         energyName,
+#         implicitVar=densityName,
+#         customNormConst=-1.0,
+#         varData=vDataBC,
+#         stencilData=sc.boundaryStencilDiv(
+#             flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#         ),
+#     )
+
+#     newModel.addTerm("energy_BCGamma", energyBCGamma)
+
+#     # Kinetic energy BC
+
+#     if boundaryFlowSpeed is not None:
+#         vDataBCKin = sc.VarData(
+#             reqRowVars=[cast(str, boundaryFlowSpeed)], reqRowPowers=[2.0]
+#         )
+
+#         energyBCU = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=densityName,
+#             customNormConst=-1 / massRatio,
+#             varData=vDataBCKin,
+#             stencilData=sc.boundaryStencilDiv(
+#                 flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#             ),
+#         )
+#         newModel.addTerm("energy_BCKin", energyBCU)
+
+#     # Viscous heating BC
+
+#     if viscosityName is not None:
+#         vData = sc.VarData()
+#         if viscosityLimitMultName is not None:
+#             vData = sc.VarData(reqColVars=[viscosityLimitMultName])
+
+#         energyBCVisc = sc.GeneralMatrixTerm(
+#             energyName,
+#             implicitVar=viscosityName,
+#             customNormConst=-1.0,
+#             stencilData=sc.boundaryStencilDiv(
+#                 flowSpeedName, sonicSpeed, isLeft=leftBoundary
+#             ),
+#             varData=vData,
+#         )
+#         newModel.addTerm("energy_BCVisc", energyBCVisc)
+
+#     return newModel

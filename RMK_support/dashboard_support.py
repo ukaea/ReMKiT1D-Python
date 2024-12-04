@@ -3,9 +3,36 @@ import holoviews as hv  # type: ignore
 import panel as pn
 import numpy as np
 from .grid import Grid
-from typing import Union, List
+from .variable_container import VariableContainer,Variable
+from . import IO_support as io
+from typing import Union, List,Dict
 import param  # type: ignore
 
+class RMKExplorer: 
+
+    def __init__(self,variables:VariableContainer,runPaths:Dict[str,str],**kwargs):
+
+        self.__variables__ = variables 
+        self.__runPaths__ = runPaths 
+
+        self.__runTimes__ ={run:io.loadVariableFromHDF5(self.__variables__["time"],filepaths=[path+file for file in io.getOutputFilenames(path)]).data for run,path in runPaths.items()}
+
+        self.__runMaxTime__ = max(np.max(self.__runTimes__[run]) for run in self.__runTimes__)
+        self.__runMinTime__ = min(np.min(self.__runTimes__[run]) for run in self.__runTimes__)
+
+        self.__timeResolution__ = kwargs.get("timeResolution",50)
+
+        self.__datasets__ = {run:io.loadVarContFromHDF5(self.__variables__["time"],filepaths=[path+file for file in io.getOutputFilenames(path)]).dataset.interp(t=np.linspace(self.__runMinTime__,self.__runMaxTime__,self.__timeResolution__,endpoint=True)) for run,path in runPaths.items()}
+
+    def __load__(self,varName:str,run:str):
+        path = self.__runPaths__[run]
+        if varName in self.__datasets__[run]:
+            return 
+
+        newVarCont = io.loadVarContFromHDF5(self.__variables__[varName],filepaths=[path+file for file in io.getOutputFilenames(path)])
+        self.__datasets__[run]=xr.merge([self.__datasets__[run],newVarCont.dataset.interp(t=np.linspace(self.__runMinTime__,self.__runMaxTime__,self.__timeResolution__,endpoint=True))],compat="override")
+            
+        
 
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):
@@ -29,8 +56,13 @@ class ReMKiT1DDashboard:
         self, dataname, time, pos, harmonic, logY, energyGrid, maxV, **kwargs
     ):
         assert self.__data__[dataname].coords.dims == (
-            "time",
+            "t",
             "x",
+            "h",
+            "v",
+        ) or self.__data__[dataname].coords.dims == (
+            "t",
+            "x_dual",
             "h",
             "v",
         ), "Non-dist dataname in load_dist"
@@ -54,8 +86,11 @@ class ReMKiT1DDashboard:
         self, dataname, val, mode, logy=False, removeTitle=False, **kwargs
     ):
         assert self.__data__[dataname].coords.dims == (
-            "time",
+            "t",
             "x",
+        ) or self.__data__[dataname].coords.dims == (
+            "t",
+            "x_dual",
         ), "Non-fluid dataname in load_fluid"
         titlePrefix = "Variable: " + dataname + ", "
         if removeTitle:
@@ -88,16 +123,16 @@ class ReMKiT1DDashboard:
                 ).opts(
                     framewise=True,
                     title=titlePrefix
-                    + f't = {self.__data__.coords["time"].values[val]:.2f} '
-                    + self.__data__.coords["time"].units,
+                    + f't = {self.__data__.coords["t"].values[val]:.2f} '
+                    + self.__data__.coords["t"].units,
                     logy=logy,
                 )
             else:
                 curve = hv.Curve(self.__data__[dataname][val, :], label=dataname).opts(
                     framewise=True,
                     title=titlePrefix
-                    + f't = {self.__data__.coords["time"].values[val]:.2f} '
-                    + self.__data__.coords["time"].units,
+                    + f't = {self.__data__.coords["t"].values[val]:.2f} '
+                    + self.__data__.coords["t"].units,
                     logy=logy,
                 )
 
@@ -128,10 +163,10 @@ class ReMKiT1DDashboard:
                 target.start = 0
                 target.end = len(self.__data__.coords["x"].values) - 1
             if event.new == "Fixed time":
-                target.name = "time"
+                target.name = "t"
                 target.value = 0
                 target.start = 0
-                target.end = len(self.__data__.coords["time"].values) - 1
+                target.end = len(self.__data__.coords["t"].values) - 1
 
         opt.link(val, callbacks={"value": callback})
         opt2.link(val2, callbacks={"value": callback})
@@ -169,8 +204,8 @@ class ReMKiT1DDashboard:
             variable = param.ObjectSelector(
                 default=self.__distNames__[0], objects=self.__distNames__
             )
-            time = param.Integer(
-                default=0, bounds=(0, len(self.__data__.coords["time"].values) - 1)
+            t = param.Integer(
+                default=0, bounds=(0, len(self.__data__.coords["t"].values) - 1)
             )
             pos = param.Integer(
                 default=0, bounds=(0, len(self.__data__.coords["x"].values) - 1)
@@ -189,11 +224,16 @@ class ReMKiT1DDashboard:
                 self.__data__ = data
                 super().__init__(**params)
 
-            @param.depends("variable", "time", "pos", "harmonic", "maxV", "energyGrid")
+            @param.depends("variable", "t", "pos", "harmonic", "maxV", "energyGrid")
             def load_dist_curve(self):
                 assert self.__data__[self.variable].coords.dims == (
-                    "time",
+                    "t",
                     "x",
+                    "h",
+                    "v",
+                ) or self.__data__[self.variable].coords.dims == (
+                    "t",
+                    "x_dual",
                     "h",
                     "v",
                 ), "Non-dist dataname in load_dist"
@@ -203,7 +243,7 @@ class ReMKiT1DDashboard:
                         (
                             self.__data__.coords["v"][: self.maxV + 1] ** 2,
                             self.__data__[self.variable][
-                                self.time, self.pos, self.harmonic, : self.maxV + 1
+                                self.t, self.pos, self.harmonic, : self.maxV + 1
                             ],
                         ),
                         label=self.variable,
@@ -211,7 +251,7 @@ class ReMKiT1DDashboard:
                 else:
                     curve = hv.Curve(
                         self.__data__[self.variable][
-                            self.time, self.pos, self.harmonic, : self.maxV + 1
+                            self.t, self.pos, self.harmonic, : self.maxV + 1
                         ],
                         label=self.variable,
                     ).opts(framewise=True, logy=self.logY)
@@ -272,12 +312,12 @@ class ReMKiT1DDashboard:
                         for name in dataNames
                     ]
                 )
-                for t in range(len(self.__data__.coords["time"].values))
+                for t in range(len(self.__data__.coords["t"].values))
             }
             kdims = [
                 hv.Dimension(
-                    ("time", "Time"),
-                    unit=self.__data__.coords["time"].attrs["units"],
+                    ("t", "Time"),
+                    unit=self.__data__.coords["t"].attrs["units"],
                     default=0,
                 )
             ]

@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v2.0.0, xxxx-xx-xx
+
+### Breaking Changes
+
+- 
+
+### Deprecations
+
+- 
+
+### New Features
+
+- 
+
+### Bug Fixes
+
+- Missing ion density added to flowing cold-ion collision operator in common_models
+
+### New Notebooks 
+
+- 
+
 ## v1.2.1, 2024-11-06
 
 - New standard textbook option for logLei discontinuity fix
