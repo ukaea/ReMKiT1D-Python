@@ -6,12 +6,11 @@ from typing import List
 def loadAMJUELReactionData(
     reaction: str, section: str, filename="../data/amjuel.tex"
 ) -> List[str]:
-    """Loads and performs minor cleanup of individual AMJUEL reaction data
+    """Loads and performs minor cleanup of individual AMJUEL reaction data. Returns first match.
 
     Args:
         reaction (str): Reaction number in AMJUEL
         filename (str, optional): Name of AMJUEL tex file. Defaults to "amjuel.tex".
-        instance (int, optional): Which instance of the reaction data to use (AMJUEL has non-unique data labelling). Defaults to 0, using the first instance.
 
     Returns:
         List[str]: Split lines corresponding to given reaction
