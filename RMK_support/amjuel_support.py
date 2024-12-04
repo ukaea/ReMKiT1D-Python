@@ -2,13 +2,13 @@ from . import amjuel_reader as ar
 from .derivations import GenIntPolynomialDerivation
 from .variable_container import Variable
 import numpy as np
-from typing import Dict,Tuple,Union
+from typing import Dict, Tuple, Union
 
 
 def AMJUELDeriv(
-    derivName:str,
-    reaction:str,
-    section:str,
+    derivName: str,
+    reaction: str,
+    section: str,
     amjuelFilename="../data/amjuel.tex",
     timeNorm=0.72204953888999173e-7,
     densNorm=1e19,
@@ -21,13 +21,15 @@ def AMJUELDeriv(
     polyPowers = np.array([[j, i] for (i, j), _ in np.ndenumerate(fit)])
     multConst = 1e-6 * timeNorm * densNorm / tempNorm
     funcName = "exp"
-    return GenIntPolynomialDerivation(derivName,polyPowers, polyCoeffs, multConst, funcName)
+    return GenIntPolynomialDerivation(
+        derivName, polyPowers, polyCoeffs, multConst, funcName
+    )
 
 
 def AMJUELDeriv1D(
-    derivName:str,
-    reaction:str,
-    section:str,
+    derivName: str,
+    reaction: str,
+    section: str,
     coefName="b",
     amjuelFilename="../data/amjuel.tex",
     timeNorm=0.72204953888999173e-7,
@@ -41,25 +43,35 @@ def AMJUELDeriv1D(
     polyPowers = np.array(len(fit))
     multConst = 1e-6 * timeNorm * densNorm / tempNorm
     funcName = "exp"
-    return GenIntPolynomialDerivation(derivName,polyPowers, polyCoeffs, multConst, funcName)
+    return GenIntPolynomialDerivation(
+        derivName, polyPowers, polyCoeffs, multConst, funcName
+    )
 
 
 def generateAMJUELDerivs(
-    derivDict: Dict[str,Tuple[str,str]],
-    norms:Dict[str,float],
-    timeNorm:Union[float,None] = None,
+    derivDict: Dict[str, Tuple[str, str]],
+    norms: Dict[str, float],
+    timeNorm: Union[float, None] = None,
     amjuelFilename="../data/amjuel.tex",
-):  
+):
     usedTimeNorm = norms["time"]
     if timeNorm is not None:
         usedTimeNorm = timeNorm
 
-    derivs:Dict[str,GenIntPolynomialDerivation] = {}
+    derivs: Dict[str, GenIntPolynomialDerivation] = {}
     for key in derivDict:
-        derivs[key]=AMJUELDeriv(key,derivDict[key][0],derivDict[key][1],amjuelFilename=amjuelFilename,timeNorm=usedTimeNorm,tempNorm=norms["eVTemperature"] if "Energy" in key else 1,
-                                  densNorm=norms["density"])
+        derivs[key] = AMJUELDeriv(
+            key,
+            derivDict[key][0],
+            derivDict[key][1],
+            amjuelFilename=amjuelFilename,
+            timeNorm=usedTimeNorm,
+            tempNorm=norms["eVTemperature"] if "Energy" in key else 1,
+            densNorm=norms["density"],
+        )
 
     return derivs
+
 
 def amjuelHydrogenAtomDerivs():
     return {
@@ -70,10 +82,22 @@ def amjuelHydrogenAtomDerivs():
     }
 
 
-def AMJUELLogVars(norms:Dict[str,float],dens: Variable, temp: Variable) -> Tuple[Variable,Variable]:
+def AMJUELLogVars(
+    norms: Dict[str, float], dens: Variable, temp: Variable
+) -> Tuple[Variable, Variable]:
 
-    logn = GenIntPolynomialDerivation("log"+dens.name,np.ones((1,1)),np.ones(1)*norms["density"]/1e14,funcName="log")(dens)
+    logn = GenIntPolynomialDerivation(
+        "log" + dens.name,
+        np.ones((1, 1)),
+        np.ones(1) * norms["density"] / 1e14,
+        funcName="log",
+    )(dens)
 
-    logT = GenIntPolynomialDerivation("log"+temp.name,np.ones((1,1)),np.ones(1)*norms["eVTemperature"],funcName="log")(temp)
+    logT = GenIntPolynomialDerivation(
+        "log" + temp.name,
+        np.ones((1, 1)),
+        np.ones(1) * norms["eVTemperature"],
+        funcName="log",
+    )(temp)
 
-    return logn,logT
+    return logn, logT

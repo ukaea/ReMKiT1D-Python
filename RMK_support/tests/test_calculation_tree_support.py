@@ -272,9 +272,9 @@ def test_funs():
         ct.atan,
         ct.erf,
         ct.erfc,
-        partial(ct.shift,shiftAmount=1),
+        partial(ct.shift, shiftAmount=1),
         ct.step,
-        partial(ct.absFloor,floorVal=0.1)
+        partial(ct.absFloor, floorVal=0.1),
     ]
 
     funTags = [
@@ -292,7 +292,7 @@ def test_funs():
         "erfc",
         "shift",
         "step",
-        "absFloor"
+        "absFloor",
     ]
 
     numFuns = [
@@ -308,15 +308,20 @@ def test_funs():
         np.arctan,
         special.erf,
         special.erfc,
-        lambda arg: np.roll(arg,1),
-        lambda arg: np.where(arg>0,1,0),
-        lambda arg: np.where(np.abs(arg)<0.1,np.sign(arg)*0.1,arg)
+        lambda arg: np.roll(arg, 1),
+        lambda arg: np.where(arg > 0, 1, 0),
+        lambda arg: np.where(np.abs(arg) < 0.1, np.sign(arg) * 0.1, arg),
     ]
 
     for i, fun in enumerate(funs):
         a = ct.Node("a")
         b = fun(a)
-        assert all(np.isclose(b.evaluate({"a":np.array([0.1,1,0.05,0.2])}),numFuns[i](np.array([0.1,1,0.05,0.2]))))
+        assert all(
+            np.isclose(
+                b.evaluate({"a": np.array([0.1, 1, 0.05, 0.2])}),
+                numFuns[i](np.array([0.1, 1, 0.05, 0.2])),
+            )
+        )
 
         b = fun(b)
 

@@ -2,7 +2,7 @@ from RMK_support.grid import Grid
 import numpy as np
 import pytest
 import xarray as xr
-from RMK_support.variable_container import VariableContainer,Variable
+from RMK_support.variable_container import VariableContainer, Variable
 
 
 @pytest.fixture
@@ -21,11 +21,12 @@ def grid():
 def vCont(grid):
     return VariableContainer(grid)
 
+
 def test_fluid_zero_var(grid):
-    var = Variable("var",grid)
+    var = Variable("var", grid)
 
     assert all(var.data == 0)
-    assert var.isFluid 
+    assert var.isFluid
     assert var.dataArr.attrs == {
         "isDerived": False,
         "isDistribution": False,
@@ -35,15 +36,17 @@ def test_fluid_zero_var(grid):
         "isOnDualGrid": False,
         "priority": 0,
         "derivationRule": "none",
-        "isSingleHarmonic":False,
+        "isSingleHarmonic": False,
         "normSI": 1.0,
         "unitSI": "",
     }
+
 
 def test_vs_init(grid, vCont):
     assert all(vCont.dataset.coords["x"].data == grid.xGrid)
     assert all(vCont.dataset.coords["h"].data == np.array([0, 1]))
     assert all(vCont.dataset.coords["v"].data == grid.vGrid)
+
 
 # def test_add_fluid_zeros(grid, vCont):
 #     testCont = vCont

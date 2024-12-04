@@ -1,16 +1,17 @@
-#%%
+# %%
 import json
 import h5py  # type: ignore
 from . import variable_container as vc
 from .grid import Grid
 import xarray as xr
 import numpy as np
-from os import path,listdir
+from os import path, listdir
 from os.path import isfile, join
 from typing import Union, List
 from copy import copy
 
-#TODO: docs
+# TODO: docs
+
 
 def writeDictToJSON(
     data: dict, filepath="./config.json", prefixKey: Union[str, None] = None
@@ -50,55 +51,71 @@ def writeRMKHDF5(varCont: vc.VariableContainer, filepath="./ReMKiT1DVarInput.h5"
             data = varCont.dataset.data_vars[varName].to_numpy().flatten()
             f.create_dataset(varName, data=data)
 
-def loadVariableFromHDF5(var: vc.Variable, filepaths:List[str]=["./ReMKiT1DVarInput.h5"]) -> vc.Variable:
+
+def loadVariableFromHDF5(
+    var: vc.Variable, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
+) -> vc.Variable:
 
     if var.isScalar:
         buffer = np.zeros(len(filepaths))
     else:
-        buffer = np.zeros(tuple([len(filepaths)]+list(var.values.shape)))
-    for i,filepath in enumerate(filepaths):
+        buffer = np.zeros(tuple([len(filepaths)] + list(var.values.shape)))
+    for i, filepath in enumerate(filepaths):
         with h5py.File(filepath, "r") as f:
-                        dset = f[var.name]
-                        data = dset[:]
-                        buffer[i, ...] = data.reshape(var.values.shape)
+            dset = f[var.name]
+            data = dset[:]
+            buffer[i, ...] = data.reshape(var.values.shape)
 
     result = copy(var)
-    if len(filepaths)>1:
+    if len(filepaths) > 1:
         result.addTimeDim(buffer)
     else:
         if var.isScalar:
             result.values = buffer
         else:
-            result.values = buffer[0,...]
+            result.values = buffer[0, ...]
     return result
 
-def loadDummyVarFromHDF5(grid: Grid, varName: str, filepaths:List[str]=["./ReMKiT1DVarInput.h5"]) -> vc.Variable:
 
-    buffers:List[np.ndarray] = []
+def loadDummyVarFromHDF5(
+    grid: Grid, varName: str, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
+) -> vc.Variable:
+
+    buffers: List[np.ndarray] = []
     for filepath in filepaths:
         with h5py.File(filepath, "r") as f:
-                        dset = f[varName]
-                        data = dset[:]
-                        if len(data) > grid.numX():
-                            buffers.append(data.reshape((grid.numX(),grid.numH(),grid.numV())))
-                        else:
-                            buffers.append(data)
+            dset = f[varName]
+            data = dset[:]
+            if len(data) > grid.numX():
+                buffers.append(data.reshape((grid.numX(), grid.numH(), grid.numV())))
+            else:
+                buffers.append(data)
 
     if len(filepaths) == 1:
         buffer = buffers[0]
     else:
-        buffer = np.zeros(tuple([len(filepaths)]+list(buffers[0].shape)))
+        buffer = np.zeros(tuple([len(filepaths)] + list(buffers[0].shape)))
 
-        for i,_ in enumerate(filepaths):
-            buffer[i,...] = buffers[i]
+        for i, _ in enumerate(filepaths):
+            buffer[i, ...] = buffers[i]
 
     isScalar = buffers[0].shape == (1,) if grid.numX() > 1 else False
     isDistribution = len(buffers[0].shape) == 3
-    result = vc.Variable(varName,grid,data=buffer,timeDimSize=0 if len(buffers)==1 else len(buffers),isScalar=isScalar,isDistribution=isDistribution)
+    result = vc.Variable(
+        varName,
+        grid,
+        data=buffer,
+        timeDimSize=0 if len(buffers) == 1 else len(buffers),
+        isScalar=isScalar,
+        isDistribution=isDistribution,
+    )
 
     return result
 
-def loadVarContFromHDF5(*args:vc.Variable,filepaths:List[str]=["./ReMKiT1DVarInput.h5"]) -> vc.VariableContainer:
+
+def loadVarContFromHDF5(
+    *args: vc.Variable, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
+) -> vc.VariableContainer:
 
     assert len(args), "loadVarContFromHDF5 called with no variable arguments"
 
@@ -112,15 +129,18 @@ def loadVarContFromHDF5(*args:vc.Variable,filepaths:List[str]=["./ReMKiT1DVarInp
             else:
                 time.append(len(time) + 1)
 
-    varCont = vc.VariableContainer(args[0].grid,timestamps=np.array(time))
+    varCont = vc.VariableContainer(args[0].grid, timestamps=np.array(time))
 
     for var in args:
-        varCont.add(loadVariableFromHDF5(var,filepaths))
+        varCont.add(loadVariableFromHDF5(var, filepaths))
 
     return varCont
 
-def loadFromHDF5(grid:Grid,varNames:List[str],filepaths:List[str]=["./ReMKiT1DVarInput.h5"])-> vc.VariableContainer:
-    vars = (loadDummyVarFromHDF5(grid,name,filepaths) for name in varNames)
+
+def loadFromHDF5(
+    grid: Grid, varNames: List[str], filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
+) -> vc.VariableContainer:
+    vars = (loadDummyVarFromHDF5(grid, name, filepaths) for name in varNames)
 
     time: List[float] = []
     for filepath in filepaths:
@@ -132,13 +152,16 @@ def loadFromHDF5(grid:Grid,varNames:List[str],filepaths:List[str]=["./ReMKiT1DVa
             else:
                 time.append(len(time) + 1)
 
-    varCont = vc.VariableContainer(grid,timestamps=np.array(time))
+    varCont = vc.VariableContainer(grid, timestamps=np.array(time))
 
     varCont.add(*vars)
     return varCont
 
-def getOutputFilenames(hdf5Dir:str) -> List[str]:
 
-    onlyfiles = [f for f in listdir(hdf5Dir) if isfile(join(hdf5Dir, f)) if "VarOutput" in f]
+def getOutputFilenames(hdf5Dir: str) -> List[str]:
+
+    onlyfiles = [
+        f for f in listdir(hdf5Dir) if isfile(join(hdf5Dir, f)) if "VarOutput" in f
+    ]
     onlyfiles.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
     return onlyfiles

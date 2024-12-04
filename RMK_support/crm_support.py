@@ -5,49 +5,56 @@ import csv
 import warnings
 from typing import Tuple
 from .derivations import Derivation, Species, Textbook, DerivationClosure
-from .grid import Grid,Profile
-from .model_construction import ModelboundData,TermGenerator
+from .grid import Grid, Profile
+from .model_construction import ModelboundData, TermGenerator
 from .variable_container import Variable
 from abc import ABC, abstractmethod
 from .tex_parsing import numToScientificTex
 import pylatex as tex
 
-#TODO: docs
+# TODO: docs
+
 
 class Transition(ABC):
 
-    def __init__(self,name:str,inStates:List[Species],outStates:List[Species],hasMomentumRate=False):
-        self.__name__ = name 
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        hasMomentumRate=False,
+    ):
+        self.__name__ = name
         self.__inStates__ = inStates
         self.__outStates__ = outStates
         self.__hasMomentumRate__ = hasMomentumRate
 
     @property
     def name(self):
-        return self.__name__ 
+        return self.__name__
 
     @name.setter
-    def name(self, name:str):
-        self.__name__ = name 
+    def name(self, name: str):
+        self.__name__ = name
 
-    @property 
+    @property
     def inStates(self):
-        return self.__inStates__ 
+        return self.__inStates__
 
     @property
     def outStates(self):
-        return self.__outStates__ 
+        return self.__outStates__
 
     @abstractmethod
     def dict(self) -> Dict:
-        pass 
+        pass
 
-    def latex(self,**kwargs) -> str:
+    def latex(self, **kwargs) -> str:
         reactants = "+".join([species.latex() for species in self.inStates])
         products = "+".join([species.latex() for species in self.outStates])
-        return "$"+reactants + "\\rightarrow" + products+"$"
+        return "$" + reactants + "\\rightarrow" + products + "$"
 
-    def registerDerivs(self,container:Textbook):
+    def registerDerivs(self, container: Textbook):
         pass
 
     @property
@@ -56,21 +63,22 @@ class Transition(ABC):
 
     @property
     def hasMomentumRate(self):
-        return self.__hasMomentumRate__ 
+        return self.__hasMomentumRate__
 
-    def setFixedEnergyIndex(self,ind:int):
+    def setFixedEnergyIndex(self, ind: int):
         pass
 
     @property
     def fixedEnergyIndex(self):
         return None
 
+
 class CRMModelboundData(ModelboundData):
     """Property container of modelbound CRM data"""
 
     def __init__(
         self,
-        grid:Grid,
+        grid: Grid,
         fixedTransitionEnergies=np.array([]),
         energyResolution: float = 1e-16,
         elState: int = 0,
@@ -96,7 +104,7 @@ class CRMModelboundData(ModelboundData):
             "active": len(fixedTransitionEnergies) > 0,
             "fixedTransitionEnergies": fixedTransitionEnergies.tolist(),
         }
-        self.__transitions__:List[Transition] = []
+        self.__transitions__: List[Transition] = []
         self.__energyResolution__ = energyResolution
         self.__elStateID__ = elState
 
@@ -122,15 +130,18 @@ class CRMModelboundData(ModelboundData):
                 }
             )
 
-    def addTransition(self, transition:Transition):
+    def addTransition(self, transition: Transition):
 
-        assert transition.name not in self.transitionTags, "Duplicate transition tag in CRMModelboundData"
+        assert (
+            transition.name not in self.transitionTags
+        ), "Duplicate transition tag in CRMModelboundData"
 
         self.__transitions__.append(transition)
         if transition.fixedEnergy is not None:
             self.addTransitionEnergy(transition.fixedEnergy)
             energyIndex, _ = min(
-                enumerate(self.__fixedTransitionEnergies__.tolist()), key=lambda x: abs(x[1] - transition.fixedEnergy)
+                enumerate(self.__fixedTransitionEnergies__.tolist()),
+                key=lambda x: abs(x[1] - transition.fixedEnergy),
             )
             transition.setFixedEnergyIndex(energyIndex)
 
@@ -164,13 +175,11 @@ class CRMModelboundData(ModelboundData):
             "electronStateID": self.__elStateID__,
         }
 
-        mbData["transitions"].update({t.name:t.dict() for t in self.__transitions__})
+        mbData["transitions"].update({t.name: t.dict() for t in self.__transitions__})
 
         return mbData
 
-    def getTransitionIndices(
-        self, prefix: str
-    ) -> List[int]:
+    def getTransitionIndices(self, prefix: str) -> List[int]:
         """Return transition indices of transitions whose tags start with given prefix
 
         Args:
@@ -184,45 +193,71 @@ class CRMModelboundData(ModelboundData):
             i + 1 for i, x in enumerate(self.transitionTags) if x.startswith(prefix)
         ]
 
-    @property 
+    @property
     def varNames(self):
         varNames = []
-        for i,t in enumerate(self.__transitions__):
-            varNames+=["rate0index"+str(i+1),"rate1index"+str(i+1),"rate2index"+str(i+1)] if t.hasMomentumRate else ["rate0index"+str(i+1),"rate2index"+str(i+1)]
+        for i, t in enumerate(self.__transitions__):
+            varNames += (
+                [
+                    "rate0index" + str(i + 1),
+                    "rate1index" + str(i + 1),
+                    "rate2index" + str(i + 1),
+                ]
+                if t.hasMomentumRate
+                else ["rate0index" + str(i + 1), "rate2index" + str(i + 1)]
+            )
 
         return varNames
+
     def __getitem__(self, key):
-        if key not in self.varNames: 
+        if key not in self.varNames:
             raise KeyError()
-        return Variable(key,self.__grid__,isDerived=True)
+        return Variable(key, self.__grid__, isDerived=True)
 
-    def getRate(self,transition:Union[str,Transition],moment:int=0):
+    def getRate(self, transition: Union[str, Transition], moment: int = 0):
         transitionName = ""
-        if isinstance(transition,Transition):
-            transitionName=transition.name 
+        if isinstance(transition, Transition):
+            transitionName = transition.name
         else:
-            transitionName = transition 
-            
-        assert transitionName in self.transitionTags, "getRate called with unregistered transition "+transition.name 
+            transitionName = transition
 
-        return self["rate"+str(moment)+"index"+self.transitionTags.index(transitionName)]
+        assert transitionName in self.transitionTags, (
+            "getRate called with unregistered transition " + transition.name
+        )
+
+        return self[
+            "rate" + str(moment) + "index" + self.transitionTags.index(transitionName)
+        ]
 
     def addLatexToDoc(self, doc, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append("CRM Modelbound data")
         with doc.create(tex.Subsubsection("Transitions")):
             with doc.create(tex.Itemize()) as itemize:
-                    for transition in self.transitions:
-                        itemize.add_item(tex.NoEscape(transition.name+": "+transition.latex(latexRemap=latexRemap)))
+                for transition in self.transitions:
+                    itemize.add_item(
+                        tex.NoEscape(
+                            transition.name
+                            + ": "
+                            + transition.latex(latexRemap=latexRemap)
+                        )
+                    )
 
     def registerDerivs(self, container):
         for transition in self.transitions:
             transition.registerDerivs(container)
-                
+
 
 class SimpleTransition(Transition):
 
-    def __init__(self, name, inState:Species, outState:Species,transitionEnergy:float,transitionRate:float):
+    def __init__(
+        self,
+        name,
+        inState: Species,
+        outState: Species,
+        transitionEnergy: float,
+        transitionRate: float,
+    ):
         self.__transitionEnergy__ = transitionEnergy
         assert (
             transitionRate > 0
@@ -237,37 +272,63 @@ class SimpleTransition(Transition):
     def dict(self):
 
         return {
-        "type": "simpleTransition",
-        "ingoingState": self.inStates[0].speciesID,
-        "outgoingState": self.outStates[0].speciesID,
-        "fixedEnergy": self.fixedEnergy,
-        "rate": self.__transitionRate__,
-    }
+            "type": "simpleTransition",
+            "ingoingState": self.inStates[0].speciesID,
+            "outgoingState": self.outStates[0].speciesID,
+            "fixedEnergy": self.fixedEnergy,
+            "rate": self.__transitionRate__,
+        }
 
     def latex(self, **kwargs):
         equation = super().latex(**kwargs)
-        equation+="\\newline "
-        equation+="Rate: $"+numToScientificTex(self.__transitionRate__)+"$\\newline "
-        equation+="Energy: $" +numToScientificTex(self.fixedEnergy)+"$"
+        equation += "\\newline "
+        equation += (
+            "Rate: $" + numToScientificTex(self.__transitionRate__) + "$\\newline "
+        )
+        equation += "Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
         return equation
+
 
 class DerivedTransition(Transition):
 
-    def __init__(self, name, inStates:List[Species], outStates:List[Species],rateDeriv:DerivationClosure,**kwargs):
+    def __init__(
+        self,
+        name,
+        inStates: List[Species],
+        outStates: List[Species],
+        rateDeriv: DerivationClosure,
+        **kwargs
+    ):
 
-        self.__rateDeriv__=rateDeriv
-        assert rateDeriv.numArgs == 0, "rateDeriv must be a full closure in DerivedTransition"
-        assert "energyRateDeriv" in kwargs or "transitionEnergy" in kwargs, "DerivedTransition must either have the energy rate derivation or a fixed energy"
-        self.__energyRateDeriv__:Optional[DerivationClosure] = kwargs.get("energyRateDeriv",None)
+        self.__rateDeriv__ = rateDeriv
+        assert (
+            rateDeriv.numArgs == 0
+        ), "rateDeriv must be a full closure in DerivedTransition"
+        assert (
+            "energyRateDeriv" in kwargs or "transitionEnergy" in kwargs
+        ), "DerivedTransition must either have the energy rate derivation or a fixed energy"
+        self.__energyRateDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "energyRateDeriv", None
+        )
         if self.__energyRateDeriv__ is not None:
-            assert self.__energyRateDeriv__.numArgs == 0, "energyRateDeriv must be a full closure in DerivedTransition"
-            
-        self.__transitionEnergy__:Optional[float] = kwargs.get("transitionEnergy",None)
-        
-        self.__momentumRateDeriv__:Optional[DerivationClosure] = kwargs.get("momentumRateDeriv",None)
+            assert (
+                self.__energyRateDeriv__.numArgs == 0
+            ), "energyRateDeriv must be a full closure in DerivedTransition"
+
+        self.__transitionEnergy__: Optional[float] = kwargs.get(
+            "transitionEnergy", None
+        )
+
+        self.__momentumRateDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "momentumRateDeriv", None
+        )
         if self.__momentumRateDeriv__ is not None:
-            assert self.__momentumRateDeriv__.numArgs == 0, "momentumRateDeriv must be a full closure in DerivedTransition"
-        super().__init__(name, inStates, outStates, self.__momentumRateDeriv__ is not None)
+            assert (
+                self.__momentumRateDeriv__.numArgs == 0
+            ), "momentumRateDeriv must be a full closure in DerivedTransition"
+        super().__init__(
+            name, inStates, outStates, self.__momentumRateDeriv__ is not None
+        )
 
     def registerDerivs(self, container):
         self.__rateDeriv__.registerComponents(container)
@@ -276,55 +337,110 @@ class DerivedTransition(Transition):
         if self.__momentumRateDeriv__ is not None:
             self.__momentumRateDeriv__.registerComponents(container)
 
-    @property 
+    @property
     def fixedEnergy(self):
         return self.__transitionEnergy__
 
     def dict(self):
         return {
-        "type": "derivedTransition",
-        "ingoingStates": [species.speciesID for species in self.inStates],
-        "outgoingStates": [species.speciesID for species in self.outStates],
-        "fixedEnergy": self.fixedEnergy if self.fixedEnergy is not None else 0.0,
-        "ruleName": self.__rateDeriv__.name,
-        "requiredVarNames": self.__rateDeriv__.fillArgs(),
-        "momentumRateDerivationRule": self.__momentumRateDeriv__.name if self.__momentumRateDeriv__ is not None else "none",
-        "momentumRateDerivationReqVarNames": self.__momentumRateDeriv__.fillArgs() if self.__momentumRateDeriv__ is not None else [],
-        "energyRateDerivationRule": self.__energyRateDeriv__.name if self.__energyRateDeriv__ is not None else "none",
-        "energyRateDerivationReqVarNames": self.__energyRateDeriv__.fillArgs() if self.__energyRateDeriv__ is not None else [],
-    }
+            "type": "derivedTransition",
+            "ingoingStates": [species.speciesID for species in self.inStates],
+            "outgoingStates": [species.speciesID for species in self.outStates],
+            "fixedEnergy": self.fixedEnergy if self.fixedEnergy is not None else 0.0,
+            "ruleName": self.__rateDeriv__.name,
+            "requiredVarNames": self.__rateDeriv__.fillArgs(),
+            "momentumRateDerivationRule": (
+                self.__momentumRateDeriv__.name
+                if self.__momentumRateDeriv__ is not None
+                else "none"
+            ),
+            "momentumRateDerivationReqVarNames": (
+                self.__momentumRateDeriv__.fillArgs()
+                if self.__momentumRateDeriv__ is not None
+                else []
+            ),
+            "energyRateDerivationRule": (
+                self.__energyRateDeriv__.name
+                if self.__energyRateDeriv__ is not None
+                else "none"
+            ),
+            "energyRateDerivationReqVarNames": (
+                self.__energyRateDeriv__.fillArgs()
+                if self.__energyRateDeriv__ is not None
+                else []
+            ),
+        }
 
     def latex(self, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         equation = super().latex(**kwargs)
-        equation+="\\newline "
-        remappedArgs = (latexRemap[arg] if arg in latexRemap else "\\text{"+arg.replace("_","\_")+"}" for arg in self.__rateDeriv__.fillArgs())
-        equation+="Rate: $"+self.__rateDeriv__.latex(*remappedArgs)+"$\\newline "
+        equation += "\\newline "
+        remappedArgs = (
+            (
+                latexRemap[arg]
+                if arg in latexRemap
+                else "\\text{" + arg.replace("_", "\_") + "}"
+            )
+            for arg in self.__rateDeriv__.fillArgs()
+        )
+        equation += "Rate: $" + self.__rateDeriv__.latex(*remappedArgs) + "$\\newline "
         if self.__momentumRateDeriv__ is not None:
-            remappedArgs = (latexRemap[arg] if arg in latexRemap else "\\text{"+arg.replace("_","\_")+"}" for arg in self.__momentumRateDeriv__.fillArgs())
-            equation+="Momentum rate: $"+self.__momentumRateDeriv__(*remappedArgs)+"$\\newline "
-        if self.__energyRateDeriv__ is not None: 
-            remappedArgs = (latexRemap[arg] if arg in latexRemap else "\\text{"+arg.replace("_","\_")+"}" for arg in self.__energyRateDeriv__.fillArgs())
-            equation+= "Energy rate: $"+self.__energyRateDeriv__(*remappedArgs)+"$"
+            remappedArgs = (
+                (
+                    latexRemap[arg]
+                    if arg in latexRemap
+                    else "\\text{" + arg.replace("_", "\_") + "}"
+                )
+                for arg in self.__momentumRateDeriv__.fillArgs()
+            )
+            equation += (
+                "Momentum rate: $"
+                + self.__momentumRateDeriv__(*remappedArgs)
+                + "$\\newline "
+            )
+        if self.__energyRateDeriv__ is not None:
+            remappedArgs = (
+                (
+                    latexRemap[arg]
+                    if arg in latexRemap
+                    else "\\text{" + arg.replace("_", "\_") + "}"
+                )
+                for arg in self.__energyRateDeriv__.fillArgs()
+            )
+            equation += "Energy rate: $" + self.__energyRateDeriv__(*remappedArgs) + "$"
         else:
-            equation+="Energy: $"+numToScientificTex(self.fixedEnergy)+"$"
-        
+            equation += "Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
+
         return equation
+
 
 class FixedECSTransition(Transition):
 
-    def __init__(self, name:str, inStates:List[Species], outStates:List[Species], transitionEnergy:float,csData:Dict[int,Profile],electronDistribution:Variable,takeMomentumMoment=False):
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        transitionEnergy: float,
+        csData: Dict[int, Profile],
+        electronDistribution: Variable,
+        takeMomentumMoment=False,
+    ):
         self.__transitionEnergy__ = transitionEnergy
-        self.__csData__ = csData 
-        assert all(cs.dim=="V" for _,cs in csData.items()), "csData must be made up of velocity profiles"
+        self.__csData__ = csData
+        assert all(
+            cs.dim == "V" for _, cs in csData.items()
+        ), "csData must be made up of velocity profiles"
         self.__electronDistribution__ = electronDistribution
-        self.__energyIndex__:Optional[int] = None 
-        assert electronDistribution.isDistribution, "electronDistribution variable in FixedECSTranstion must be a distribution variable"
+        self.__energyIndex__: Optional[int] = None
+        assert (
+            electronDistribution.isDistribution
+        ), "electronDistribution variable in FixedECSTranstion must be a distribution variable"
         super().__init__(name, inStates, outStates, takeMomentumMoment)
 
     @property
     def fixedEnergy(self):
-        return self.__transitionEnergy__ 
+        return self.__transitionEnergy__
 
     def setFixedEnergyIndex(self, ind):
         self.__energyIndex__ = ind
@@ -340,7 +456,7 @@ class FixedECSTransition(Transition):
             "presentHarmonics": presentCSHarmonics,
         }
 
-        for l,cs in self.__csData__.items():
+        for l, cs in self.__csData__.items():
             csDataDict["l=" + str(l)] = cs.data.tolist()
 
         tProperties = {
@@ -356,43 +472,61 @@ class FixedECSTransition(Transition):
         return tProperties
 
     def latex(self, **kwargs):
-        expression =  super().latex(**kwargs)
+        expression = super().latex(**kwargs)
         expression += "\\newline Fixed energy/cross-section transition"
-        expression +="\\newline Energy: $" +numToScientificTex(self.fixedEnergy)+"$"
+        expression += "\\newline Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
         return expression
+
 
 class VariableECSTransition(Transition):
 
-    def __init__(self, name, inStates, outStates, csDerivs:Dict[int,DerivationClosure],energyDeriv:DerivationClosure,electronDistribution:Variable,takeMomentumMoment=False):
+    def __init__(
+        self,
+        name,
+        inStates,
+        outStates,
+        csDerivs: Dict[int, DerivationClosure],
+        energyDeriv: DerivationClosure,
+        electronDistribution: Variable,
+        takeMomentumMoment=False,
+    ):
 
-        assert electronDistribution.isDistribution, "electronDistribution variable in FixedECSTranstion must be a distribution variable"
+        assert (
+            electronDistribution.isDistribution
+        ), "electronDistribution variable in FixedECSTranstion must be a distribution variable"
 
         self.__electronDistribution__ = electronDistribution
 
-        self.__csDerivs__ = csDerivs 
+        self.__csDerivs__ = csDerivs
         for l in csDerivs:
-            assert csDerivs[l].numArgs == 0, "All csDerivs in VariableECSTransition must be complete closures"
-        assert energyDeriv.numArgs == 0, "energyDeriv in VariableECSTransition must be complete closure"
+            assert (
+                csDerivs[l].numArgs == 0
+            ), "All csDerivs in VariableECSTransition must be complete closures"
+        assert (
+            energyDeriv.numArgs == 0
+        ), "energyDeriv in VariableECSTransition must be complete closure"
 
         self.__energyDeriv__ = energyDeriv
-        
+
         super().__init__(name, inStates, outStates, takeMomentumMoment)
 
     def dict(self):
-        
+
         presentCSHarmonics = [x[0] for x in self.__csDerivs__]
 
         csDataDict: Dict[str, object] = {
             "crossSectionDerivationHarmonics": presentCSHarmonics,
         }
 
-        for l,deriv in self.__csDerivs__.items():
+        for l, deriv in self.__csDerivs__.items():
             csDataDict["l=" + str(l)] = {}
-            cast(Dict[str, object], csDataDict["l=" + str(l)]).update({"ruleName":deriv.name,"requiredVarNames":deriv.fillArgs()})
+            cast(Dict[str, object], csDataDict["l=" + str(l)]).update(
+                {"ruleName": deriv.name, "requiredVarNames": deriv.fillArgs()}
+            )
 
         tProperties = {
             "type": "variableECSTransition",
-            "ingoingStates":  [s.speciesID for s in self.inStates],
+            "ingoingStates": [s.speciesID for s in self.inStates],
             "outgoingStates": [s.speciesID for s in self.outStates],
             "distributionVarName": self.__electronDistribution__.name,
             "takeMomentumMoment": self.hasMomentumRate,
@@ -404,38 +538,69 @@ class VariableECSTransition(Transition):
         return tProperties
 
     def latex(self, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         equation = super().latex(**kwargs)
-        equation+="\\newline Variable energy/cross-section transition"
-        remappedArgs = (latexRemap[arg] if arg in latexRemap else "\\text{"+arg.replace("_","\_")+"}" for arg in self.__energyDeriv__.fillArgs())
-        equation+= "\\newline Energy: $"+self.__energyDeriv__(*remappedArgs)+"$"
+        equation += "\\newline Variable energy/cross-section transition"
+        remappedArgs = (
+            (
+                latexRemap[arg]
+                if arg in latexRemap
+                else "\\text{" + arg.replace("_", "\_") + "}"
+            )
+            for arg in self.__energyDeriv__.fillArgs()
+        )
+        equation += "\\newline Energy: $" + self.__energyDeriv__(*remappedArgs) + "$"
 
     def registerDerivs(self, container):
-        for _,deriv in self.__csDerivs__.items():
+        for _, deriv in self.__csDerivs__.items():
             deriv.registerComponents(container)
         self.__energyDeriv__.registerComponents(container)
 
+
 class DetailedBalanceTransition(Transition):
 
-    def __init__(self, name:str, directTransitionName:str, crmData:CRMModelboundData, temperature:Variable,electronDistribution:Variable,degeneracyRatio:float,maxResolvedCSHarmonic:int,**kwargs):
+    def __init__(
+        self,
+        name: str,
+        directTransitionName: str,
+        crmData: CRMModelboundData,
+        temperature: Variable,
+        electronDistribution: Variable,
+        degeneracyRatio: float,
+        maxResolvedCSHarmonic: int,
+        **kwargs
+    ):
 
-        self.__takeMomentumMoment__ = kwargs.get("takeMomentumMoment",False)
-        self.__directTransition__ = crmData.transitions[crmData.transitionTags.index(directTransitionName)]
+        self.__takeMomentumMoment__ = kwargs.get("takeMomentumMoment", False)
+        self.__directTransition__ = crmData.transitions[
+            crmData.transitionTags.index(directTransitionName)
+        ]
         self.__temperature__ = temperature
-        self.__electronDistribution__ = electronDistribution 
+        self.__electronDistribution__ = electronDistribution
         self.__degeneracyRatio__ = degeneracyRatio
         self.__maxResolvedCSHarmonics__ = maxResolvedCSHarmonic
-        self.__csUpdatePriority__:int = kwargs.get("csUpdatePriority",0)
-        self.__degeneracyDeriv__:Optional[DerivationClosure] = kwargs.get("degeneracyDeriv",None)
+        self.__csUpdatePriority__: int = kwargs.get("csUpdatePriority", 0)
+        self.__degeneracyDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "degeneracyDeriv", None
+        )
         self.__fixedEnergy__ = -self.__directTransition__.fixedEnergy
-        self.__directTransitionIndex__ = crmData.transitionTags.index(directTransitionName)
-        self.__directTransitionEnergyIndex__ = self.__directTransition__.fixedEnergyIndex
-        self.__energyIndex__:Optional[int] = None 
-        super().__init__(name, self.__directTransition__.outStates, self.__directTransition__.inStates, self.__takeMomentumMoment__)
+        self.__directTransitionIndex__ = crmData.transitionTags.index(
+            directTransitionName
+        )
+        self.__directTransitionEnergyIndex__ = (
+            self.__directTransition__.fixedEnergyIndex
+        )
+        self.__energyIndex__: Optional[int] = None
+        super().__init__(
+            name,
+            self.__directTransition__.outStates,
+            self.__directTransition__.inStates,
+            self.__takeMomentumMoment__,
+        )
 
     @property
     def fixedEnergy(self):
-        return self.__fixedEnergy__ 
+        return self.__fixedEnergy__
 
     def setFixedEnergyIndex(self, ind):
         self.__energyIndex__ = ind
@@ -455,8 +620,16 @@ class DetailedBalanceTransition(Transition):
             "distributionVarName": self.__electronDistribution__.name,
             "electronTemperatureVar": self.__temperature__.name,
             "fixedDegeneracyRatio": self.__degeneracyRatio__,
-            "degeneracyRuleName": self.__degeneracyDeriv__.name if self.__degeneracyDeriv__ is not None else "",
-            "degeneracyRuleReqVars": self.__degeneracyDeriv__.fillArgs() if self.__degeneracyDeriv__ is not None else [],
+            "degeneracyRuleName": (
+                self.__degeneracyDeriv__.name
+                if self.__degeneracyDeriv__ is not None
+                else ""
+            ),
+            "degeneracyRuleReqVars": (
+                self.__degeneracyDeriv__.fillArgs()
+                if self.__degeneracyDeriv__ is not None
+                else []
+            ),
             "takeMomentumMoment": self.hasMomentumRate,
             "maxCrossSectionL": self.__maxResolvedCSHarmonics__,
             "crossSectionUpdatePriority": self.__csUpdatePriority__,
@@ -464,46 +637,67 @@ class DetailedBalanceTransition(Transition):
 
     def latex(self, **kwargs):
         equation = super().latex(**kwargs)
-        equation+="\\newline Detailed balance transition with direct transition "+self.__directTransition__.name
-        return equation 
+        equation += (
+            "\\newline Detailed balance transition with direct transition "
+            + self.__directTransition__.name
+        )
+        return equation
+
 
 class RadRecombJanevTransition(Transition):
 
-    def __init__(self, name, endState:int,temperature:Variable):
+    def __init__(self, name, endState: int, temperature: Variable):
         self.__endState__ = endState
         self.__temperature__ = temperature
         super().__init__(name, [], [])
 
     def dict(self):
         return {
-        "type": "JanevRadRecomb",
-        "endHState": self.__endState__,
-        "electronTemperatureVar": self.__temperature__.name,
-    }
+            "type": "JanevRadRecomb",
+            "endHState": self.__endState__,
+            "electronTemperatureVar": self.__temperature__.name,
+        }
 
     def latex(self, **kwargs):
-        expression="$\\text{H}^{+} + e^{-} \\rightarrow \\text{H}(n="+str(self.__endState__)+") + h\\nu$"
-        expression+="\\newline Janev radiative recombination transition"
+        expression = (
+            "$\\text{H}^{+} + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + h\\nu$"
+        )
+        expression += "\\newline Janev radiative recombination transition"
         return expression
+
 
 class CollExIonJanevTransition(Transition):
 
-    def __init__(self, name, startState:int,endState:int,energyNorm:float,electronDistribution:Variable,lowestCellEnergy:float=0):
+    def __init__(
+        self,
+        name,
+        startState: int,
+        endState: int,
+        energyNorm: float,
+        electronDistribution: Variable,
+        lowestCellEnergy: float = 0,
+    ):
         self.__startState__ = startState
         self.__endState__ = endState
         self.__energyNorm__ = energyNorm
         self.__electronDistribution__ = electronDistribution
         self.__lowestCellEnergy__ = lowestCellEnergy
-        self.__energyIndex__:Optional[int] = None 
+        self.__energyIndex__: Optional[int] = None
         if endState > 0:
-            self.__transitionEnergy__ = 13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
+            self.__transitionEnergy__ = (
+                13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
+            )
         else:
-            self.__transitionEnergy__ = 13.6 * (1 / startState**2) / energyNorm + lowestCellEnergy
+            self.__transitionEnergy__ = (
+                13.6 * (1 / startState**2) / energyNorm + lowestCellEnergy
+            )
         super().__init__(name, [], [])
 
     @property
     def fixedEnergy(self):
-        return self.__transitionEnergy__ 
+        return self.__transitionEnergy__
 
     def setFixedEnergyIndex(self, ind):
         self.__energyIndex__ = ind
@@ -520,31 +714,61 @@ class CollExIonJanevTransition(Transition):
             "fixedEnergyIndex": self.fixedEnergyIndex + 1,
             "distributionVarName": self.__electronDistribution__.name,
         }
+
     def latex(self, **kwargs):
         if self.__endState__ == 0:
-            
-            expression="$\\text{H}(n="+str(self.__startState__)+") + e^{-} \\rightarrow \\text{H}^{+} + e^{-}  + e^{-} $"
-            expression+="\\newline Janev ionization transition"
+
+            expression = (
+                "$\\text{H}(n="
+                + str(self.__startState__)
+                + ") + e^{-} \\rightarrow \\text{H}^{+} + e^{-}  + e^{-} $"
+            )
+            expression += "\\newline Janev ionization transition"
             return expression
-        
-        expression="$\\text{H}(n="+str(self.__startState__)+") + e^{-} \\rightarrow \\text{H}(n="+str(self.__endState__)+") + e^{-}  $"
-        expression+="\\newline Janev excitation transition"
+
+        expression = (
+            "$\\text{H}(n="
+            + str(self.__startState__)
+            + ") + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + e^{-}  $"
+        )
+        expression += "\\newline Janev excitation transition"
         return expression
+
 
 class CollDeexRecombJanevTransition(Transition):
 
-    def __init__(self, name, startState:int,endState:int, energyNorm:float, electronDistribution:Variable, temperature:Variable, directTransitionName:str, crmData:CRMModelboundData, lowestCellEnergy:float = 0, csUpdatePriority:int = 0):
+    def __init__(
+        self,
+        name,
+        startState: int,
+        endState: int,
+        energyNorm: float,
+        electronDistribution: Variable,
+        temperature: Variable,
+        directTransitionName: str,
+        crmData: CRMModelboundData,
+        lowestCellEnergy: float = 0,
+        csUpdatePriority: int = 0,
+    ):
         self.__startState__ = startState
         self.__endState__ = endState
         self.__energyNorm__ = energyNorm
         self.__electronDistribution__ = electronDistribution
         self.__lowestCellEnergy__ = lowestCellEnergy
         self.__temperature__ = temperature
-        self.__directTransition__ = crmData.transitions[crmData.transitionTags.index(directTransitionName)]
-        self.__directTransitionIndex__ = crmData.transitionTags.index(directTransitionName)
-        self.__directTransitionEnergyIndex__ = self.__directTransition__.fixedEnergyIndex
-        self.__energyIndex__:Optional[int] = None 
-        self.__csUpdatePriority__:int = csUpdatePriority
+        self.__directTransition__ = crmData.transitions[
+            crmData.transitionTags.index(directTransitionName)
+        ]
+        self.__directTransitionIndex__ = crmData.transitionTags.index(
+            directTransitionName
+        )
+        self.__directTransitionEnergyIndex__ = (
+            self.__directTransition__.fixedEnergyIndex
+        )
+        self.__energyIndex__: Optional[int] = None
+        self.__csUpdatePriority__: int = csUpdatePriority
         if startState > 0:
             self.__transitionEnergy__ = (
                 13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
@@ -557,7 +781,7 @@ class CollDeexRecombJanevTransition(Transition):
 
     @property
     def fixedEnergy(self):
-        return self.__transitionEnergy__ 
+        return self.__transitionEnergy__
 
     def setFixedEnergyIndex(self, ind):
         self.__energyIndex__ = ind
@@ -571,8 +795,9 @@ class CollDeexRecombJanevTransition(Transition):
             "type": "JanevCollDeexRecomb",
             "startHState": self.__startState__,
             "endHState": self.__endState__,
-            "directTransitionFixedEnergyIndex": self.__directTransitionEnergyIndex__ + 1,
-            "directTransitionIndex": self.__directTransitionIndex__+1,
+            "directTransitionFixedEnergyIndex": self.__directTransitionEnergyIndex__
+            + 1,
+            "directTransitionIndex": self.__directTransitionIndex__ + 1,
             "fixedEnergyIndex": self.fixedEnergyIndex + 1,
             "distributionVarName": self.__electronDistribution__.name,
             "electronTemperatureVar": self.__temperature__.name,
@@ -581,14 +806,25 @@ class CollDeexRecombJanevTransition(Transition):
 
     def latex(self, **kwargs):
         if self.__startState__ == 0:
-            
-            expression="$\\text{H}^{+} + e^{-}  + e^{-}   \\rightarrow  \\text{H}(n="+str(self.__endState__)+") + e^{-}$"
-            expression+="\\newline Janev three-body recombination transition"
+
+            expression = (
+                "$\\text{H}^{+} + e^{-}  + e^{-}   \\rightarrow  \\text{H}(n="
+                + str(self.__endState__)
+                + ") + e^{-}$"
+            )
+            expression += "\\newline Janev three-body recombination transition"
             return expression
-        
-        expression="$\\text{H}(n="+str(self.__startState__)+") + e^{-} \\rightarrow \\text{H}(n="+str(self.__endState__)+") + e^{-}  $"
-        expression+="\\newline Janev de-excitation transition"
+
+        expression = (
+            "$\\text{H}(n="
+            + str(self.__startState__)
+            + ") + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + e^{-}  $"
+        )
+        expression += "\\newline Janev de-excitation transition"
         return expression
+
 
 def addJanevTransitionsToCRMData(
     mbData: CRMModelboundData,
@@ -600,7 +836,7 @@ def addJanevTransitionsToCRMData(
     processes=["ex", "deex", "ion", "recomb3b", "recombRad"],
     lowestCellEnergy: float = 0,
 ) -> None:
-    allowedProcesses:List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"]
+    allowedProcesses: List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"]
 
     for process in processes:
         assert (
@@ -616,7 +852,16 @@ def addJanevTransitionsToCRMData(
                 for endState in range(startState + 1, maxState + 1):
                     transitionTag = "JanevEx" + str(startState) + "-" + str(endState)
 
-                    mbData.addTransition(CollExIonJanevTransition(transitionTag,startState,endState,energyNorm,electronDistribution,lowestCellEnergy))
+                    mbData.addTransition(
+                        CollExIonJanevTransition(
+                            transitionTag,
+                            startState,
+                            endState,
+                            energyNorm,
+                            electronDistribution,
+                            lowestCellEnergy,
+                        )
+                    )
 
         if process == "ion":
             assert (
@@ -626,7 +871,15 @@ def addJanevTransitionsToCRMData(
             for startState in range(1, maxState + 1):
 
                 transitionTag = "JanevIon" + str(startState)
-                mbData.addTransition(CollExIonJanevTransition(transitionTag,startState,0,energyNorm,electronDistribution,lowestCellEnergy)
+                mbData.addTransition(
+                    CollExIonJanevTransition(
+                        transitionTag,
+                        startState,
+                        0,
+                        energyNorm,
+                        electronDistribution,
+                        lowestCellEnergy,
+                    )
                 )
 
         if process == "deex":
@@ -650,7 +903,19 @@ def addJanevTransitionsToCRMData(
                         "JanevEx" + str(endState) + "-" + str(startState)
                     )
 
-                    mbData.addTransition(CollDeexRecombJanevTransition(transitionTag,startState,endState,energyNorm,electronDistribution,temperature,directTransitionTag,mbData,lowestCellEnergy,csUpdatePriority=detailedBalanceCSPriority)
+                    mbData.addTransition(
+                        CollDeexRecombJanevTransition(
+                            transitionTag,
+                            startState,
+                            endState,
+                            energyNorm,
+                            electronDistribution,
+                            temperature,
+                            directTransitionTag,
+                            mbData,
+                            lowestCellEnergy,
+                            csUpdatePriority=detailedBalanceCSPriority,
+                        )
                     )
 
         if process == "recomb3b":
@@ -671,7 +936,18 @@ def addJanevTransitionsToCRMData(
                 transitionTag = "JanevRecomb3b" + str(endState)
                 directTransitionTag = "JanevIon" + str(endState)
                 mbData.addTransition(
-                    CollDeexRecombJanevTransition(transitionTag,0,endState,energyNorm,electronDistribution,temperature,directTransitionTag,mbData,lowestCellEnergy,csUpdatePriority=detailedBalanceCSPriority)
+                    CollDeexRecombJanevTransition(
+                        transitionTag,
+                        0,
+                        endState,
+                        energyNorm,
+                        electronDistribution,
+                        temperature,
+                        directTransitionTag,
+                        mbData,
+                        lowestCellEnergy,
+                        csUpdatePriority=detailedBalanceCSPriority,
+                    )
                 )
 
         if process == "recombRad":
@@ -682,13 +958,13 @@ def addJanevTransitionsToCRMData(
             for endState in range(1, maxState + 1):
                 transitionTag = "JanevRecombRad" + str(endState)
                 mbData.addTransition(
-                    RadRecombJanevTransition(transitionTag,endState,temperature)
+                    RadRecombJanevTransition(transitionTag, endState, temperature)
                 )
 
 
 def addHSpontaneousEmissionToCRMData(
     mbData: CRMModelboundData,
-    transitionData: Dict[Tuple[int,int],float],
+    transitionData: Dict[Tuple[int, int], float],
     maxStartState: int,
     maxEndState: int,
     timeNorm: float,
@@ -713,11 +989,25 @@ def addHSpontaneousEmissionToCRMData(
             ) in transitionData, "(startState,endState) pair not found in transitionData keys for spontaneous emission"
             transitionTag = "SpontEmissionH" + str(startState) + "-" + str(endState)
             mbData.addTransition(
-                SimpleTransition(transitionTag,Species("H"+str(startState),startState,latexName="\\text{H}(n="+str(startState)+")"),Species("H"+str(endState),endState,latexName="\\text{H}(n="+str(endState)+")"),transitionEnergy,transitionData[(startState, endState)] * timeNorm)
+                SimpleTransition(
+                    transitionTag,
+                    Species(
+                        "H" + str(startState),
+                        startState,
+                        latexName="\\text{H}(n=" + str(startState) + ")",
+                    ),
+                    Species(
+                        "H" + str(endState),
+                        endState,
+                        latexName="\\text{H}(n=" + str(endState) + ")",
+                    ),
+                    transitionEnergy,
+                    transitionData[(startState, endState)] * timeNorm,
+                )
             )
 
 
-def readNISTAkiCSV(filename: str) -> Dict[Tuple[int,int],float]:
+def readNISTAkiCSV(filename: str) -> Dict[Tuple[int, int], float]:
     res = {}
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
@@ -755,8 +1045,8 @@ def hydrogenSahaBoltzmann(
 
     vPlanck = (hPlanck**2 / (2 * np.pi * elMass * elCharge * temperature)) ** (-3 / 2)
     g = sum(
-            i**2 * np.exp(-hydrogenIonPot * (1 - 1 / i**2) / temperature)
-            for i in range(1, numStates + 1)
+        i**2 * np.exp(-hydrogenIonPot * (1 - 1 / i**2) / temperature)
+        for i in range(1, numStates + 1)
     )
 
     A1 = vPlanck * np.exp(-hydrogenIonPot / temperature) / g
@@ -779,50 +1069,107 @@ def hydrogenSahaBoltzmann(
 
     return densDist
 
+
 class CRMTermGenerator(TermGenerator):
 
-    def __init__(self, name: str, evolvedSpecies: List[Species], implicitGroups: Optional[List[int]] =None, includedTransitionIndices:Optional[List[int]] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        evolvedSpecies: List[Species],
+        implicitGroups: Optional[List[int]] = None,
+        includedTransitionIndices: Optional[List[int]] = None,
+    ) -> None:
         self.__evolvedSpecies__ = evolvedSpecies
 
         for species in evolvedSpecies:
-            assert len(species.associatedVarNames) > 0, "Species "+species.name+" does not have any associated variables - the first variable is interpreted as the density by CRMTermGenerator"
+            assert len(species.associatedVarNames) > 0, (
+                "Species "
+                + species.name
+                + " does not have any associated variables - the first variable is interpreted as the density by CRMTermGenerator"
+            )
         self.__includedTransitionIndices__ = includedTransitionIndices
         super().__init__(name, implicitGroups if implicitGroups is not None else [1])
 
     def dict(self) -> Dict:
         tg = super().dict()
 
-        tg.update({
-            "type": "CRMDensityEvolution",
-            "evolvedSpeciesIDs": [species.speciesID for species in self.__evolvedSpecies__],
-            "includedTransitionIndices": self.__includedTransitionIndices__ if self.__includedTransitionIndices__ is not None else [],
-        })
+        tg.update(
+            {
+                "type": "CRMDensityEvolution",
+                "evolvedSpeciesIDs": [
+                    species.speciesID for species in self.__evolvedSpecies__
+                ],
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
 
         return tg
 
-    @property 
+    @property
     def evolvedVars(self):
         return [sp.associatedVarNames[0] for sp in self.__evolvedSpecies__]
 
     def onlyEvolving(self, *args: Variable) -> Self:
         evolvedVarNames = [arg.name for arg in args]
-        newSpecies:List[Species] = []
+        newSpecies: List[Species] = []
         for sp in self.__evolvedSpecies__:
             if sp.associatedVarNames[0] in evolvedVarNames:
                 newSpecies.append(sp)
-        return CRMTermGenerator(self.name,newSpecies,self.implicitGroups,self.__includedTransitionIndices__)
+        return CRMTermGenerator(
+            self.name,
+            newSpecies,
+            self.implicitGroups,
+            self.__includedTransitionIndices__,
+        )
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
-        varNames = ", ".join("$"+latexRemap[var]+"$" if var in latexRemap else "$\\text{"+var+"}$" for var in self.evolvedVars)
-        doc.append(tex.NoEscape(self.name.replace("_","\_")+": \\newline CRM density evolution term generator"))
-        doc.append(tex.NoEscape("\\newline Evolved densities: "+varNames))
-        doc.append(tex.NoEscape("\\newline $$\\frac{\\partial \\vec{n}}{\\partial t} = M \\cdot \\vec{n}$$"))
-        doc.append(tex.NoEscape("\\newline Transitions included: "+(", ".join(str(i) for i in self.__includedTransitionIndices__) + " \\newline" if self.__includedTransitionIndices__ is not None else "all \\newline")))
-        
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        varNames = ", ".join(
+            (
+                "$" + latexRemap[var] + "$"
+                if var in latexRemap
+                else "$\\text{" + var + "}$"
+            )
+            for var in self.evolvedVars
+        )
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", "\_")
+                + ": \\newline CRM density evolution term generator"
+            )
+        )
+        doc.append(tex.NoEscape("\\newline Evolved densities: " + varNames))
+        doc.append(
+            tex.NoEscape(
+                "\\newline $$\\frac{\\partial \\vec{n}}{\\partial t} = M \\cdot \\vec{n}$$"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
+
+
 class CRMElEnergyTermGenerator(TermGenerator):
 
-    def __init__(self, name: str, electronEnergyDens:Variable, implicitGroups: Optional[List[int]] =None, includedTransitionIndices:Optional[List[int]] = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        electronEnergyDens: Variable,
+        implicitGroups: Optional[List[int]] = None,
+        includedTransitionIndices: Optional[List[int]] = None,
+    ) -> None:
         self.__electronEnergyDens__ = electronEnergyDens
         self.__includedTransitionIndices__ = includedTransitionIndices
         super().__init__(name, implicitGroups if implicitGroups is not None else [1])
@@ -830,15 +1177,21 @@ class CRMElEnergyTermGenerator(TermGenerator):
     def dict(self) -> Dict:
         tg = super().dict()
 
-        tg.update({
-            "type": "CRMElectronEnergyEvolution",
-            "electronEnergyDensity": self.__electronEnergyDens__.name,
-            "includedTransitionIndices": self.__includedTransitionIndices__ if self.__includedTransitionIndices__ is not None else [],
-        })
+        tg.update(
+            {
+                "type": "CRMElectronEnergyEvolution",
+                "electronEnergyDensity": self.__electronEnergyDens__.name,
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
 
         return tg
 
-    @property 
+    @property
     def evolvedVars(self):
         return [self.__electronEnergyDens__.name]
 
@@ -846,42 +1199,96 @@ class CRMElEnergyTermGenerator(TermGenerator):
         return self
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
-        doc.append(tex.NoEscape(self.name.replace("_","\_")+": \\newline CRM Electron energy evolution term generator"))
-        doc.append(tex.NoEscape("\\newline Evolved energy variable: "+self.__electronEnergyDens__.latex(latexRemap)))
-        doc.append(tex.NoEscape("\\newline Transitions included: "+(", ".join(str(i) for i in self.__includedTransitionIndices__) + " \\newline" if self.__includedTransitionIndices__ is not None else "all \\newline")))
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", "\_")
+                + ": \\newline CRM Electron energy evolution term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved energy variable: "
+                + self.__electronEnergyDens__.latex(latexRemap)
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
+
 
 class CRMBoltzTermGenerator(TermGenerator):
-    def __init__(self, name: str, distribution:Variable, evolvedHarmonic:int, includedTransitionIndices:List[int],mbData:CRMModelboundData,associatedVarIndex:int = 1,absorptionTerms=False,implicitGroups: Optional[List[int]] =None) -> None:
+    def __init__(
+        self,
+        name: str,
+        distribution: Variable,
+        evolvedHarmonic: int,
+        includedTransitionIndices: List[int],
+        mbData: CRMModelboundData,
+        associatedVarIndex: int = 1,
+        absorptionTerms=False,
+        implicitGroups: Optional[List[int]] = None,
+    ) -> None:
 
-        assert all(isinstance(mbData.transitions[ind-1],(FixedECSTransition,CollExIonJanevTransition)) for ind in includedTransitionIndices) or all(isinstance(mbData.transitions[ind-1],(DetailedBalanceTransition,CollDeexRecombJanevTransition)) for ind in includedTransitionIndices), "CRMBoltzTermGenerator can only be called with transition indices all corresponding to FixedECSTransitions or DetailedBalanceTransitions"
+        assert all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (FixedECSTransition, CollExIonJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        ) or all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (DetailedBalanceTransition, CollDeexRecombJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        ), "CRMBoltzTermGenerator can only be called with transition indices all corresponding to FixedECSTransitions or DetailedBalanceTransitions"
 
-        self.__detailedBalanceTerms__ = all(isinstance(mbData.transitions[ind-1],(DetailedBalanceTransition,CollDeexRecombJanevTransition)) for ind in includedTransitionIndices)
+        self.__detailedBalanceTerms__ = all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (DetailedBalanceTransition, CollDeexRecombJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        )
         self.__distribution__ = distribution
         self.__evolvedHarmonic__ = evolvedHarmonic
         self.__associatedVarIndex__ = associatedVarIndex
         self.__absorptionTerms__ = absorptionTerms
         self.__includedTransitionIndices__ = includedTransitionIndices
-        self.__fixedEnergyIndices__ = [mbData.transitions[ind-1].fixedEnergyIndex + 1 for ind in includedTransitionIndices]
+        self.__fixedEnergyIndices__ = [
+            mbData.transitions[ind - 1].fixedEnergyIndex + 1
+            for ind in includedTransitionIndices
+        ]
         super().__init__(name, implicitGroups if implicitGroups is not None else [1])
 
     def dict(self) -> Dict:
         tg = super().dict()
 
-        tg.update({
-        "type": "CRMFixedBoltzmannCollInt",
-        "evolvedHarmonic": self.__evolvedHarmonic__,
-        "distributionVarName": self.__distribution__.name,
-        "includedTransitionIndices": self.__includedTransitionIndices__,
-        "fixedEnergyIndices":self.__fixedEnergyIndices__,
-        "absorptionTerm": self.__absorptionTerms__,
-        "detailedBalanceTerm": self.__detailedBalanceTerms__,
-        "associatedVarIndex": self.__associatedVarIndex__,
-    })
+        tg.update(
+            {
+                "type": "CRMFixedBoltzmannCollInt",
+                "evolvedHarmonic": self.__evolvedHarmonic__,
+                "distributionVarName": self.__distribution__.name,
+                "includedTransitionIndices": self.__includedTransitionIndices__,
+                "fixedEnergyIndices": self.__fixedEnergyIndices__,
+                "absorptionTerm": self.__absorptionTerms__,
+                "detailedBalanceTerm": self.__detailedBalanceTerms__,
+                "associatedVarIndex": self.__associatedVarIndex__,
+            }
+        )
 
         return tg
 
-    @property 
+    @property
     def evolvedVars(self):
         return [self.__distribution__.name]
 
@@ -889,14 +1296,43 @@ class CRMBoltzTermGenerator(TermGenerator):
         return self
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
-        doc.append(tex.NoEscape(self.name.replace("_","\_")+": \\newline CRM Boltzmann collision operator "+("absorption" if self.__absorptionTerms__ else "emission") +" term generator"))
-        doc.append(tex.NoEscape("\\newline Evolved distribution: "+self.__distribution__.latex(latexRemap)))
-        doc.append(tex.NoEscape("\\newline Transitions included: "+(", ".join(str(i) for i in self.__includedTransitionIndices__) + " \\newline" if self.__includedTransitionIndices__ is not None else "all \\newline")))
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", "\_")
+                + ": \\newline CRM Boltzmann collision operator "
+                + ("absorption" if self.__absorptionTerms__ else "emission")
+                + " term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved distribution: "
+                + self.__distribution__.latex(latexRemap)
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
+
 
 class CRMSecElTermGenerator(TermGenerator):
 
-    def __init__(self, name: str, distribution:Variable, includedTransitionIndices:Optional[List[int]]=None,implicitGroups: Optional[List[int]] =None) -> None:
+    def __init__(
+        self,
+        name: str,
+        distribution: Variable,
+        includedTransitionIndices: Optional[List[int]] = None,
+        implicitGroups: Optional[List[int]] = None,
+    ) -> None:
 
         self.__distribution__ = distribution
         self.__includedTransitionIndices__ = includedTransitionIndices
@@ -905,15 +1341,21 @@ class CRMSecElTermGenerator(TermGenerator):
     def dict(self) -> Dict:
         tg = super().dict()
 
-        tg.update({
-        "type": "CRMSecondaryElectronTerms",
-        "distributionVarName": self.__distribution__.name,
-        "includedTransitionIndices": self.__includedTransitionIndices__ if self.__includedTransitionIndices__ is not None else [],
-    })
+        tg.update(
+            {
+                "type": "CRMSecondaryElectronTerms",
+                "distributionVarName": self.__distribution__.name,
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
 
         return tg
 
-    @property 
+    @property
     def evolvedVars(self):
         return [self.__distribution__.name]
 
@@ -921,7 +1363,27 @@ class CRMSecElTermGenerator(TermGenerator):
         return self
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
-        latexRemap:Dict[str,str] = kwargs.get("latexRemap",{})
-        doc.append(tex.NoEscape(self.name.replace("_","\_")+": \\newline CRM secondary electron source term generator"))
-        doc.append(tex.NoEscape("\\newline Evolved distribution: "+self.__distribution__.latex(latexRemap)))
-        doc.append(tex.NoEscape("\\newline Transitions included: "+(", ".join(str(i) for i in self.__includedTransitionIndices__) + " \\newline" if self.__includedTransitionIndices__ is not None else "all \\newline")))
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", "\_")
+                + ": \\newline CRM secondary electron source term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved distribution: "
+                + self.__distribution__.latex(latexRemap)
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )

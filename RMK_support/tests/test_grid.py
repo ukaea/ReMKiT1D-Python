@@ -205,30 +205,46 @@ def test_domain_integral_dual(xGrid):
 
     assert all(grid.domainIntegral(data) == np.ones(3) * np.sum(dV[:-1]))
 
+
 def test_grid_to_dual():
-    grid = Grid(xGrid=np.linspace(1,2,5),interpretXGridAsWidths=True)
+    grid = Grid(xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True)
 
-    data = np.linspace(0,4,5)
+    data = np.linspace(0, 4, 5)
     interpData = grid.gridToDual(data)
-    assert all(interpData[:-1] == np.interp(grid.xGridDual,grid.xGrid,data)[:-1])
+    assert all(interpData[:-1] == np.interp(grid.xGridDual, grid.xGrid, data)[:-1])
 
-    assert interpData[-1] == 2*(data[-1]-data[-2])/(grid.xWidths[-1]+grid.xWidths[-2]) * grid.xWidths[-1]/2 + data[-1]
+    assert (
+        interpData[-1]
+        == 2
+        * (data[-1] - data[-2])
+        / (grid.xWidths[-1] + grid.xWidths[-2])
+        * grid.xWidths[-1]
+        / 2
+        + data[-1]
+    )
 
-    grid = Grid(xGrid=np.linspace(1,2,5),interpretXGridAsWidths=True,isPeriodic=True)
+    grid = Grid(
+        xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True, isPeriodic=True
+    )
 
-    data = np.linspace(0,4,5)
+    data = np.linspace(0, 4, 5)
     interpData = grid.gridToDual(data)
-    assert all(interpData == np.interp(grid.xGridDual,grid.xGrid,data,period=grid.xGridDual[-1]))
+    assert all(
+        np.isclose(
+            interpData,
+            np.interp(grid.xGridDual, grid.xGrid, data, period=grid.xGridDual[-1]),
+        )
+    )
+
 
 def test_profile():
-    grid = Grid(xGrid=np.linspace(1,2,5),interpretXGridAsWidths=True)
+    grid = Grid(xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True)
 
-    p = grid.profile(np.linspace(0,10,5),"X",latexName="a")
+    p = grid.profile(np.linspace(0, 10, 5), "X", latexName="a")
 
-    assert all(p.data == np.linspace(0,10,5))
+    assert all(p.data == np.linspace(0, 10, 5))
     assert p.dim == "X"
     assert p.latex() == "a"
 
-    p = grid.profile(np.linspace(0,10,5),"X")
+    p = grid.profile(np.linspace(0, 10, 5), "X")
     assert p.latex() == "X"
-    
