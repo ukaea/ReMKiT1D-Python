@@ -197,9 +197,7 @@ class Variable(DerivationArgument):
 
         self.__name__ = name
 
-        self.__derivation__: Optional[Derivation] = kwargs.get(
-            "derivation", None
-        )
+        self.__derivation__: Optional[Derivation] = kwargs.get("derivation", None)
         self.__isDerived__: bool = kwargs.get("isDerived", False)
         if self.__derivation__ is not None:
             self.__isDerived__ = True
