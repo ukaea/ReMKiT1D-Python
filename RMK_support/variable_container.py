@@ -119,7 +119,14 @@ class MultiplicativeArgument:
         return newArgs
 
     def latex(self, latexRemap: Dict[str, str] = {}) -> str:
-        # TODO: note in docs that this does not write out the scalar component
+        """Generate latex representation - does not include the scalar component!
+
+        Args:
+            latexRemap (Dict[str, str], optional): Optional remapping of variable names. Defaults to {}.
+
+        Returns:
+            str: LaTeX-compatible string
+        """
         numerator = ""
         denominator = ""
 
@@ -537,8 +544,15 @@ class Variable(DerivationArgument):
             ),
         )
 
-    def latex(self, latexRemap: Dict[str, str] = {}):
+    def latex(self, latexRemap: Dict[str, str] = {}) -> str:
+        """Generate LaTeX representation of the variable, including any derivation rules
 
+        Args:
+            latexRemap (Dict[str, str], optional): Optional variable name latex remap. Defaults to {}.
+
+        Returns:
+            str: LaTeX-compatible string
+        """
         result = (
             "\\text{" + self.name.replace("_", r"_") + "}"
             if self.name not in latexRemap
@@ -597,6 +611,15 @@ class Variable(DerivationArgument):
         return newArg
 
     def evaluate(self, dataset: xr.Dataset) -> np.ndarray:
+        """Attempt to evaluate the variable based on passed dataset. Variables with no derivations result in just their values.
+        **NOTE**: Not all derivations have an implemented evaluate function
+
+        Args:
+            dataset (xr.Dataset): Dataset containing any required variable values
+
+        Returns:
+            np.ndarray: Evaluation result
+        """
         if self.isDerived:
             self.__data__ = self.derivation.evaluate(
                 *tuple(dataset[name].data for name in self.__derivationArgs__)
@@ -838,7 +861,12 @@ class VariableContainer:
         return variableData
 
     def addLatexToDoc(self, doc: Document, latexRemap: Dict[str, str] = {}) -> None:
+        """Add variable section to a ReMKiT1D summary LaTeX doc
 
+        Args:
+            doc (Document): pylatex Document to add the section to
+            latexRemap (Dict[str, str], optional): Optional remapping of variable names. Defaults to {}.
+        """
         implicitVars = self.implicitVars
         derivedVars = self.derivedVars
         with doc.create(Section("Variables")):
@@ -852,7 +880,11 @@ class VariableContainer:
                         itemize.add_item(NoEscape(f"${var.latex(latexRemap)}$"))
 
     def registerDerivs(self, textbook: Textbook):
+        """Register any derivations on derived variables in given textbook
 
+        Args:
+            textbook (Textbook): Textbook to contain the derivations
+        """
         for var in self.derivedVars:
             if var.derivation is not None:
                 try:
@@ -862,7 +894,8 @@ class VariableContainer:
                     textbook.register(var.derivation)
 
     def checkDerivationArgs(self) -> None:
-
+        """Check whether all derived variable derivation arguments are present in the container
+        """
         for var in self.derivedVars:
             for name in var.derivationArgs:
                 assert name in self.varNames, (
