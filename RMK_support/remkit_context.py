@@ -1,14 +1,15 @@
 import numpy as np
 from .grid import Grid
 from typing import Union, List, Dict, cast, Tuple, Optional
+from typing_extensions import Self
 from .variable_container import VariableContainer, Variable, MPIContext
 from . import IO_support as io
 from . import derivations as dv
 from . import integrators as it
 from . import model_construction as mc
 from . import sk_normalization as skn
-import pylatex as tex
-from pylatex.utils import bold
+import pylatex as tex  # type: ignore
+from pylatex.utils import bold  # type: ignore
 import warnings
 import os
 from abc import ABC, abstractmethod
@@ -16,7 +17,12 @@ from abc import ABC, abstractmethod
 
 class IOContext:
 
-    def __init__(self, jsonFilepath="./config.json", HDF5Dir="./RMKOutput/", **kwargs):
+    def __init__(
+        self,
+        jsonFilepath: str = "./config.json",
+        HDF5Dir: str = "./RMKOutput/",
+        **kwargs,
+    ):
 
         self.__jsonFilepath__ = jsonFilepath
         self.__HDF5Dir__ = HDF5Dir
@@ -51,19 +57,21 @@ class IOContext:
 
     def setRestartOptions(self, **kwargs) -> None:
         if "save" in kwargs:
-            self.__restartSave__ = kwargs.get("save")
+            self.__restartSave__ = cast(bool, kwargs.get("save"))
 
         if "load" in kwargs:
-            self.__restartLoad__ = kwargs.get("load")
+            self.__restartLoad__ = cast(bool, kwargs.get("load"))
 
         if "frequency" in kwargs:
-            self.__restartFreq__ = kwargs.get("frequency")
+            self.__restartFreq__ = cast(int, kwargs.get("frequency"))
 
         if "resetTime" in kwargs:
-            self.__restartResetTime__ = kwargs.get("resetTime")
+            self.__restartResetTime__ = cast(bool, kwargs.get("resetTime"))
 
         if "initialOutputIndex" in kwargs:
-            self.__restartInitialOutputIndex__ = kwargs.get("initialOutputIndex")
+            self.__restartInitialOutputIndex__ = cast(
+                int, kwargs.get("initialOutputIndex")
+            )
 
     def populateOutputVars(self, variables: VariableContainer):
 
@@ -265,7 +273,7 @@ class MBDataExtractor(Manipulator):
 
         return manip
 
-    def latex(self, **kwargs):
+    def latex(self: Self, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         resultVarName = (
             latexRemap[self.__mbVar__.name]
@@ -283,7 +291,7 @@ class MBDataExtractor(Manipulator):
 
 class ManipulatorCollection:
 
-    def __init__(self):
+    def __init__(self: Self):
         self.__manipulators__: List[Manipulator] = []
 
     @property
@@ -571,10 +579,12 @@ class RMKContext:
             "species": self.species.dict(),
             "MPI": self.mpiContext.dict(self.variables),
             "PETSc": self.optionsPETSc,
-            "models": self.__models__.dict(),
-            "manipulators": self.__manipulators__.dict(),
+            "models": cast(mc.ModelCollection, self.__models__).dict(),
+            "manipulators": cast(ManipulatorCollection, self.__manipulators__).dict(),
         }
-        implicitGroups, generalGroups = self.__models__.numGroups()
+        implicitGroups, generalGroups = cast(
+            mc.ModelCollection, self.__models__
+        ).numGroups()
 
         configFile.update(cast(Grid, self.__gridObj__).dict())
         configFile.update(cast(VariableContainer, self.__variables__).dict())
@@ -619,13 +629,19 @@ class RMKContext:
             doc.append(tex.LargeText(bold(latexFilename)))
             doc.append(tex.LineBreak())
 
-        self.__variables__.addLatexToDoc(doc, latexRemap=latexRemap)
-        self.__textbook__.addLatexToDoc(doc)
+        cast(VariableContainer, self.__variables__).addLatexToDoc(
+            doc, latexRemap=latexRemap
+        )
+        cast(dv.Textbook, self.__textbook__).addLatexToDoc(doc)
         self.__species__.addLatexToDoc(doc, latexRemap=latexRemap)
-        self.__models__.addLatexToDoc(doc, latexRemap=latexRemap)
-        self.__manipulators__.addLatexToDoc(doc, latexRemap=latexRemap)
-        implicitGroups, _ = self.__models__.numGroups()
-        self.__integrationScheme__.addLatexToDoc(
+        cast(mc.ModelCollection, self.__models__).addLatexToDoc(
+            doc, latexRemap=latexRemap
+        )
+        cast(ManipulatorCollection, self.__manipulators__).addLatexToDoc(
+            doc, latexRemap=latexRemap
+        )
+        implicitGroups, _ = cast(mc.ModelCollection, self.__models__).numGroups()
+        cast(it.IntegrationScheme, self.__integrationScheme__).addLatexToDoc(
             doc, implicitGroups, latexRemap=latexRemap
         )
 

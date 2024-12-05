@@ -8,7 +8,7 @@ import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy, copy
 from math import isclose
-import pylatex as tex
+import pylatex as tex  # type: ignore
 from .tex_parsing import numToScientificTex
 
 # TODO: docs
@@ -42,7 +42,7 @@ class Term(ABC):
     def __init__(
         self,
         name: str,
-        evolvedVar: Union[Variable, None] = None,
+        evolvedVar: Optional[Variable] = None,
         implicitGroups: List[int] = [],
         generalGroups: List[int] = [],
     ) -> None:
@@ -95,7 +95,7 @@ class Term(ABC):
         pass
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Union[ModelboundData, None] = None
+        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
     ):
 
         assert len(self.implicitGroups) or len(self.generalGroups), (
@@ -121,6 +121,16 @@ class Term(ABC):
     @abstractmethod
     def registerDerivs(self, container: Textbook):
         pass
+
+    def __rmul__(self, rhs: Union[int, float]):
+        raise NotImplementedError(
+            "Attempted __rmul__ for Term type which doesn't have it implemented"
+        )
+
+    def __neg__(self):
+        raise NotImplementedError(
+            "Attempted __neg__ for Term type which doesn't have it implemented"
+        )
 
 
 class TermCollection:
@@ -237,7 +247,7 @@ class TermCollection:
 
         return newCollection
 
-    def __sub__(self, rhs: Union[Term]):
+    def __sub__(self, rhs: Union[Term, Self]):
 
         assert isinstance(
             rhs, (Term, TermCollection)
@@ -281,7 +291,7 @@ class TermCollection:
         return newCollection
 
     def checkTerms(
-        self, varCont: VariableContainer, mbData: Union[ModelboundData, None] = None
+        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
     ):
 
         for term in self.__terms__:
@@ -317,7 +327,7 @@ class VarData:
         varCont: VariableContainer,
         rowVarOnDual=False,
         colVarOnDual=False,
-        mbData: Union[ModelboundData, None] = None,
+        mbData: Optional[ModelboundData] = None,
     ):
         """Check whether required variables exist in the variable container and are on the correct grids
 
@@ -488,14 +498,14 @@ class MatrixTerm(Term):
         self,
         name: str,
         stencil: AbstractStencil,
-        evolvedVar: Union[Variable, None] = None,
-        implicitVar: Union[Variable, None] = None,
+        evolvedVar: Optional[Variable] = None,
+        implicitVar: Optional[Variable] = None,
         profiles: Dict[str, Profile] = {},
         R: MultiplicativeArgument = MultiplicativeArgument(),
         modelboundR: MultiplicativeArgument = MultiplicativeArgument(),
         C: MultiplicativeArgument = MultiplicativeArgument(),
         modelboundC: MultiplicativeArgument = MultiplicativeArgument(),
-        T: Union[TimeSignalData, None] = None,
+        T: Optional[TimeSignalData] = None,
         implicitGroups=[1],
         generalGroups: List[int] = [],
         **kwargs,
@@ -518,9 +528,9 @@ class MatrixTerm(Term):
         self.__T__ = T
         self.__skipPattern__ = kwargs.get("skipPattern", False)
         self.__fixedMatrix__ = kwargs.get("fixedMatrix", False)
-        self.__copyTermName__: Union[str, None] = kwargs.get("copyTermName", None)
+        self.__copyTermName__: Optional[str] = kwargs.get("copyTermName", None)
         self.__evaluatedTermGroup__: int = kwargs.get("evaluatedTermGroup", 0)
-        self.__constLatex__: Union[str, None] = kwargs.get("constLatex", None)
+        self.__constLatex__: Optional[str] = kwargs.get("constLatex", None)
 
     @property
     def implicitVar(self):
@@ -565,7 +575,7 @@ class MatrixTerm(Term):
         return self.__R__.scalar * self.__modelboundR__.scalar
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Union[ModelboundData, None] = None
+        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
     ):
         """Perform consistency check on term
 
@@ -639,7 +649,7 @@ class MatrixTerm(Term):
 
         return gTerm
 
-    def latex(self, *args, **kwargs):
+    def latex(self, *args: str, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         result = " " + self.__stencil__.latex(
             self.implicitVar * self.__C__ * self.__modelboundC__, latexRemap=latexRemap
@@ -721,8 +731,8 @@ class Stencil(AbstractStencil):
 
     def __init__(
         self,
-        latexTemplate: Union[str, None] = None,
-        properties: Union[Dict[str, object], None] = None,
+        latexTemplate: Optional[str] = None,
+        properties: Optional[Dict[str, object]] = None,
     ):
         super().__init__()
         if latexTemplate is not None:
@@ -775,7 +785,7 @@ class Stencil(AbstractStencil):
             modelboundC=modelboundC,
         )
 
-    def latex(self, arg, **kwargs):
+    def latex(self, arg: MultiplicativeArgument, **kwargs):
         assert (
             self.__latexTemplate__ is not None
         ), "latex() on Stencil called without a default latexTemplate set"
@@ -791,7 +801,7 @@ class DiagonalStencil(Stencil):
         evolvedHarmonics: Optional[List[int]] = None,
         evolvedVCells: Optional[List[int]] = None,
     ):
-        properties = {
+        properties: Dict[str, object] = {
             "stencilType": "diagonalStencil",
             "evolvedXCells": evolvedXCells if evolvedXCells is not None else [],
             "evolvedHarmonics": (
@@ -810,8 +820,8 @@ class DerivationTerm(Term):
         name: str,
         derivation: Derivation,
         derivationArgs: List[str],
-        evolvedVar: Union[Variable, None] = None,
-        mbVar: Union[Variable, None] = None,
+        evolvedVar: Optional[Variable] = None,
+        mbVar: Optional[Variable] = None,
         generalGroups=[1],
     ) -> None:
         """Derivation term constructor
@@ -826,11 +836,11 @@ class DerivationTerm(Term):
         super().__init__(name, evolvedVar, [], generalGroups)
 
         self.__derivation__ = derivation
-        self.__derivationArgs__ = derivation.fillArgs(derivationArgs)
+        self.__derivationArgs__ = derivation.fillArgs(*tuple(derivationArgs))
         self.__mbVar__ = mbVar
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Union[ModelboundData, None] = None
+        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
     ):
         """Perform consistency check on term, including the required variables
 
@@ -888,7 +898,7 @@ class DerivationTerm(Term):
 
         return gTerm
 
-    def latex(self, *args, **kwargs):
+    def latex(self, *args: str, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         remappedArgs = (
             (
@@ -1024,7 +1034,7 @@ class Model:
             if latexName is not None
             else "\\text{" + name.replace("_", "\_") + "}"
         )
-        self.__modelboundData__: Union[ModelboundData, None] = None
+        self.__modelboundData__: Optional[ModelboundData] = None
         self.__termGenerators__: List[TermGenerator] = []
         self.__isIntegrable__ = isIntegrable
 
@@ -1034,7 +1044,7 @@ class Model:
     def name(self):
         return self.__name__
 
-    def rename(self, name: str, latexName: Union[str, None] = None):
+    def rename(self, name: str, latexName: Optional[str] = None):
         newModel = deepcopy(self)
         newModel.__name__ = name
         if latexName is not None:
@@ -1103,7 +1113,7 @@ class Model:
 
         newModel.setModelboundData(self.mbData)
 
-        return newModel
+        return cast(Self, newModel)
 
     def addTerm(self, termTag: str, term: Term):
         assert (
@@ -1179,7 +1189,7 @@ class Model:
     def registerDerivs(self, container: Textbook):
         self.ddt.registerDerivs(container)
         if self.mbData is not None:
-            self.__modelboundData__.registerDerivs(container)
+            cast(ModelboundData, self.__modelboundData__).registerDerivs(container)
 
 
 class ModelCollection:
@@ -1240,7 +1250,7 @@ class ModelCollection:
             if any(arg.name in model.evolvedVars for arg in args):
                 newCollection.add(model.onlyEvolving(*args))
 
-        return newCollection
+        return cast(Self, newCollection)
 
     def checkModels(self, varCont: VariableContainer):
         for model in self.__models__:
@@ -1355,9 +1365,9 @@ class LBCModelboundData(ModelboundData):
         ionCurrent: Variable,
         distFun: Variable,
         density: Variable,
-        densityDual: Union[Variable, None] = None,
-        densityOnBoundary: Union[Variable, None] = None,
-        totalCurrent: Union[Variable, None] = None,
+        densityDual: Optional[Variable] = None,
+        densityOnBoundary: Optional[Variable] = None,
+        totalCurrent: Optional[Variable] = None,
         bisTol: float = 1e-12,
         leftBoundary=False,
     ):
@@ -1439,7 +1449,7 @@ class LBCModelboundData(ModelboundData):
             raise KeyError()
         return Variable(key, self.__grid__, isDerived=True, isScalar=True)
 
-    def addLatexToDoc(self, doc, **kwargs):
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append(
             "Logical boundary condition data on "

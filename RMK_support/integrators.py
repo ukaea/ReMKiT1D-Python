@@ -4,7 +4,7 @@ import numpy as np
 import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
-import pylatex as tex
+import pylatex as tex  # type: ignore
 from .tex_parsing import numToScientificTex
 from . import model_construction as mc
 from .variable_container import Variable, VariableContainer, MultiplicativeArgument
@@ -134,7 +134,7 @@ class IntegrationStepSequence:
 
     def __mul__(self, rhs: Union[IntegrationStepBase, Self]) -> Self:
         assert isinstance(
-            rhs, (IntegrationStepBase, Self)
+            rhs, (IntegrationStepBase, IntegrationStepSequence)
         ), "__mul__ rhs of IntegrationStepSequence must be IntegrationStep or IntegrationSequence"
         if isinstance(rhs, IntegrationStepBase):
             newSequence = deepcopy(self)
@@ -142,9 +142,9 @@ class IntegrationStepSequence:
                 rhs.rename(rhs.name + str(len(self.steps)))
             ] + newSequence.__steps__
         if isinstance(rhs, IntegrationStepSequence):
-            newSequence = deepcopy(rhs)
+            newSequence = cast(Self, deepcopy(rhs))
             newSequence.__steps__ += self.__steps__
-        return newSequence
+        return cast(Self, newSequence)
 
     def __rmul__(self, lhs: IntegrationStepBase) -> Self:
         assert isinstance(
@@ -377,7 +377,7 @@ class Timestep:
                 + " not found in used variable container"
             )
 
-    def latex(self, **kwargs):
+    def latex(self: Self, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         if len(self.__timestep__.args) > 0:
             if self.__max__:
@@ -453,14 +453,14 @@ class IntegrationScheme:
 
     def dict(self, implicitGroups: int, mpiComm: dict) -> dict:
 
-        scheme = {
+        scheme: Dict[str, object] = {
             "stepTags": [step.name for step in self.steps],
             "integratorTags": list(set(step.integrator.name for step in self.steps)),
         }
         scheme.update(self.__timestep__.dict())
         for step in self.steps:
             scheme[step.name] = {"commData": mpiComm}
-            scheme[step.name].update(step.dict(implicitGroups))
+            cast(Dict, scheme[step.name]).update(step.dict(implicitGroups))
             scheme.update({step.integrator.name: step.integrator.dict()})
 
         timeloop = {

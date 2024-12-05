@@ -5,11 +5,11 @@ from abc import ABC, abstractmethod
 from . import calculation_tree_support as ct
 from copy import copy, deepcopy
 from .grid import Grid, Profile
-import pylatex as tex
+import pylatex as tex  # type: ignore
 from math import isclose
 from .tex_parsing import numToScientificTex
-from scipy import special
-from scipy.interpolate import RegularGridInterpolator
+from scipy import special  # type: ignore
+from scipy.interpolate import RegularGridInterpolator  # type: ignore
 
 # TODO: docs
 
@@ -43,7 +43,7 @@ class DerivationArgument(ABC):
 
     @classmethod
     @abstractmethod
-    def apply(cls, deriv: Type[DerivBase], *args: Self):
+    def apply(cls, deriv: DerivBase, *args: Self):
         assert len(args), "apply() args must be of non-zero length"
         pass
 
@@ -255,7 +255,7 @@ class Derivation(DerivBase):
 
     def latex(self, *args: str) -> str:
         if self.__latexTemplate__ is None:
-            raise Exception(
+            raise NotImplementedError(
                 "latexTemplate not provided in Derivation and latex() function not overwritten"
             )
         expression = copy(self.__latexTemplate__)
@@ -265,7 +265,7 @@ class Derivation(DerivBase):
         return expression
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
-        raise Exception("Derivation evaluation not implemented")
+        raise NotImplementedError("Derivation evaluation not implemented")
 
     def __call__(self, *args):
         if len(args):
@@ -669,7 +669,7 @@ class Textbook(DerivationContainer):
             raise KeyError()
         return self.__derivations__[self.registeredDerivs.index(name)]
 
-    def register(self, deriv: Derivation, ignoreDuplicates=False) -> None:
+    def register(self, deriv: DerivBase, ignoreDuplicates=False) -> None:
         if not ignoreDuplicates:
             assert deriv.name not in self.registeredDerivs, (
                 "Derivation " + deriv.name + " already registered in textbook"
@@ -681,11 +681,11 @@ class Textbook(DerivationContainer):
         try:
             _ = self[deriv.name]
         except KeyError:
-            deriv.registerComponents(self)
+            cast(Derivation, deriv).registerComponents(self)
             try:
                 _ = self[deriv.name]
             except KeyError:
-                self.__derivations__.append(deriv)
+                self.__derivations__.append(cast(Derivation, deriv))
 
     def dict(self):
 
@@ -710,9 +710,9 @@ class Textbook(DerivationContainer):
         return textbookDict
 
     def addSpeciesForTempDeriv(self, species: Species):
-        self.__tempDerivSpeciesIDs__ = list(
-            set(self.__tempDerivSpeciesIDs__).add(species.speciesID)
-        )
+        ids = set(self.__tempDerivSpeciesIDs__)
+        ids.add(species.speciesID)
+        self.__tempDerivSpeciesIDs__ = list(ids)
 
     @property
     def ePolyCoeff(self):
@@ -774,7 +774,7 @@ class MultiplicativeDerivation(Derivation):
         super().__init__(name, numArgs, container=container)
 
         self.__innerDeriv__ = innerDerivation
-        self.__outerDeriv__: Union[str, None] = outerDerivation
+        self.__outerDeriv__: Union[Derivation, None] = outerDerivation
 
         funMap = {
             "exp": np.exp,
@@ -952,7 +952,7 @@ class AdditiveDerivation(Derivation):
     def enclosedArgs(self):
         return sum(deriv.enclosedArgs for deriv in self.derivs)
 
-    def fillArgs(self, *args):
+    def fillArgs(self, *args: str):
 
         derivArgs: List[str] = []
 
@@ -963,7 +963,7 @@ class AdditiveDerivation(Derivation):
 
         return derivArgs
 
-    def dict(self):
+    def dict(self) -> Dict:
 
         derivIndices: List[List[int]] = []
         offset = 1
@@ -972,7 +972,7 @@ class AdditiveDerivation(Derivation):
             offset += deriv.numArgs
 
         derivTags = [deriv.name for deriv in self.__derivs__]
-        derivDict = {
+        derivDict: Dict[str, object] = {
             "type": "additiveDerivation",
             "derivationTags": derivTags,
             "resultPower": self.__resultPower__,
@@ -1117,10 +1117,13 @@ class DerivationClosure(Derivation):
             list(self.__argPositions__)
             + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
         )
-        return DerivationClosure(
-            addDeriv,
-            *tuple(list(self.__args__) + list(rhs.__args__)),
-            argPositions=posMap,
+        return cast(
+            Self,
+            DerivationClosure(
+                addDeriv,
+                *tuple(list(self.__args__) + list(rhs.__args__)),
+                argPositions=posMap,
+            ),
         )
 
     def __add__(self, rhs: Self) -> Self:
@@ -1140,10 +1143,13 @@ class DerivationClosure(Derivation):
                         list(self.__argPositions__)
                         + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
                     )
-                    return DerivationClosure(
-                        addDeriv,
-                        *tuple(list(self.__args__) + list(rhs.__args__)),
-                        argPositions=posMap,
+                    return cast(
+                        Self,
+                        DerivationClosure(
+                            addDeriv,
+                            *tuple(list(self.__args__) + list(rhs.__args__)),
+                            argPositions=posMap,
+                        ),
                     )
                 return self.__generalAdd__(rhs)
             if self.__deriv__.resultPower == 1:
@@ -1157,10 +1163,13 @@ class DerivationClosure(Derivation):
                     list(self.__argPositions__)
                     + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
                 )
-                return DerivationClosure(
-                    addDeriv,
-                    *tuple(list(self.__args__) + list(rhs.__args__)),
-                    argPositions=posMap,
+                return cast(
+                    Self,
+                    DerivationClosure(
+                        addDeriv,
+                        *tuple(list(self.__args__) + list(rhs.__args__)),
+                        argPositions=posMap,
+                    ),
                 )
             return self.__generalAdd__(rhs)
 
@@ -1176,10 +1185,13 @@ class DerivationClosure(Derivation):
                     list(self.__argPositions__)
                     + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
                 )
-                return DerivationClosure(
-                    addDeriv,
-                    *tuple(list(self.__args__) + list(rhs.__args__)),
-                    argPositions=posMap,
+                return cast(
+                    Self,
+                    DerivationClosure(
+                        addDeriv,
+                        *tuple(list(self.__args__) + list(rhs.__args__)),
+                        argPositions=posMap,
+                    ),
                 )
         return self.__generalAdd__(rhs)
 
@@ -1193,10 +1205,13 @@ class DerivationClosure(Derivation):
             list(self.__argPositions__)
             + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
         )
-        return DerivationClosure(
-            mulDeriv,
-            *tuple(list(self.__args__) + list(rhs.__args__)),
-            argPositions=posMap,
+        return cast(
+            Self,
+            DerivationClosure(
+                mulDeriv,
+                *tuple(list(self.__args__) + list(rhs.__args__)),
+                argPositions=posMap,
+            ),
         )
 
     def __mul__(self, rhs: Self) -> Self:
@@ -1215,10 +1230,13 @@ class DerivationClosure(Derivation):
                     list(self.__argPositions__)
                     + [self.__deriv__.numArgs + i for i in rhs.__argPositions__]
                 )
-                return DerivationClosure(
-                    mulDeriv,
-                    *tuple(list(self.__args__) + list(rhs.__args__)),
-                    argPositions=posMap,
+                return cast(
+                    Self,
+                    DerivationClosure(
+                        mulDeriv,
+                        *tuple(list(self.__args__) + list(rhs.__args__)),
+                        argPositions=posMap,
+                    ),
                 )
             return self.__generalMul__(rhs)
         if isinstance(rhs.__deriv__, MultiplicativeDerivation):
@@ -1238,14 +1256,20 @@ class DerivationClosure(Derivation):
                     for coeff in self.__deriv__.linCoeffs
                 ],
             )
-            return DerivationClosure(
-                addDeriv, *self.__args__, argPositions=self.__argPositions__
+            return cast(
+                Self,
+                DerivationClosure(
+                    addDeriv, *self.__args__, argPositions=self.__argPositions__
+                ),
             )
         addDeriv = AdditiveDerivation(
             self.name + "_rmul", [self.__deriv__], linCoeffs=[lhs]
         )
-        return DerivationClosure(
-            addDeriv, *self.__args__, argPositions=self.__argPositions__
+        return cast(
+            Self,
+            DerivationClosure(
+                addDeriv, *self.__args__, argPositions=self.__argPositions__
+            ),
         )
 
     def __pow__(self, rhs: Union[float, int]) -> Self:
@@ -1258,14 +1282,20 @@ class DerivationClosure(Derivation):
                 resultPower=self.__deriv__.resultPower * rhs,
                 linCoeffs=self.__deriv__.linCoeffs,
             )
-            return DerivationClosure(
-                addDeriv, *self.__args__, argPositions=self.__argPositions__
+            return cast(
+                Self,
+                DerivationClosure(
+                    addDeriv, *self.__args__, argPositions=self.__argPositions__
+                ),
             )
         addDeriv = AdditiveDerivation(
             self.name + "_pow", [self.__deriv__], linCoeffs=[1.0], resultPower=rhs
         )
-        return DerivationClosure(
-            addDeriv, *self.__args__, argPositions=self.__argPositions__
+        return cast(
+            Self,
+            DerivationClosure(
+                addDeriv, *self.__args__, argPositions=self.__argPositions__
+            ),
         )
 
     def registerComponents(self, container):
@@ -1344,7 +1374,7 @@ class PolynomialDerivation(GenericDerivation):
         assert (
             len(args) == self.numArgs
         ), "Unexpected number of arguments in PolynomialDerivation evaluate() call"
-        result = self.__constCoeff__
+        result = self.__constCoeff__ * np.ones(args[0].shape)
         for i, arg in enumerate(args):
             result += self.__polyCoeffs__[i] * arg ** self.__polyPowers__[i]
 
@@ -1419,16 +1449,16 @@ class RangeFilterDerivation(Derivation):
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
 
-        filterVals = []
+        filterVals: List[np.ndarray] = []
         for i, fl in enumerate(self.__filtering__):
             _, range0, range1 = fl
-            filterVals.append[
+            filterVals.append(
                 np.where(
                     args[i] < range1 and args[i] > range0,
                     np.ones(args[i].shape),
                     np.zeros(args[i].shape),
                 )
-            ]
+            )
 
         result = self.__deriv__.evaluate(*args[len(self.__filtering__) :])
         for filter in filterVals:
@@ -1794,7 +1824,7 @@ class MomentDerivation(Derivation):
         gVec: Union[Profile, None] = None,
         container: Union[DerivationContainer, None] = None,
     ) -> None:
-        super().__init__(name, 1 + len(varPowers), container)
+        super().__init__(name, 1 + len(varPowers), container=container)
         self.__momentHarmonic__ = momentHarmonic
         self.__momentOrder__ = momentOrder
         self.__multConst__ = multConst
@@ -1893,11 +1923,10 @@ class GenIntPolynomialDerivation(Derivation):
         funcName: Union[None, str] = None,
         container: Union[DerivationContainer, None] = None,
     ) -> None:
-        super().__init__(name, polyPowers.shape[1], container)
+        super().__init__(name, polyPowers.shape[1], container=container)
         self.__polyPowers__ = polyPowers
         self.__polyCoeffs__ = polyCoeffs
         self.__multConst__ = multConst
-        self.__funcName__ = funcName
 
         funMap = {
             "exp": np.exp,
@@ -1956,12 +1985,12 @@ class GenIntPolynomialDerivation(Derivation):
         assert (
             len(args) == self.numArgs
         ), "Unexpected number of arguments in GenIntPolynomialDerivation evaluate() call"
-        result = 0
+        result = np.zeros(args[0].shape)
         for ind, coeff in np.ndenumerate(self.__polyCoeffs__):
             for j, arg in enumerate(args):
                 result += coeff * arg ** self.__polyPowers__[ind[0], j]
         if self.__funcName__ is not None:
-            result = self.__fun__(result)
+            result = cast(Callable, self.__fun__)(result)
         return result * self.__multConst__
 
 
@@ -2013,7 +2042,7 @@ class NDInterpolationDerivation(Derivation):
         data: np.ndarray,
         container: Union[DerivationContainer, None] = None,
     ) -> None:
-        super().__init__(name, len(grids), container)
+        super().__init__(name, len(grids), container=container)
         self.__grids__ = grids
         self.__data__ = data
         dataShape = np.shape(data)

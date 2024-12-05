@@ -1,9 +1,10 @@
 import numpy as np
 import xarray as xr
 from .grid import Grid
-from typing import Union, List, Dict, cast, Any, Type, Tuple
+from typing import Union, List, Dict, cast, Any, Type, Tuple, Optional
 import warnings
 from .derivations import (
+    DerivBase,
     Derivation,
     NodeDerivation,
     DerivationArgument,
@@ -14,7 +15,7 @@ from .derivations import (
 from . import calculation_tree_support as ct
 from typing_extensions import Self
 from copy import copy, deepcopy
-from pylatex import Document, Section, Subsection, Itemize, NoEscape
+from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose
 
 # TODO: docs
@@ -343,9 +344,9 @@ class Variable(DerivationArgument):
         self.__dual__: Union[Variable, None] = None
 
     @property
-    def dual(self) -> Self:
+    def dual(self) -> Optional[Self]:
         """The dual variable to this variable. If no dual returns None."""
-        return self.__dual__
+        return cast(Optional[Self], self.__dual__)
 
     @dual.setter
     def dual(self, var: Self):
@@ -514,21 +515,24 @@ class Variable(DerivationArgument):
             self.__normConst__ = self.__normSI__
 
     @classmethod
-    def apply(cls, deriv: Type[Derivation], *args: Self) -> Self:
+    def apply(cls, deriv: DerivBase, *args: Self) -> Self:
         DerivationArgument.apply(deriv, *args)
         options = {
             "isDistribution": args[0].isDistribution,
             "isScalar": args[0].isScalar,
             "isSingleHarmonic": args[0].isSingleHarmonic,
         }
-        options.update(deriv.resultProperties)
+        options.update(cast(Derivation, deriv).resultProperties)
         derivationArgs = [arg.name for arg in args]
-        return Variable(
-            deriv.name,
-            args[0].grid,
-            derivation=deriv,
-            derivationArgs=derivationArgs,
-            **options,
+        return cast(
+            Self,
+            Variable(
+                deriv.name,
+                args[0].grid,
+                derivation=deriv,
+                derivationArgs=derivationArgs,
+                **options,
+            ),
         )
 
     def latex(self, latexRemap: Dict[str, str] = {}):
@@ -581,9 +585,9 @@ class Variable(DerivationArgument):
         if isinstance(rhs, MultiplicativeArgument):
             return (rhs ** (-1)) * self
         if isinstance(rhs, Variable):
-            return MultiplicativeArgument((self, 1.0), (rhs, -1.0))
+            return MultiplicativeArgument((self, 1.0), (cast(Variable, rhs), -1.0))
         if isinstance(rhs, (float, int)):
-            return MultiplicativeArgument((self, 1.0), (rhs, -1.0))
+            return MultiplicativeArgument((self, 1.0)) / rhs
 
     def __neg__(self):
         newArg = MultiplicativeArgument((self, 1.0))
@@ -607,7 +611,7 @@ def varFromNode(
     name: str,
     gridObj: Grid,
     node: ct.Node,
-    container: Union[DerivationContainer, None] = None,
+    container: Optional[DerivationContainer] = None,
     **kwargs,
 ) -> Variable:
     """Wrapper for creating a variable from a node. Takes in all of the same kwargs as the Variable constructor

@@ -54,7 +54,7 @@ def advection(
 
     advModel = mc.Model("advection_" + advectedVar.name)
 
-    div = stencils.StaggeredDivStencil()
+    div: mc.Stencil = stencils.StaggeredDivStencil()
 
     fluxOnDualGrid = (
         flux.isOnDualGrid if isinstance(flux, Variable) else flux.firstArg.isOnDualGrid
@@ -112,7 +112,7 @@ def pressureGrad(
 
     pressureGradModel = mc.Model("pressure_grad_" + fluxVar.name)
 
-    grad = stencils.StaggeredGradStencil()
+    grad: mc.Stencil = stencils.StaggeredGradStencil()
 
     fluxOnDualGrid = fluxVar.isOnDualGrid
     if isinstance(pressure, Variable):
@@ -343,8 +343,8 @@ def implicitTemperatures(
         )
 
         if speciesFluxes is not None:
-            colDensity = (
-                speciesDensities[i].dual
+            colDensity: Variable = (
+                cast(Variable, speciesDensities[i].dual)
                 if speciesFluxes[i].isOnDualGrid
                 else speciesDensities[i]
             )
@@ -654,7 +654,7 @@ def eeCollIsotropic(
         * mbData["logLee"]
         @ (
             vOuter
-            * stencils.D2DV2Stencil(1, 1, DiffCoeff=mbData["diffCCL"])(distribution)
+            * stencils.D2DV2Stencil(1, 1, diffCoeff=mbData["diffCCL"])(distribution)
         ).rename("diff_term")
     )
 
@@ -739,7 +739,7 @@ def eiCollIsotropic(
         * ionTemperature
         * (
             mbData["logLei"]
-            @ (vOuter * stencils.D2DV2Stencil(1, 1, DiffCoeff=innerV)(distribution))
+            @ (vOuter * stencils.D2DV2Stencil(1, 1, diffCoeff=innerV)(distribution))
         ).rename("diff_term")
     )
 
@@ -841,7 +841,7 @@ def flowingIonEIColl(
     ionFlowSpeed: Variable,
     elDensity: Variable,
     elTemperature: Variable,
-    ionSpecies: Variable,
+    ionSpecies: Species,
     evolvedHarmonics: List[int],
     ionFlux: Optional[Variable] = None,
 ) -> mc.Model:
@@ -1029,7 +1029,9 @@ def flowingIonEIColl(
     for harmonic in evolvedHarmonics:
         l = lNums[harmonic - 1]
 
-        usedDensity = ionDensity.dual if ionFlowSpeed.isOnDualGrid else ionDensity
+        usedDensity: Variable = (
+            cast(Variable, ionDensity.dual) if ionFlowSpeed.isOnDualGrid else ionDensity
+        )
         # velocity diffusion terms with fl
 
         v1 = grid.profile(np.array([1 / v for v in vGrid]), "V", "\\frac{1}{v}")
@@ -1846,13 +1848,13 @@ def standardBaseFluid(
     massRatio = elMass / speciesMass
 
     # Continuity equation flux divergence
-    newModel.ddt[density] += -stencils.StaggeredDivStencil()(flux.dual).rename(
-        "cont_divFlux"
-    )
+    newModel.ddt[density] += -stencils.StaggeredDivStencil()(
+        cast(Variable, flux.dual)
+    ).rename("cont_divFlux")
 
     # Momentum equation pressure gradient
 
-    newModel.ddt[flux.dual] += (
+    newModel.ddt[cast(Variable, flux.dual)] += (
         -massRatio
         / 2
         * stencils.StaggeredGradStencil()(temperature * density).rename(
@@ -1862,19 +1864,19 @@ def standardBaseFluid(
 
     # Momentum advection
 
-    newModel.ddt[flux.dual] += -stencils.CentralDiffDivStencil(flowSpeed.dual)(
-        flux.dual
-    ).rename("momentum_divFlux")
+    newModel.ddt[cast(Variable, flux.dual)] += -stencils.CentralDiffDivStencil(
+        cast(Variable, flowSpeed.dual)
+    )(cast(Variable, flux.dual)).rename("momentum_divFlux")
 
     diag = mc.DiagonalStencil()
     # Lorentz force
     if abs(species.charge) > 1e-6:  # Species effectively neutral below this
 
-        newModel.ddt[flux.dual] += (
+        newModel.ddt[cast(Variable, flux.dual)] += (
             species.charge
             * massRatio
             * density.dual
-            * diag(eField.dual).rename("momentum_lorentzForce")
+            * diag(cast(Variable, eField.dual)).rename("momentum_lorentzForce")
         )
 
     if energyDensity is not None:
@@ -1894,19 +1896,23 @@ def standardBaseFluid(
         newModel.ddt[temperature] += (
             -2
             / (3 * massRatio)
-            * diag(flux.dual**2 / density.dual**2).rename("temperature_U2")
+            * diag(
+                cast(Variable, flux.dual) ** 2 / cast(Variable, density.dual) ** 2
+            ).rename("temperature_U2")
         )
 
         # Energy advection
 
         newModel.ddt[energyDensity] += -stencils.StaggeredDivStencil()(
-            energyDensity.dual * flux.dual / density.dual
+            cast(Variable, energyDensity.dual)
+            * cast(Variable, flux.dual)
+            / cast(Variable, density.dual)
         ).rename("energy_wAdv")
 
         # Pressure advection
 
         newModel.ddt[energyDensity] += -stencils.StaggeredDivStencil()(
-            temperature.dual * flux.dual
+            cast(Variable, temperature.dual) * cast(Variable, flux.dual)
         ).rename("energy_pAdv")
 
         # Lorentz Force work
@@ -1915,7 +1921,9 @@ def standardBaseFluid(
             newModel.ddt[energyDensity] += (
                 2
                 * species.charge
-                * diag(flux.dual * eField.dual).rename("energy_lorentzWork")
+                * diag(cast(Variable, flux.dual) * cast(Variable, eField.dual)).rename(
+                    "energy_lorentzWork"
+                )
             )
 
         # Heatflux terms
@@ -1923,14 +1931,14 @@ def standardBaseFluid(
         if heatflux is not None:
             # Identity term
 
-            newModel.ddt[heatflux.dual] += -diag(heatflux.dual).rename(
-                "heatflux_identity"
-            )
+            newModel.ddt[cast(Variable, heatflux.dual)] += -diag(
+                cast(Variable, heatflux.dual)
+            ).rename("heatflux_identity")
 
             # Heatflux divergence in energy equation
 
             newModel.ddt[energyDensity] += -stencils.StaggeredDivStencil()(
-                heatflux.dual
+                cast(Variable, heatflux.dual)
             ).rename("energy_divq")
 
     # Viscosity
@@ -1943,7 +1951,7 @@ def standardBaseFluid(
 
         if viscosityLimitMult is not None:
 
-            newModel.ddt[flux.dual] += (
+            newModel.ddt[cast(Variable, flux.dual)] += (
                 -massRatio
                 / 2
                 * stencils.StaggeredDivStencil()(viscosityLimitMult * viscosity).rename(
@@ -1953,7 +1961,7 @@ def standardBaseFluid(
 
         else:
 
-            newModel.ddt[flux.dual] += (
+            newModel.ddt[cast(Variable, flux.dual)] += (
                 -massRatio
                 / 2
                 * stencils.StaggeredDivStencil()(viscosity).rename("momentum_divpi")
@@ -1965,13 +1973,18 @@ def standardBaseFluid(
             if viscosityLimitMult is not None:
 
                 newModel.ddt[energyDensity] += -stencils.StaggeredDivStencil()(
-                    viscosityLimitMult.dual * viscosity.dual * flux.dual / density.dual
+                    cast(Variable, viscosityLimitMult.dual)
+                    * cast(Variable, viscosity.dual)
+                    * cast(Variable, flux.dual)
+                    / cast(Variable, density.dual)
                 ).rename("energy_divpiu")
 
             else:
 
                 newModel.ddt[energyDensity] += -stencils.StaggeredDivStencil()(
-                    viscosity.dual * flux.dual / density.dual
+                    cast(Variable, viscosity.dual)
+                    * cast(Variable, flux.dual)
+                    / cast(Variable, density.dual)
                 ).rename("energy_divpiu")
 
     return newModel
@@ -2024,7 +2037,9 @@ def bohmBoundaryModel(
 
     # Momentum BC
 
-    newModel.ddt[flux.dual] += -bcDiv(flux.dual).rename("momentum_Bohm")
+    newModel.ddt[cast(Variable, flux.dual)] += -bcDiv(cast(Variable, flux.dual)).rename(
+        "momentum_Bohm"
+    )
 
     if energyDensity is not None:
 
