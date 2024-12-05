@@ -185,7 +185,7 @@ class MomentStencil(Stencil):
 
 class DistGradStencil(Stencil):
 
-    def __init__(self, rowHarmonic: str, colHarmonic: str):
+    def __init__(self, rowHarmonic: int, colHarmonic: int):
         super().__init__(
             "\\delta_{h,"
             + str(rowHarmonic)
@@ -498,7 +498,10 @@ class CustomFluid1DStencil(Stencil):
             xStencil
         ), "fixedColumnVecs must be of same length as xStencil in CustomFluid1DStencil"
 
-        stencil = {"stencilType": "customFluid1DStencil", "xStencil": list(xStencil)}
+        stencil: Dict[str, object] = {
+            "stencilType": "customFluid1DStencil",
+            "xStencil": list(xStencil),
+        }
 
         for i, vec in enumerate(fixedColumnVecs):
             stencil.update({"columnVector" + str(i + 1): vec.data.tolist()})

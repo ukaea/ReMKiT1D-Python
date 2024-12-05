@@ -10,7 +10,7 @@ from .model_construction import ModelboundData, TermGenerator
 from .variable_container import Variable
 from abc import ABC, abstractmethod
 from .tex_parsing import numToScientificTex
-import pylatex as tex
+import pylatex as tex  # type: ignore
 
 # TODO: docs
 
@@ -222,14 +222,14 @@ class CRMModelboundData(ModelboundData):
             transitionName = transition
 
         assert transitionName in self.transitionTags, (
-            "getRate called with unregistered transition " + transition.name
+            "getRate called with unregistered transition " + transitionName
         )
 
         return self[
             "rate" + str(moment) + "index" + self.transitionTags.index(transitionName)
         ]
 
-    def addLatexToDoc(self, doc, **kwargs):
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append("CRM Modelbound data")
         with doc.create(tex.Subsubsection("Transitions")):
@@ -371,7 +371,7 @@ class DerivedTransition(Transition):
             ),
         }
 
-    def latex(self, **kwargs):
+    def latex(self: Self, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         equation = super().latex(**kwargs)
         equation += "\\newline "
@@ -510,9 +510,9 @@ class VariableECSTransition(Transition):
 
         super().__init__(name, inStates, outStates, takeMomentumMoment)
 
-    def dict(self):
+    def dict(self: Self):
 
-        presentCSHarmonics = [x[0] for x in self.__csDerivs__]
+        presentCSHarmonics = list(self.__csDerivs__.keys())
 
         csDataDict: Dict[str, object] = {
             "crossSectionDerivationHarmonics": presentCSHarmonics,
@@ -537,7 +537,7 @@ class VariableECSTransition(Transition):
 
         return tProperties
 
-    def latex(self, **kwargs):
+    def latex(self: Self, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         equation = super().latex(**kwargs)
         equation += "\\newline Variable energy/cross-section transition"
@@ -1119,11 +1119,14 @@ class CRMTermGenerator(TermGenerator):
         for sp in self.__evolvedSpecies__:
             if sp.associatedVarNames[0] in evolvedVarNames:
                 newSpecies.append(sp)
-        return CRMTermGenerator(
-            self.name,
-            newSpecies,
-            self.implicitGroups,
-            self.__includedTransitionIndices__,
+        return cast(
+            Self,
+            CRMTermGenerator(
+                self.name,
+                newSpecies,
+                self.implicitGroups,
+                self.__includedTransitionIndices__,
+            ),
         )
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
