@@ -21,3 +21,4 @@ build
 *.json
 *.old*
 ignore
+*coverage
