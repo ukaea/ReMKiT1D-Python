@@ -107,7 +107,7 @@ class MultiplicativeArgument:
         newArgs = cast(Self, MultiplicativeArgument())
         for arg, power in self.__argBuffer__:
             newArgs.__argBuffer__.append((arg, rhs * power))
-        newArgs.__scalar__ = newArgs.scalar**rhs
+        newArgs.__scalar__ = self.scalar**rhs
         return newArgs
 
     def __matmul__(self, rhs):
@@ -478,6 +478,10 @@ class Variable(DerivationArgument):
     def isCommunicated(self):
         return self.__isCommunicated__
 
+    @isCommunicated.setter
+    def isCommunicated(self, comm=True):
+        self.__isCommunicated__ = comm
+
     @property
     def scalarHostProcess(self):
         return self.__scalarHostProcess__
@@ -560,7 +564,7 @@ class Variable(DerivationArgument):
         self, rhs: Union[Self, MultiplicativeArgument, float, int]
     ) -> MultiplicativeArgument:
         if isinstance(rhs, MultiplicativeArgument):
-            return rhs * self
+            return MultiplicativeArgument((self, 1.0)) * rhs
         elif isinstance(rhs, Variable):
             return MultiplicativeArgument((rhs, 1.0), (self, 1.0))
         elif isinstance(rhs, (int, float)):
@@ -711,7 +715,9 @@ class VariableContainer:
 
         self.__grid__ = gridObj
         self.__variables__: List[Variable] = [
-            Variable("time", gridObj, isDerived=True, isScalar=True)
+            Variable(
+                "time", gridObj, isDerived=True, isScalar=True, isCommunicated=False
+            )
         ]
 
     def add(self, *args: Variable):
@@ -754,7 +760,7 @@ class VariableContainer:
     def __setitem__(self, key: str, var: Variable):
         if key not in self.varNames:
             self.add(var.rename(key))
-        return self.__variables__[self.varNames.index(key)]
+        self.__variables__[self.varNames.index(key)] = var.rename(key)
 
     def getVarAttrs(self, varName: str) -> Dict:
         """Get attributes associated with given variable
