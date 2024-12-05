@@ -82,7 +82,7 @@ class IntegrationRule:
             ]
 
     def latex(self) -> str:
-        expression = "Evolved model: " + self.__model__.name.replace("_", "\_")
+        expression = "Evolved model: " + self.__model__.name.replace("_", r"\_")
         expression += "\\newline Evaluated groups: " + ",".join(
             str(group) for group in self.evaluatedGroups
         )

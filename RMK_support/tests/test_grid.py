@@ -211,16 +211,18 @@ def test_grid_to_dual():
 
     data = np.linspace(0, 4, 5)
     interpData = grid.gridToDual(data)
-    assert all(interpData[:-1] == np.interp(grid.xGridDual, grid.xGrid, data)[:-1])
+    assert all(
+        np.isclose(interpData[:-1], np.interp(grid.xGridDual, grid.xGrid, data)[:-1])
+    )
 
-    assert (
-        interpData[-1]
-        == 2
+    assert np.isclose(
+        interpData[-1],
+        2
         * (data[-1] - data[-2])
         / (grid.xWidths[-1] + grid.xWidths[-2])
         * grid.xWidths[-1]
         / 2
-        + data[-1]
+        + data[-1],
     )
 
     grid = Grid(
