@@ -120,7 +120,7 @@ class Species:
         return (
             self.__latexName__
             if self.__latexName__ is not None
-            else "\\text{" + self.name.replace("_", "\_") + "}"
+            else "\\text{" + self.name.replace("_", r"\_") + "}"
         )
 
 
@@ -152,7 +152,7 @@ class SpeciesContainer:
                             (
                                 "$" + latexRemap[varName] + "$"
                                 if varName in latexRemap
-                                else "$\\text{" + varName.replace("_", "\_") + "}$"
+                                else "$\\text{" + varName.replace("_", r"\_") + "}$"
                             )
                             for varName in species.associatedVarNames
                         ]
@@ -215,7 +215,7 @@ class Derivation(DerivBase):
         self.__latexName__ = (
             latexName
             if latexName is not None
-            else "\\text{" + name.replace("_", "\_") + "}"
+            else "\\text{" + name.replace("_", r"\_") + "}"
         )
         if latexTemplate is not None:
             for i in range(numArgs):
@@ -752,7 +752,7 @@ class Textbook(DerivationContainer):
                         )
                         itemize.add_item(
                             tex.NoEscape(
-                                deriv.name.replace("_", "\_")
+                                deriv.name.replace("_", r"\_")
                                 + f": ${deriv.latex(*argTuple)}$"
                             )
                         )

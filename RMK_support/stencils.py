@@ -66,12 +66,12 @@ class BCDivStencil(Stencil):
             boundVar += (
                 latexRemap[self.__lowerBoundVar__.name]
                 if self.__lowerBoundVar__.name in latexRemap
-                else "\\text{" + self.__lowerBoundVar__.name.replace("_", "\_") + "}"
+                else "\\text{" + self.__lowerBoundVar__.name.replace("_", r"\_") + "}"
             )
         fluxJac = (
             latexRemap[self.__fluxJac__.name]
             if self.__fluxJac__.name in latexRemap
-            else "\\text{" + self.__fluxJac__.name.replace("_", "\_") + "}"
+            else "\\text{" + self.__fluxJac__.name.replace("_", r"\_") + "}"
         )
         return (
             "\\nabla_{BC,"
@@ -118,7 +118,7 @@ class CentralDiffDivStencil(Stencil):
             fluxJac = (
                 latexRemap[self.__fluxJac__.name]
                 if self.__fluxJac__.name in latexRemap
-                else "\\text{" + self.__fluxJac__.name.replace("_", "\_") + "}"
+                else "\\text{" + self.__fluxJac__.name.replace("_", r"\_") + "}"
             )
         return (
             "\\nabla_{c}\\cdot\\left("
@@ -336,7 +336,7 @@ class TermMomentStencil(Stencil):
             "\\langle \\left( \\frac{\\partial $0_{h="
             + str(colHarmonic)
             + "}}{\\partial t} \\right)_{\\text{"
-            + termName.replace("_", "\_")
+            + termName.replace("_", r"\_")
             + "}} \\rangle_{n="
             + str(momentOrder)
             + "}",

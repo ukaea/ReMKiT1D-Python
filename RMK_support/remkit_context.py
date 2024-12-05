@@ -168,7 +168,7 @@ class GroupEvaluator(Manipulator):
         resultVarName = (
             latexRemap[self.__resultVar__.name]
             if self.__resultVar__.name in latexRemap
-            else "\\text{" + self.__resultVar__.name.replace("_", "\_") + "}"
+            else "\\text{" + self.__resultVar__.name.replace("_", r"\_") + "}"
         )
 
         return (
@@ -221,7 +221,7 @@ class TermEvaluator(Manipulator):
         resultVarName = (
             latexRemap[self.__resultVar__.name]
             if self.__resultVar__.name in latexRemap
-            else "\\text{" + self.__resultVar__.name.replace("_", "\_") + "}"
+            else "\\text{" + self.__resultVar__.name.replace("_", r"\_") + "}"
         )
         accu = "_{accu}" if self.__accumulate__ else ""
         return (
@@ -230,7 +230,7 @@ class TermEvaluator(Manipulator):
             + accu
             + "\\left(\\text{"
             + ",".join(
-                model.replace("_", "\_") + "-" + term.replace("_", "\_")
+                model.replace("_", r"\_") + "-" + term.replace("_", r"\_")
                 for model, term in self.__modelTermTags__
             )
             + "}\\right)"
@@ -278,7 +278,7 @@ class MBDataExtractor(Manipulator):
         resultVarName = (
             latexRemap[self.__mbVar__.name]
             if self.__mbVar__.name in latexRemap
-            else "\\text{" + self.__mbVar__.name.replace("_", "\_") + "}"
+            else "\\text{" + self.__mbVar__.name.replace("_", r"\_") + "}"
         )
 
         return (
@@ -341,7 +341,7 @@ class ManipulatorCollection:
                     for manip in self.manipulators:
                         itemize.add_item(
                             tex.NoEscape(
-                                manip.name.replace("_", "\_")
+                                manip.name.replace("_", r"\_")
                                 + f": \\newline ${manip.latex(**kwargs)}$"
                             )
                         )

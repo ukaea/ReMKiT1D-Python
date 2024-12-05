@@ -195,7 +195,7 @@ class TermCollection:
         evolvedVarTex = (
             latexRemap[self.__evolvedVar__.name]
             if self.__evolvedVar__.name in latexRemap
-            else "\\text{" + self.__evolvedVar__.name.replace("_", "\_") + "}"
+            else "\\text{" + self.__evolvedVar__.name.replace("_", r"\_") + "}"
         )
         doc.append(
             "\\left(\\frac{"
@@ -904,7 +904,7 @@ class DerivationTerm(Term):
             (
                 latexRemap[arg]
                 if arg in latexRemap
-                else "\\text{" + arg.replace("_", "\_") + "}"
+                else "\\text{" + arg.replace("_", r"\_") + "}"
             )
             for arg in self.__derivationArgs__
         )
@@ -913,7 +913,7 @@ class DerivationTerm(Term):
             result = (
                 latexRemap[self.__mbVar__.name]
                 if self.__mbVar__.name in latexRemap
-                else "\\text{" + self.__mbVar__.name.replace("_", "\_") + "} " + result
+                else "\\text{" + self.__mbVar__.name.replace("_", r"\_") + "} " + result
             )
         return result
 
@@ -1032,7 +1032,7 @@ class Model:
         self.__latexName__ = (
             latexName
             if latexName is not None
-            else "\\text{" + name.replace("_", "\_") + "}"
+            else "\\text{" + name.replace("_", r"\_") + "}"
         )
         self.__modelboundData__: Optional[ModelboundData] = None
         self.__termGenerators__: List[TermGenerator] = []

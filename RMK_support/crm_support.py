@@ -379,7 +379,7 @@ class DerivedTransition(Transition):
             (
                 latexRemap[arg]
                 if arg in latexRemap
-                else "\\text{" + arg.replace("_", "\_") + "}"
+                else "\\text{" + arg.replace("_", r"\_") + "}"
             )
             for arg in self.__rateDeriv__.fillArgs()
         )
@@ -389,7 +389,7 @@ class DerivedTransition(Transition):
                 (
                     latexRemap[arg]
                     if arg in latexRemap
-                    else "\\text{" + arg.replace("_", "\_") + "}"
+                    else "\\text{" + arg.replace("_", r"\_") + "}"
                 )
                 for arg in self.__momentumRateDeriv__.fillArgs()
             )
@@ -403,7 +403,7 @@ class DerivedTransition(Transition):
                 (
                     latexRemap[arg]
                     if arg in latexRemap
-                    else "\\text{" + arg.replace("_", "\_") + "}"
+                    else "\\text{" + arg.replace("_", r"\_") + "}"
                 )
                 for arg in self.__energyRateDeriv__.fillArgs()
             )
@@ -545,7 +545,7 @@ class VariableECSTransition(Transition):
             (
                 latexRemap[arg]
                 if arg in latexRemap
-                else "\\text{" + arg.replace("_", "\_") + "}"
+                else "\\text{" + arg.replace("_", r"\_") + "}"
             )
             for arg in self.__energyDeriv__.fillArgs()
         )
@@ -1141,7 +1141,7 @@ class CRMTermGenerator(TermGenerator):
         )
         doc.append(
             tex.NoEscape(
-                self.name.replace("_", "\_")
+                self.name.replace("_", r"\_")
                 + ": \\newline CRM density evolution term generator"
             )
         )
@@ -1205,7 +1205,7 @@ class CRMElEnergyTermGenerator(TermGenerator):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append(
             tex.NoEscape(
-                self.name.replace("_", "\_")
+                self.name.replace("_", r"\_")
                 + ": \\newline CRM Electron energy evolution term generator"
             )
         )
@@ -1302,7 +1302,7 @@ class CRMBoltzTermGenerator(TermGenerator):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append(
             tex.NoEscape(
-                self.name.replace("_", "\_")
+                self.name.replace("_", r"\_")
                 + ": \\newline CRM Boltzmann collision operator "
                 + ("absorption" if self.__absorptionTerms__ else "emission")
                 + " term generator"
@@ -1369,7 +1369,7 @@ class CRMSecElTermGenerator(TermGenerator):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         doc.append(
             tex.NoEscape(
-                self.name.replace("_", "\_")
+                self.name.replace("_", r"\_")
                 + ": \\newline CRM secondary electron source term generator"
             )
         )
