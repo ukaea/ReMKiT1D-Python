@@ -197,7 +197,7 @@ class Variable(DerivationArgument):
 
         self.__name__ = name
 
-        self.__derivation__: Union[Type[Derivation], None] = kwargs.get(
+        self.__derivation__: Optional[Derivation] = kwargs.get(
             "derivation", None
         )
         self.__isDerived__: bool = kwargs.get("isDerived", False)
