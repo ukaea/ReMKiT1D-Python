@@ -70,11 +70,6 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
 
     rk.mpiContext = rmk.MPIContext(kwargs.get("mpiProcs", 8))
 
-    tempNorm = rk.norms["eVTemperature"]
-    densNorm = rk.norms["density"]
-
-    timeNorm = rk.norms["time"]
-
     dx0 = kwargs.get("dx0", 0.27)
     dxN = kwargs.get("dxN", 0.0125)
     Nx = kwargs.get("Nx", 128)
@@ -94,6 +89,11 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         isLengthInMeters=True,
     )
 
+    tempNorm = rk.norms["eVTemperature"]
+    densNorm = rk.norms["density"]
+
+    timeNorm = rk.norms["time"]
+    
     Tn = kwargs.get("Tn", 3.0) / tempNorm
 
     rk.species.add(rmk.Species("e", 0, atomicA=elMass / amu, charge=-1.0))
@@ -359,7 +359,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     neutDynModel = rmk.Model("neutDyn")
 
     if kwargs.get("amjuelCXRate", False):
-        diffCoeff = DerivationClosure(NodeDerivation("amjDiff",np.sqrt(Tn)/2 * node(Te_dual**(0.5)) /(node(ni_dual)*node(cxRate))),ni_dual,Te_dual,cxRate)
+        diffCoeff = DerivationClosure(NodeDerivation("amjDiff",np.sqrt(Tn)/2 * node(Te_dual)**(0.5) /(node(ni_dual)*node(cxRate))),ni_dual,Te_dual,cxRate)
         
         neutDynModel.ddt[nn[0]] += elMass/ionMass * stencils.DiffusionStencil(diffCoeff,diffCoeffOnDualGrid=True)(nn[0]).rename("neutralDiff")
 
