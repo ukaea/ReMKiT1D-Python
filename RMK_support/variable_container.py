@@ -18,9 +18,6 @@ from copy import copy, deepcopy
 from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose
 
-# TODO: docs
-
-
 class MultiplicativeArgument:
     """A multiplicative argument composed of variables raised to powers and an optional multiplicative scalar"""
 
@@ -134,7 +131,7 @@ class MultiplicativeArgument:
             var = (
                 latexRemap[key]
                 if key in latexRemap
-                else "\\text{" + key.replace("_", r"_") + "}"
+                else "\\text{" + key.replace("_", r"\_") + "}"
             )
             if self.argMultiplicity[key] > 0:
                 if isclose(self.argMultiplicity[key], 1.0, rel_tol=1e-4):
@@ -554,7 +551,7 @@ class Variable(DerivationArgument):
             str: LaTeX-compatible string
         """
         result = (
-            "\\text{" + self.name.replace("_", r"_") + "}"
+            "\\text{" + self.name.replace("_", r"\_") + "}"
             if self.name not in latexRemap
             else latexRemap[self.name]
         )
@@ -563,7 +560,7 @@ class Variable(DerivationArgument):
                 (
                     latexRemap[arg]
                     if arg in latexRemap
-                    else "\\text{" + arg.replace("_", r"_") + "}"
+                    else "\\text{" + arg.replace("_", r"\_") + "}"
                 )
                 for arg in self.__derivationArgs__
             )
@@ -894,8 +891,7 @@ class VariableContainer:
                     textbook.register(var.derivation)
 
     def checkDerivationArgs(self) -> None:
-        """Check whether all derived variable derivation arguments are present in the container
-        """
+        """Check whether all derived variable derivation arguments are present in the container"""
         for var in self.derivedVars:
             for name in var.derivationArgs:
                 assert name in self.varNames, (
