@@ -40,7 +40,7 @@ def AMJUELDeriv1D(
         ar.loadAMJUELReactionData(reaction, section, amjuelFilename), coefName=coefName
     )
     polyCoeffs = fit.flatten()
-    polyPowers = np.array(list(range(len(fit)))).reshape((len(fit),1))
+    polyPowers = np.array(list(range(len(fit)))).reshape((len(fit), 1))
     multConst = 1e-6 * timeNorm * densNorm / tempNorm
     funcName = "exp"
     return GenIntPolynomialDerivation(

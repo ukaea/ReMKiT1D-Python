@@ -18,6 +18,7 @@ from copy import copy, deepcopy
 from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose
 
+
 class MultiplicativeArgument:
     """A multiplicative argument composed of variables raised to powers and an optional multiplicative scalar"""
 
@@ -273,17 +274,17 @@ class Variable(DerivationArgument):
         self.__dims__: Union[List[str], None] = (
             ["x"] if not self.isOnDualGrid else ["x_dual"]
         )
-        dataShape = [gridObj.numX()]
+        dataShape = [gridObj.numX]
 
         if self.__isDistribution__:
             cast(List[str], self.__dims__).append("h")
-            dataShape.append(gridObj.numH())
+            dataShape.append(gridObj.numH)
             cast(List[str], self.__dims__).append("v")
-            dataShape.append(gridObj.numV())
+            dataShape.append(gridObj.numV)
 
         if self.__isSingleHarmonic__:
             cast(List[str], self.__dims__).append("v")
-            dataShape.append(gridObj.numV())
+            dataShape.append(gridObj.numV)
 
         if self.__isScalar__:
             self.__dims__ = None
@@ -711,7 +712,7 @@ class VariableContainer:
         self.__coords__ = {
             "x": gridObj.xGrid,
             "x_dual": gridObj.xGridDual,
-            "h": range(gridObj.numH()),
+            "h": range(gridObj.numH),
             "v": gridObj.vGrid,
         }
         if len(timestamps) > 0:

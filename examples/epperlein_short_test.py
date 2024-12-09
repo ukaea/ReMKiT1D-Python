@@ -67,17 +67,17 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
 
     # ### Variables
 
-    nInit = np.ones(rk.grid.numX())
+    nInit = np.ones(rk.grid.numX)
 
     TInit = 1.0 + 0.001*np.sin(2*np.pi*rk.grid.xGrid/L)
     WInit = 3*nInit*TInit/2
-    fInit = np.zeros([rk.grid.numX(),rk.grid.numH(),rk.grid.numV()])
-    for i in range(rk.grid.numX()):
+    fInit = np.zeros([rk.grid.numX,rk.grid.numH,rk.grid.numV])
+    for i in range(rk.grid.numX):
         fInit[i,rk.grid.getH(0)-1,:] = (np.pi*TInit[i])**(-1.5) * nInit[i]* np.exp(-rk.grid.vGrid**2/TInit[i])
 
     # Rescale distribution function to ensure that the numerical density moment agrees with the initial values
     numerical_dens = rk.grid.velocityMoment(fInit,0,1)
-    for i in range(rk.grid.numX()):
+    for i in range(rk.grid.numX):
         fInit[i,rk.grid.getH(0)-1,:] = nInit[i] *fInit[i,rk.grid.getH(0)-1,:]/numerical_dens[i]
         
     f,f_dual = rmk.varAndDual("f",rk.grid,isDistribution=True,data=fInit)
@@ -121,14 +121,14 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
 
     rk.models.add(cm.eeCollIsotropic(f,T,n,rk.norms,rk.grid,rk.textbook).rename("e-e_0"))
 
-    rk.models.add(cm.stationaryIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni_dual,n_dual,T_dual,rk.species["D+"],evolvedHarmonics=list(range(2, rk.grid.numH()+1, 2))).rename("e-i_odd"))
+    rk.models.add(cm.stationaryIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni_dual,n_dual,T_dual,rk.species["D+"],evolvedHarmonics=list(range(2, rk.grid.numH+1, 2))).rename("e-i_odd"))
 
-    rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,T_dual,n_dual,list(range(2, rk.grid.numH()+1, 2))).rename("e-e_odd"))
+    rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,T_dual,n_dual,list(range(2, rk.grid.numH+1, 2))).rename("e-e_odd"))
     
     if lMax > 1:
-        rk.models.add(cm.stationaryIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni,n,T,rk.species["D+"],evolvedHarmonics=list(range(3, rk.grid.numH()+1, 2))).rename("e-i_even"))
+        rk.models.add(cm.stationaryIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni,n,T,rk.species["D+"],evolvedHarmonics=list(range(3, rk.grid.numH+1, 2))).rename("e-i_even"))
 
-        rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,T,n,list(range(3, rk.grid.numH()+1, 2))).rename("e-e_even"))
+        rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,T,n,list(range(3, rk.grid.numH+1, 2))).rename("e-e_even"))
 
     # Extractor manipulator to retrieve the e-e Coulomb log from the e-e0 model. Priority set to 1 to ensure that qB is derived from the latest logLee value.
 

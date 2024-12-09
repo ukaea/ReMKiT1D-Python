@@ -226,8 +226,8 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         rk.variables.add(n,n_dual)
 
     # We need a distribution function to calculate rates from cross-sections built into the code
-    fInit = np.zeros([rk.grid.numX(), rk.grid.numH(), rk.grid.numV()])
-    for i in range(rk.grid.numX()):
+    fInit = np.zeros([rk.grid.numX, rk.grid.numH, rk.grid.numV])
+    for i in range(rk.grid.numX):
         fInit[i, rk.grid.getH(0) - 1, :] = (
             np.pi ** (-1.5) * TInit[i] ** (-1.5) * nInit[i] * np.exp(-rk.grid.vGrid**2 / TInit[i])
         )

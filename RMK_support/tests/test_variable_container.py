@@ -58,7 +58,7 @@ def test_fluid_nonzero_var(grid):
         var = Variable(
             "var",
             grid,
-            data=np.ones(grid.numX()),
+            data=np.ones(grid.numX),
             isDerived=True,
             units="arb",
             isOnDualGrid=True,
@@ -66,7 +66,7 @@ def test_fluid_nonzero_var(grid):
             unitSI="a",
         )
 
-    assert all(var.dataArr.data == np.ones(grid.numX()))
+    assert all(var.dataArr.data == np.ones(grid.numX))
     assert var.properties == {
         "isDerived": True,
         "isDistribution": False,
@@ -82,14 +82,14 @@ def test_fluid_nonzero_var(grid):
     }
 
     var.switchUnits()
-    assert all(var.data == 2 * np.ones(grid.numX()))
+    assert all(var.data == 2 * np.ones(grid.numX))
     assert var.units == "a"
     var.switchUnits()
-    assert all(var.data == np.ones(grid.numX()))
+    assert all(var.data == np.ones(grid.numX))
     assert var.units == "arb"
 
-    var.values = 3 * np.ones(grid.numX())
-    assert all(var.values == 3 * np.ones(grid.numX()))
+    var.values = 3 * np.ones(grid.numX)
+    assert all(var.values == 3 * np.ones(grid.numX))
 
 
 def test_var_and_dual(grid):
@@ -243,21 +243,21 @@ def test_vs_init(grid, vCont):
 
 def test_var_evaluate(grid, vCont):
 
-    vCont.add(Variable("b", grid, data=np.ones(grid.numX())))
+    vCont.add(Variable("b", grid, data=np.ones(grid.numX)))
 
     a = varFromNode("a", grid, 2 * node(vCont["b"]))
-    assert all(vCont["b"].evaluate(vCont.dataset) == np.ones(grid.numX()))
-    assert all(a.evaluate(vCont.dataset) == 2 * np.ones(grid.numX()))
+    assert all(vCont["b"].evaluate(vCont.dataset) == np.ones(grid.numX))
+    assert all(a.evaluate(vCont.dataset) == 2 * np.ones(grid.numX))
 
 
 def test_json_dump(grid, vCont):
     testCont = vCont
 
     testCont.setVar("var0")
-    testCont.setVar("var1", data=np.ones(grid.numX()), isDerived=True, units="arb")
+    testCont.setVar("var1", data=np.ones(grid.numX), isDerived=True, units="arb")
     testCont.setVar(
         "var2",
-        data=np.ones((grid.numX(), grid.numH(), grid.numV())),
+        data=np.ones((grid.numX, grid.numH, grid.numV)),
         isDistribution=True,
         units="arb",
     )
@@ -283,7 +283,7 @@ def test_json_dump(grid, vCont):
                     "isStationary": False,
                     "isOnDualGrid": False,
                     "priority": 0,
-                    "initVals": np.zeros(grid.numX()).tolist(),
+                    "initVals": np.zeros(grid.numX).tolist(),
                 },
                 "var2": {
                     "isDistribution": True,
@@ -291,9 +291,7 @@ def test_json_dump(grid, vCont):
                     "isStationary": False,
                     "isOnDualGrid": False,
                     "priority": 0,
-                    "initVals": np.ones(
-                        grid.numX() * grid.numH() * grid.numV()
-                    ).tolist(),
+                    "initVals": np.ones(grid.numX * grid.numH * grid.numV).tolist(),
                 },
             },
             "derivedVariables": {
@@ -312,7 +310,7 @@ def test_json_dump(grid, vCont):
                     "isStationary": False,
                     "isOnDualGrid": False,
                     "priority": 0,
-                    "initVals": np.ones(grid.numX()).tolist(),
+                    "initVals": np.ones(grid.numX).tolist(),
                 },
                 "var3": {
                     "isDistribution": False,

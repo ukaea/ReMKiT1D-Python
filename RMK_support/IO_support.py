@@ -86,8 +86,8 @@ def loadDummyVarFromHDF5(
         with h5py.File(filepath, "r") as f:
             dset = f[varName]
             data = dset[:]
-            if len(data) > grid.numX():
-                buffers.append(data.reshape((grid.numX(), grid.numH(), grid.numV())))
+            if len(data) > grid.numX:
+                buffers.append(data.reshape((grid.numX, grid.numH, grid.numV)))
             else:
                 buffers.append(data)
 
@@ -99,7 +99,7 @@ def loadDummyVarFromHDF5(
         for i, _ in enumerate(filepaths):
             buffer[i, ...] = buffers[i]
 
-    isScalar = buffers[0].shape == (1,) if grid.numX() > 1 else False
+    isScalar = buffers[0].shape == (1,) if grid.numX > 1 else False
     isDistribution = len(buffers[0].shape) == 3
     result = vc.Variable(
         varName,

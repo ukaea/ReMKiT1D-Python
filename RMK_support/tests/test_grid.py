@@ -17,7 +17,7 @@ def vGrid():
 def test_grid_x_simple(xGrid):
     grid = Grid(xGrid=xGrid)
     assert all(abs(xGrid - grid.xGrid) < 1e-15)
-    assert grid.numX() == 128
+    assert grid.numX == 128
     assert not grid.isLengthInMeters
 
 
@@ -41,8 +41,8 @@ def test_grid_v_simple(xGrid, vGrid):
     assert grid.lMax == 1
     assert grid.mMax == 1
     assert grid.getH(1, 0, im=False) == 2
-    assert grid.numH() == 4
-    assert grid.numV() == 120
+    assert grid.numH == 4
+    assert grid.numV == 120
 
     assert grid.lGrid == [0, 1, 1, 1]
     assert grid.mGrid == [0, 0, 1, 1]
@@ -57,7 +57,7 @@ def test_grid_v_widths(xGrid, vGrid):
 
     assert all(abs(vGrid - grid.vWidths) < 1e-12)
 
-    assert grid.numV() == 120
+    assert grid.numV == 120
 
     gridPoints = np.zeros(len(vGrid))
     gridPoints[0] = vGrid[0] / 2

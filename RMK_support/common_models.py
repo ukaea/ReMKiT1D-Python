@@ -378,14 +378,14 @@ def kinAdvX(
     assert (
         distribution.isDistribution
     ), "kinAdvX distribution must be a distribution variable"
-    usedHarmonics = list(range(1, grid.numH() + 1))
+    usedHarmonics = list(range(1, grid.numH + 1))
 
     if evolvedHarmonics is not None:
         usedHarmonics = evolvedHarmonics
 
     advModel = mc.Model("kinetic_X_advection")
-    lNums = [grid.lGrid[i - 1] for i in range(1, grid.numH() + 1)]
-    mNums = [grid.mGrid[i - 1] for i in range(1, grid.numH() + 1)]
+    lNums = [grid.lGrid[i - 1] for i in range(1, grid.numH + 1)]
+    mNums = [grid.mGrid[i - 1] for i in range(1, grid.numH + 1)]
     v = grid.profile(grid.vGrid, dim="V", latexName="v")
 
     for harmonic in usedHarmonics:
@@ -447,7 +447,7 @@ def advectionEx(
     Returns:
         Model: Electric field velocity space advection model ready for adding to ReMKiT1D context
     """
-    numH = grid.numH()
+    numH = grid.numH
     derivReqFun = distribution.dual if distribution.isOnDualGrid else distribution
     mbData = mc.VarlikeModelboundData()
     vGrid = grid.vGrid
@@ -1646,7 +1646,7 @@ def logicalBCModel(
     lbcModel = mc.Model("lbc_" + ("L" if leftBoundary else "R"))
     lbcModel.setModelboundData(mbData)
 
-    usedHarmonics = list(range(1, grid.numH() + 1))
+    usedHarmonics = list(range(1, grid.numH + 1))
     if evolvedHarmonics is not None:
         usedHarmonics = evolvedHarmonics
 

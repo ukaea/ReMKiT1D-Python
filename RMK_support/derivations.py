@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, cast, Tuple, Type, Callable
+from typing import Union, List, Dict, cast, Tuple, Type, Callable, Optional
 from typing_extensions import Self
 import numpy as np
 from abc import ABC, abstractmethod
@@ -10,8 +10,6 @@ from math import isclose
 from .tex_parsing import numToScientificTex
 from scipy import special  # type: ignore
 from scipy.interpolate import RegularGridInterpolator  # type: ignore
-
-# TODO: docs
 
 
 class DerivBase(ABC):
@@ -62,22 +60,36 @@ class Species:
         speciesID: int,
         atomicA: float = 1.0,
         charge: float = 0.0,
-        associatedVars: List[DerivationArgument] = [],
-        latexName: Union[str, None] = None,
+        associatedVars: Optional[List[DerivationArgument]] = None,
+        latexName: Optional[str] = None,
     ) -> None:
+        """A species object used by ReMKiT1D
 
+        Args:
+            name (str): Name of the species
+            speciesID (int): Unique integer ID - note that 0 is reserved for an electron species
+            atomicA (float, optional): Atomic mass in amu. Defaults to 1.0.
+            charge (float, optional): Charge in elementary units. Defaults to 0.0.
+            associatedVars (List[DerivationArgument], optional): List of associated variables. Defaults to None.
+            latexName (Optional[str], optional): Optional non-default LaTeX name for the species, uses \\text{name} if None. Defaults to None.
+        """
         assert atomicA > 0, "Species mass must be positive"
 
         self.__name__ = name
         self.__speciesID__ = speciesID
         self.__atomicA__ = atomicA
         self.__charge__ = charge
-        self.__associatedVars__ = copy(associatedVars)
+        self.__associatedVars__ = [] if associatedVars is None else associatedVars
         self.__latexName__ = latexName
 
     @property
     def name(self):
         return self.__name__
+
+    def rename(self, name: str):
+        newSp = deepcopy(self)
+        newSp.__name__ = name
+        return newSp
 
     @property
     def speciesID(self):
@@ -96,6 +108,7 @@ class Species:
         return [var.name for var in self.__associatedVars__]
 
     def associateVar(self, *args: DerivationArgument):
+        """Associate variable with this species"""
         for arg in args:
             if arg.name not in self.associatedVarNames:
                 self.__associatedVars__.append(arg)
@@ -116,7 +129,12 @@ class Species:
 
         return speciesData
 
-    def latex(self):
+    def latex(self) -> str:
+        """LaTeX represenation of the species
+
+        Returns:
+            str: LaTeX-compatible string representing the species
+        """
         return (
             self.__latexName__
             if self.__latexName__ is not None
@@ -173,9 +191,9 @@ class SpeciesContainer:
 
     def __setitem__(self, key: str, species: Species):
         if key not in self.speciesNames:
-            self.__species__.append(species)
+            self.__species__.append(species.rename(key))
         else:
-            self.__species__[self.speciesNames.index(key)] = species
+            self.__species__[self.speciesNames.index(key)] = species.rename(key)
 
     def __delitem__(self, key: str):
         if key not in self.speciesNames:
@@ -204,9 +222,9 @@ class Derivation(DerivBase):
         self,
         name: str,
         numArgs: int,
-        latexTemplate: Union[str, None] = None,
-        latexName: Union[str, None] = None,
-        container: Union[DerivationContainer, None] = None,
+        latexTemplate: Optional[str] = None,
+        latexName: Optional[str] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
         super().__init__()
         self.__name__ = name
@@ -302,15 +320,19 @@ class GenericDerivation(Derivation):
         name: str,
         numArgs: int,
         properties: Dict[str, object],
-        latexTemplate: Union[str, None] = None,
+        latexTemplate: Optional[str] = None,
         resultProperties: Dict[str, object] = {},
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
         """Generic derivation wrapper taking in the ReMKiT1D dictionary representation
 
         Args:
             name (str): Name of the derivation
+            numArgs (int): Expected number of arguments of the derivation
             properties (Dict[str,object]): Dictionary representation of the ReMKiT1D derivation
+            latexTemplate (Optional[str], optional): Optional latex template. If present, needs to contain tokens of the form $0,$1, etc. in order and for each expected argument. These are then replaced by latex representations of the individual arguments. Defaults to None.
+            resultProperties (Dict[str, object], optional): List of result properties in the form of kwargs for the Variable constructor. Defaults to {}.
+            container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation on construction. Defaults to None.
         """
         super().__init__(name, numArgs, latexTemplate, container=container)
         self.__properties__ = properties
@@ -342,9 +364,18 @@ class NodeDerivation(Derivation):
         self,
         name: str,
         node: ct.Node,
-        latexTemplate: Union[str, None] = None,
-        container: Union[DerivationContainer, None] = None,
+        latexTemplate: Optional[str] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Derivation based on a calculation tree
+
+        Args:
+            name (str): Name of the derivation
+            node (ct.Node): The node used for the derived variable. The number of arguments and the arguments themselves are inferred from the node.
+            latexTemplate (Optional[str], optional): Optional latex template. If present, needs to contain tokens of the form $0,$1, etc. in order and for each expected argument. These are then replaced by latex representations of the individual arguments. Defaults to None.
+            resultProperties (Dict[str, object], optional): List of result properties in the form of kwargs for the Variable constructor. Defaults to {}.
+            container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation on construction. Defaults to None.
+        """
         super().__init__(
             name, len(ct.getLeafVars(node)), latexTemplate, container=container
         )
@@ -382,13 +413,15 @@ class SimpleDerivation(Derivation):
         name: str,
         multConst: float,
         varPowers: List[float],
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
         """Simple derivation object which calculates its value as multConst * prod(vars**powers)
 
         Args:
+            name (str): Name of the derivation
             multConst (float): Multiplicative constant
             varPowers (List[float]): Powers to raise passed variables to.
+            container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation on construction. Defaults to None.
         """
         super().__init__(name, len(varPowers), container=container)
         self.__multConst__ = multConst
@@ -455,8 +488,8 @@ class BuiltInDerivation(Derivation):
         self,
         name: str,
         numArgs: int,
-        latexTemplate: Union[str, None] = None,
-        latexName: Union[str, None] = None,
+        latexTemplate: Optional[str] = None,
+        latexName: Optional[str] = None,
     ) -> None:
         super().__init__(name, numArgs, latexTemplate, latexName)
 
@@ -468,6 +501,16 @@ class BuiltInDerivation(Derivation):
 class InterpolationDerivation(BuiltInDerivation):
 
     def __init__(self, grid: Grid, ontoDual=True, onDistribution=False):
+        """Built-in interpolation derivation
+
+        Args:
+            grid (Grid): Grid used for the interpolation (variables should live on this grid)
+            ontoDual (bool, optional): True if the interpolation is from grid to dual, otherwise false. Defaults to True.
+            onDistribution (bool, optional): True if the interpolated variable is a distribution. Defaults to False.
+
+        Raises:
+            ValueError: If ontoDual is false for a distribution - distribution interpolation goes only from grid to dual due to the harmonic structure
+        """
         if onDistribution and not ontoDual:
             raise ValueError(
                 "InterpolationDerivation on distributions must be ontoDual"
@@ -486,8 +529,7 @@ class InterpolationDerivation(BuiltInDerivation):
             return self.__grid__.distFullInterp(args[0])
         if self.name == "gridToDual":
             return self.__grid__.gridToDual(args[0])
-        if self.name == "dualToGrid":
-            return self.__grid__.dualToGrid(args[0])
+        return self.__grid__.dualToGrid(args[0])
 
     def latex(self, *args: str):
         assert (
@@ -498,12 +540,10 @@ class InterpolationDerivation(BuiltInDerivation):
             return "\\mathcal{I}\\left(" + args[0] + "\\rightarrow \\text{dual}\\right)"
         if self.name == "dualToGrid":
             return "\\mathcal{I}\\left(" + args[0] + "\\rightarrow \\text{grid}\\right)"
-        if self.name == "distributionInterp":
-            return (
-                "\\mathcal{I}\\left("
-                + args[0]
-                + "\\rightarrow \\text{grid/dual}\\right)"
-            )
+
+        return (
+            "\\mathcal{I}\\left(" + args[0] + "\\rightarrow \\text{grid/dual}\\right)"
+        )
 
 
 class Textbook(DerivationContainer):
@@ -511,16 +551,60 @@ class Textbook(DerivationContainer):
     def __init__(
         self,
         grid: Grid,
-        tempDerivSpeciesIDs: List[int] = [],
+        tempDerivSpeciesIDs: Optional[List[int]] = None,
         ePolyCoeff=1.0,
         ionPolyCoeff=1.0,
         electronSheathGammaIonSpeciesID=-1,
         removeLogLeiDiscontinuity=False,
     ) -> None:
+        """The default container of ReMKiT1D derivations, including built-in derivations.
+
+        Args:
+            grid (Grid): Simulation grid
+            tempDerivSpeciesIDs (Optional[List[int]], optional): Species ID's for which a built-in temperature derivation should be added. Defaults to None.
+            ePolyCoeff (float, optional): Electron polytropic coefficient for built-in sonic speed calculation. Defaults to 1.0.
+            ionPolyCoeff (float, optional): Ion polytropic coefficient for built-in sonic speed calculation. Defaults to 1.0.
+            electronSheathGammaIonSpeciesID (int, optional): The species ID used to calculate the mass ratio that goes into the electron sheath heat flux transmission coefficient. Defaults to -1.
+            removeLogLeiDiscontinuity (bool, optional): If true will remove the discontinuity in the electron-ion Coulomb logarithm present in the NRL Plasma Formulary. Defaults to False.
+
+        All build-in derivations assume default normalisation (arguments counted using $0,$1, etc. where they are not obvious)
+        Built-in derivations:
+
+            "flowSpeedFromFlux" = $0/$1
+            "sonicSpeed" for each ion species (negative IDs) = sqrt((poly_e * $0 + poly_i * $1)/m_i) where i is the index of the ion species (the derivation names will end in the name of the species, e.g. sonicSpeedD+)
+            "tempFromEnergy" for each species in tempDerivSpeciesIDs = 2/3 * $0/$1 - mass * $2**2/(3*$1**2) (the derivation names will end in the name of the species, e.g. sonicSpeedD+)
+            "leftElectronGamma" = sheath heat transmission coeffiecient for electrons at the left boundary using T_e and T_i
+            "rightElectronGamma" = sheath heat transmission coefficient for electrons at the right boundary using T_e and T_i
+            "densityMoment" = zeroth moment of f_0
+            "energyMoment" = second order of f_0
+            "cclDragCoeff" = Chang-Cooper-Langdon drag coefficient - assumes passed variable is the single harmonic f_0
+            "cclDiffusionCoeff" = Chang-Cooper-Langdon diffusion coefficient - assumes passed variables are the single harmonic f_0 and cclWeight
+            "cclWeight" = Chang-Cooper-Langdon interpolation weight - assumes passed variables are the single harmonic cclDragCoeff and cclDiffusionCoeff
+
+            if l=1 is resolved:
+            "fluxMoment" = first moment of f_1/3
+            "heatFluxMoment" = third moment of f_1/3
+            if l=2 is resolved:
+            "viscosityTensorxxMoment" = second moment of 2*f_2/15
+
+            Interpolation for staggered grids:
+            "gridToDual" = interpolates one variable from regular to staggered(dual) grid
+            "dualToGrid" = interpolates one variable from staggered(dual) to regular grid
+            "distributionInterp" = interpolates one distribution function (even harmonics to dual, odd to regular grid)
+
+            Other useful derivations:
+            "gradDeriv" = calculates gradient of variable on regular grid, interpolating on cell faces and extrapolating at boundaries
+            "logLei" = calculates electron-ion Coulomb log taking in electron temperature and density (derivations added for each ion species - e.g. logLeiD+)
+            "logLee" = calculates electron self collision Coulomb log taking in electron temperature and density
+            "logLii" = calculates ion-ion collision frequency for each ion collision combination taking in the two species temperatures and densities (used as"logLiis_S" where s and S are the first and second ion species name)
+            "maxwellianDistribution" = calculates distribution function with Maxwellian l=0 harmonic and all other harmonics 0. Takes in temperature and density as first and second argument
+        """
         super().__init__()
 
         self.__grid__ = grid
-        self.__tempDerivSpeciesIDs__ = copy(tempDerivSpeciesIDs)
+        self.__tempDerivSpeciesIDs__: List[int] = (
+            [] if tempDerivSpeciesIDs is None else tempDerivSpeciesIDs
+        )
         self.__ePolyCoeff__ = ePolyCoeff
         self.__ionPolyCoeff__ = ionPolyCoeff
         self.__electronSheathGammaIonSpeciesID__ = electronSheathGammaIonSpeciesID
@@ -529,7 +613,6 @@ class Textbook(DerivationContainer):
         self.__derivations__: List[Derivation] = []
 
         # Built-in derivations
-        # TODO: add result properties to all derivations!
         self.__derivations__.append(
             GenericDerivation(
                 "flowSpeedFromFlux", 2, {}, latexTemplate="\\frac{$0}{$1}"
@@ -541,6 +624,11 @@ class Textbook(DerivationContainer):
                 2,
                 {},
                 latexTemplate="\\gamma_{e,\\text{left}}\\left($0,$1\\right)",
+                resultProperties={
+                    "isScalar": True,
+                    "isDistribution": False,
+                    "isSingleHarmonic": False,
+                },
             )
         )
         self.__derivations__.append(
@@ -549,29 +637,78 @@ class Textbook(DerivationContainer):
                 2,
                 {},
                 latexTemplate="\\gamma_{e,\\text{right}}\\left($0,$1\\right)",
+                resultProperties={
+                    "isScalar": True,
+                    "isDistribution": False,
+                    "isSingleHarmonic": False,
+                },
             )
         )
         self.__derivations__.append(
             GenericDerivation(
-                "densityMoment", 1, {}, latexTemplate="\\langle $0 \\rangle _{l=0,n=0}"
+                "densityMoment",
+                1,
+                {},
+                latexTemplate="\\langle $0 \\rangle _{l=0,n=0}",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": False,
+                    "isSingleHarmonic": False,
+                },
             )
         )
         self.__derivations__.append(
             GenericDerivation(
-                "energyMoment", 1, {}, latexTemplate="\\langle $0 \\rangle _{l=0,n=2}"
+                "energyMoment",
+                1,
+                {},
+                latexTemplate="\\langle $0 \\rangle _{l=0,n=2}",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": False,
+                    "isSingleHarmonic": False,
+                },
             )
         )
 
         self.__derivations__.append(
-            GenericDerivation("cclDragCoeff", 1, {}, latexTemplate="C_{CCL}($0)")
-        )
-        self.__derivations__.append(
             GenericDerivation(
-                "cclDiffusionCoeff", 2, {}, latexTemplate="D_{CCL}($0,$1)"
+                "cclDragCoeff",
+                1,
+                {},
+                latexTemplate="C_{CCL}($0)",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": False,
+                    "isSingleHarmonic": True,
+                },
             )
         )
         self.__derivations__.append(
-            GenericDerivation("cclWeight", 2, {}, latexTemplate="\\delta_{CCL}($0,$1)")
+            GenericDerivation(
+                "cclDiffusionCoeff",
+                2,
+                {},
+                latexTemplate="D_{CCL}($0,$1)",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": False,
+                    "isSingleHarmonic": True,
+                },
+            )
+        )
+        self.__derivations__.append(
+            GenericDerivation(
+                "cclWeight",
+                2,
+                {},
+                latexTemplate="\\delta_{CCL}($0,$1)",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": False,
+                    "isSingleHarmonic": True,
+                },
+            )
         )
 
         if grid.lMax > 0:
@@ -581,6 +718,11 @@ class Textbook(DerivationContainer):
                     1,
                     {},
                     latexTemplate="\\frac{1}{3}\\langle $0 \\rangle _{l=1,n=1}",
+                    resultProperties={
+                        "isScalar": False,
+                        "isDistribution": False,
+                        "isSingleHarmonic": False,
+                    },
                 )
             )
             self.__derivations__.append(
@@ -589,6 +731,11 @@ class Textbook(DerivationContainer):
                     1,
                     {},
                     latexTemplate="\\frac{1}{3}\\langle $0 \\rangle _{l=1,n=3}",
+                    resultProperties={
+                        "isScalar": False,
+                        "isDistribution": False,
+                        "isSingleHarmonic": False,
+                    },
                 )
             )
         if grid.lMax > 1:
@@ -598,6 +745,11 @@ class Textbook(DerivationContainer):
                     1,
                     {},
                     latexTemplate="\\frac{2}{15}\\langle $0 \\rangle _{l=2,n=2}",
+                    resultProperties={
+                        "isScalar": False,
+                        "isDistribution": False,
+                        "isSingleHarmonic": False,
+                    },
                 )
             )
 
@@ -618,7 +770,15 @@ class Textbook(DerivationContainer):
 
         self.__derivations__.append(
             GenericDerivation(
-                "maxwellianDistribution", 2, {}, "f_M\\left($0,$1\\right)"
+                "maxwellianDistribution",
+                2,
+                {},
+                "f_M\\left($0,$1\\right)",
+                resultProperties={
+                    "isScalar": False,
+                    "isDistribution": True,
+                    "isSingleHarmonic": False,
+                },
             )
         )
 
@@ -627,6 +787,14 @@ class Textbook(DerivationContainer):
     @property
     def registeredDerivs(self):
         return [deriv.name for deriv in self.__derivations__]
+
+    @property
+    def tempDerivSpeciesIDs(self):
+        return self.__tempDerivSpeciesIDs__
+
+    @tempDerivSpeciesIDs.setter
+    def tempDerivSpeciesIDs(self, ids: List[int]):
+        self.__tempDerivSpeciesIDs__ = ids
 
     def __getitem__(self, name: str):
         if name not in self.registeredDerivs:
@@ -764,17 +932,28 @@ class MultiplicativeDerivation(Derivation):
         self,
         name: str,
         innerDerivation: Derivation,
-        outerDerivation: Union[Derivation, None] = None,
-        innerFunc: Union[str, None] = None,
-        container: Union[DerivationContainer, None] = None,
+        outerDerivation: Optional[Derivation] = None,
+        innerFunc: Optional[str] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Multiplicative composite derivation. Takes up to two derivations and composes them as follows: fun(d1) * d2, where d2 is optional, and fun is an optional Fortran intrinsic function. Assumes that arguments are passed first for the inner then for the outer derivation.
+
+        Args:
+            name (str): Name of the derivation
+            innerDerivation (Derivation): Inner derivation (d1 in  the text above)
+            outerDerivation (Optional[Derivation], optional): Optional outer derivation (d2 in the text above). Defaults to None.
+            innerFunc (Optional[str], optional): String representation of Fortran function to be applied to inner derivation. Defaults to None.
+            container (Optional[DerivationContainer], optional): Optional container for registering this derivation at construction. Defaults to None.
+
+        Allowed innerFunc names: exp,log,sin,cos,abs,tan,atan,asin,acos,sign,erf,erfc
+        """
         numArgs = innerDerivation.numArgs
         if outerDerivation is not None:
             numArgs += outerDerivation.numArgs
         super().__init__(name, numArgs, container=container)
 
         self.__innerDeriv__ = innerDerivation
-        self.__outerDeriv__: Union[Derivation, None] = outerDerivation
+        self.__outerDeriv__: Optional[Derivation] = outerDerivation
 
         funMap = {
             "exp": np.exp,
@@ -791,7 +970,7 @@ class MultiplicativeDerivation(Derivation):
             "erfc": special.erfc,
         }
 
-        self.__innerFunc__: Union[str, None] = innerFunc
+        self.__innerFunc__: Optional[str] = innerFunc
         self.__fun__: Union[Callable, None] = None
         if self.__innerFunc__ is not None:
             assert (
@@ -907,12 +1086,21 @@ class AdditiveDerivation(Derivation):
 
     def __init__(
         self,
-        name,
+        name: str,
         derivs: List[Derivation],
         resultPower: Union[int, float] = 1,
-        linCoeffs: Union[List[float], None] = None,
-        container=None,
+        linCoeffs: Optional[List[float]] = None,
+        container: Optional[DerivationContainer] = None,
     ):
+        """Additive composite derivation. Takes a linear combination of derivation output and optionally raises to a power. Derivation arguments are assumed to be passed in order.
+
+        Args:
+            name (str): Name of the derivation
+            derivs (List[Derivation]): List of derivations in the linear combination
+            resultPower (Union[int, float], optional): Power to raise the linear combination to. Defaults to 1.
+            linCoeffs (Optional[List[float]], optional): Linear combination coefficients. Defaults to None.
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         numArgs = sum(deriv.numArgs for deriv in derivs)
         super().__init__(name, numArgs, container=container)
 
@@ -1018,17 +1206,20 @@ class AdditiveDerivation(Derivation):
 
         return result
 
-    def evaluate(self, *args):
+    def evaluate(self, *args: np.ndarray) -> np.ndarray:
         assert (
             len(args) == self.numArgs
         ), "evaluate() on AdditiveDerivation called with wrong number of arguments"
-        result = 0
-        offset = 0
-        for i, deriv in enumerate(self.__derivs__):
-            result += self.__linCoeffs__[i] * deriv.evaluate(
+        result = self.__linCoeffs__[0] * self.derivs[0].evaluate(
+            *args[: self.derivs[0].numArgs]
+        )
+        offset = self.derivs[0].numArgs
+        for i, deriv in enumerate(self.__derivs__[1:]):
+            result += self.__linCoeffs__[i + 1] * deriv.evaluate(
                 *args[offset : offset + deriv.numArgs]
             )
             offset += deriv.numArgs
+
         result = result**self.__resultPower__
 
         return result
@@ -1044,9 +1235,20 @@ class DerivationClosure(Derivation):
         self,
         deriv: Derivation,
         *args: DerivationArgument,
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
         **kwargs,
     ):
+        """Derivation closure, allowing for storing a derivation and fixing one or more of its arguments. If all arguments are fixed, the closure can be used in additive and multiplicative arithmetic, producing new closures.
+
+        Args:
+            deriv (Derivation): Enclosed derivation
+            container (Optional[DerivationContainer], optional): Optional container to register the enclosed derivation at construction. Defaults to None.
+
+        kwargs:
+
+            argPositions (Tuple[int]): The positions of the enclosed arguments relative to the required arguments of the enclosed derivation. For example:
+            if the enclosed derivation requires 3 arguments and argPositions = (0,2), the enclosed arguments are the first and the last argument, and the remaining arguments is free, i.e. the argument of the resulting closure.
+        """
         self.__deriv__ = deriv
         self.__args__ = args
         self.__argPositions__ = kwargs.get("argPositions", tuple(range(len(args))))
@@ -1302,7 +1504,16 @@ class DerivationClosure(Derivation):
         container.register(self.__deriv__, ignoreDuplicates=True)
 
 
-def funApply(funName: str, closure: DerivationClosure):
+def funApply(funName: str, closure: DerivationClosure) -> DerivationClosure:
+    """Apply a function to a complete closure (0 free arguments), resulting in a closure of a multiplicative derivation with that function.
+
+    Args:
+        funName (str): Fortran function name (see MultiplicativeDerivation for allowed names)
+        closure (DerivationClosure): Closure to applu the function to
+
+    Returns:
+        DerivationClosure: Complete closure of a multiplicative derivation
+    """
     assert (
         closure.numArgs == 0
     ), "Can only apply functions to complete derivation closures"
@@ -1334,8 +1545,17 @@ class PolynomialDerivation(GenericDerivation):
         constCoeff: Union[float, int],
         polyCoeffs: np.ndarray,
         polyPowers: np.ndarray,
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Polynomial derivation with arbitrary powers
+
+        Args:
+            name (str): Name of the derivation
+            constCoeff (Union[float, int]): Constant polynomial coefficient
+            polyCoeffs (np.ndarray): Polynomial coefficients
+            polyPowers (np.ndarray): Polynomial powers corresponding to each coefficient
+            container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation in at construction. Defaults to None.
+        """
         assert len(polyCoeffs) == len(polyPowers)
         properties = {
             "type": "polynomialFunctionDerivation",
@@ -1388,8 +1608,16 @@ class RangeFilterDerivation(Derivation):
         name: str,
         deriv: Derivation,
         filtering: List[Tuple[DerivationArgument, float, float]],
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """A wrapper for a derivation, filtering it based on the values of arguments. All arguments, as well as the output of the derivation should conform in size.
+
+        Args:
+            name (str): Name of the derivation
+            deriv (Derivation): Filtered derivation
+            filtering (List[Tuple[DerivationArgument, float, float]]): A list of filtering rules of the form (variable,lowerBound,upperBound), such that all variables must be within the bounds for the filter to return the derivation values.
+            container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, deriv.numArgs, container=container)
         self.__deriv__ = deriv
         for _, range0, range1 in filtering:
@@ -1450,17 +1678,17 @@ class RangeFilterDerivation(Derivation):
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
 
         filterVals: List[np.ndarray] = []
-        for i, fl in enumerate(self.__filtering__):
-            _, range0, range1 = fl
+        for fl in self.__filtering__:
+            filterVar, range0, range1 = fl
             filterVals.append(
                 np.where(
-                    args[i] < range1 and args[i] > range0,
-                    np.ones(args[i].shape),
-                    np.zeros(args[i].shape),
+                    (filterVar.data < range1) & (filterVar.data > range0),
+                    np.ones(filterVar.data.shape),
+                    np.zeros(filterVar.data.shape),
                 )
             )
 
-        result = self.__deriv__.evaluate(*args[len(self.__filtering__) :])
+        result = self.__deriv__.evaluate(*args)
         for filter in filterVals:
             result *= filter
 
@@ -1479,13 +1707,27 @@ class BoundedExtrapolationDerivation(Derivation):
 
     def __init__(
         self,
-        name,
+        name: str,
         extrapolationType: str = "lin",
         lowerBound: Union[float, DerivationArgument, None] = None,
         upperBound: Union[float, int, DerivationArgument, None] = None,
-        container=None,
+        container: Optional[DerivationContainer] = None,
         **kwargs,
     ):
+        """Bounded extrapolation derivation, extrapolating a variable to one of the boundaries and optionally applying a lower and/or upper bound to the extrapolated value. Note that the upper and lower bounds must be properly ordered. If extrapolating to the left boundary, bounds are reflected around 0, i.e. the lower bound becomes a negative upper bound, and the upper bound becomes a negative lower bound.
+
+        Args:
+            name (str): Name of the derivation
+            extrapolationType (str, optional): Extrapolation strategy - on of ["lin","log","loglin"]. "lin" in linear extrapolation, "log" is logarithmic extrapolation, and "linlog" is a mixture, performing logarithmic extrapolation using the value in the final cell and a linearly interpolated value on the penultimate cell. Defaults to "lin".
+            lowerBound (Union[float, DerivationArgument, None], optional): Lower bound value, if using a variable will extrapolate it to the boundary. Defaults to None.
+            upperBound (Union[float, int, DerivationArgument, None], optional): Upper bounda value, if using a variable will extrapolate it to the boundary. Defaults to None.
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+
+        kwargs:
+            leftBoundary (bool): Set to true if extrapolating to the left boundary
+            staggeredVars (bool): Set to true if extrapolating staggered variables
+            expectedHaloWidth (int): Expected halo size, set to 0 for modelbound variables
+        """
         super().__init__(name, 1, container=container)
         assert extrapolationType in [
             "lin",
@@ -1595,7 +1837,16 @@ class BoundedExtrapolationDerivation(Derivation):
         return {"isScalar": True, "isDistribution": False, "isSingleHarmonic": False}
 
 
-def coldIonIDeriv(name: str, index: int):
+def coldIonIDeriv(name: str, index: int) -> GenericDerivation:
+    """Shkarofsky I integral assuming cold flowing ions. Does not include the ion density factor. The single argument is assumed to be the ion flow speed.
+
+    Args:
+        name (str): Name of the derivation
+        index (int): Integral index
+
+    Returns:
+        GenericDerivation: Cold ion I integral derivation
+    """
     deriv = {
         "type": "coldIonIJIntegralDerivation",
         "isJIntegral": False,
@@ -1607,6 +1858,15 @@ def coldIonIDeriv(name: str, index: int):
 
 
 def coldIonJDeriv(name: str, index: int):
+    """Shkarofsky J integral assuming cold flowing ions. Does not include the ion density factor. The single argument is assumed to be the ion flow speed.
+
+    Args:
+        name (str): Name of the derivation
+        index (int): Integral index
+
+    Returns:
+        GenericDerivation: Cold ion J integral derivation
+    """
     deriv = {
         "type": "coldIonIJIntegralDerivation",
         "isJIntegral": True,
@@ -1618,6 +1878,15 @@ def coldIonJDeriv(name: str, index: int):
 
 
 def shkarofskyIIntegralDeriv(name: str, index: int):
+    """Shkarofsky I integral. The single argument is assumed to be the electron distribution.
+
+    Args:
+        name (str): Name of the derivation
+        index (int): Integral index
+
+    Returns:
+        GenericDerivation: I integral derivation
+    """
     deriv = {
         "type": "IJIntegralDerivation",
         "isJIntegral": False,
@@ -1627,6 +1896,15 @@ def shkarofskyIIntegralDeriv(name: str, index: int):
 
 
 def shkarofskyJIntegralDeriv(name: str, index: int):
+    """Shkarofsky I integral. The single argument is assumed to be the electron distribution.
+
+    Args:
+        name (str): Name of the derivation
+        index (int): Integral index
+
+    Returns:
+        GenericDerivation: I integral derivation
+    """
     deriv = {
         "type": "IJIntegralDerivation",
         "isJIntegral": True,
@@ -1637,11 +1915,25 @@ def shkarofskyJIntegralDeriv(name: str, index: int):
 
 class HarmonicExtractorDerivation(Derivation):
 
-    def __init__(self, name, grid: Grid, index: int, container=None):
+    def __init__(
+        self,
+        name: str,
+        grid: Grid,
+        index: int,
+        container: Optional[DerivationContainer] = None,
+    ):
+        """Harmonic extractor derivation, producing a single harmonic variable from a distribution
+
+        Args:
+            name (str): Name of the derivation
+            grid (Grid): Grid object used in evaluation
+            index (int): Harmonic index (Fortran 1-indexing)
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, 1, container=container)
         self.__grid__ = grid
         assert index > 0, "Harmonic index must be positive"
-        assert index <= self.__grid__.numH(), "Harmonic index out of bounds"
+        assert index <= self.__grid__.numH, "Harmonic index out of bounds"
         self.__index__ = index
 
     def dict(self):
@@ -1658,12 +1950,12 @@ class HarmonicExtractorDerivation(Derivation):
             len(args) == self.numArgs
         ), "Wrong number of args passed to HarmonicExtractorDerivation evaluate()"
         assert args[0].shape == (
-            self.__grid__.numX(),
-            self.__grid__.numH(),
-            self.__grid__.numV(),
+            self.__grid__.numX,
+            self.__grid__.numH,
+            self.__grid__.numV,
         ), "args[0] of HarmonicExtractorDerivation must be a full distribution"
 
-        return args[0][:, self.__index__, :]
+        return args[0][:, self.__index__ - 1, :]
 
     @property
     def resultProperties(self):
@@ -1677,22 +1969,33 @@ class DDVDerivation(Derivation):
         name: str,
         grid: Grid,
         harmonicIndex: int,
-        innerV: Union[None, Profile] = None,
-        outerV: Union[None, Profile] = None,
-        vifAtZero: Union[None, Tuple[float, float]] = None,
-        container: Union[DerivationContainer, None] = None,
+        innerV: Optional[Profile] = None,
+        outerV: Optional[Profile] = None,
+        vifAtZero: Optional[Tuple[float, float]] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Velocity derivative derivation acting on a harmonic of a distribution variable with optional velocity function inside and/or outside of the derivative v_o * d(v_i * f)/dv
+
+        Args:
+            name (str): Name of the derivation
+            grid (Grid): Grid object used ensure profile consistency
+            harmonicIndex (int): Index of the differentiated harmonic
+            innerV (Optional[Profile], optional): Optional velocity space profile inside the derivative (at right velocity cell edges). Defaults to None.
+            outerV (Optional[Profile], optional): Optional velocity space profile outside the derivative. Defaults to None.
+            vifAtZero (Optional[Tuple[float,float]], optional): Extrapolation coefficents (A1,A2) of v_i*f at zero in the form A1*f(v1)+A2*f(v2). Defaults to None, which results in (0,0).
+            container (Optional[DerivationContainer], optional): Optiona container to register the distribution in at construction. Defaults to None.
+        """
         super().__init__(name, 1, container=container)
         self.__grid__ = grid
         self.__harmonicIndex__ = harmonicIndex
         if innerV is not None:
             assert (
-                innerV.dim == "V" and len(innerV.data) == grid.numV()
+                innerV.dim == "V" and len(innerV.data) == grid.numV
             ), "innerV size does not conform to velocity grid"
         self.__innerV__ = innerV
         if outerV is not None:
             assert (
-                outerV.dim == "V" and len(outerV.data) == grid.numV()
+                outerV.dim == "V" and len(outerV.data) == grid.numV
             ), "outerV size does not conform to velocity grid"
         self.__outerV__ = outerV
         self.__vifAtZero__ = vifAtZero
@@ -1746,22 +2049,33 @@ class D2DV2Derivation(Derivation):
         name: str,
         grid: Grid,
         harmonicIndex: int,
-        innerV: Union[None, Profile] = None,
-        outerV: Union[None, Profile] = None,
-        vidfdvAtZero: Union[None, Tuple[float, float]] = None,
-        container: Union[DerivationContainer, None] = None,
+        innerV: Optional[Profile] = None,
+        outerV: Optional[Profile] = None,
+        vidfdvAtZero: Optional[Tuple[float, float]] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Velocity space diffusion derivation acting on a single harmonic of a distribution variable. Can set outer and/or inner velocity profiles to calculate v_o * d(v_i * df/dv)/dv
+
+        Args:
+            name (str): Name of the derivation
+            grid (Grid): Grid used to check the consistency of the profiles
+            harmonicIndex (int): Index of the harmonic the derivative is taken on
+            innerV (Optional[Profile], optional): Diffusion coefficient (at right velocity cell edges). Defaults to None.
+            outerV (Optional[Profile], optional): Velocity profile outside of the derivative. Defaults to None.
+            vidfdvAtZero (Optional[Tuple[float,float]], optional): Extrapolation coefficents (A1,A2) of v_i*df/dv at zero in the form A1*f(v1)+A2*f(v2). Defaults to None, which results in (0,0).
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, 1, container=container)
         self.__grid__ = grid
         self.__harmonicIndex__ = harmonicIndex
         if innerV is not None:
             assert (
-                innerV.dim == "V" and len(innerV.data) == grid.numV()
+                innerV.dim == "V" and len(innerV.data) == grid.numV
             ), "innerV size does not conform to velocity grid"
         self.__innerV__ = innerV
         if outerV is not None:
             assert (
-                outerV.dim == "V" and len(outerV.data) == grid.numV()
+                outerV.dim == "V" and len(outerV.data) == grid.numV
             ), "outerV size does not conform to velocity grid"
         self.__outerV__ = outerV
         self.__vidfdvAtZero__ = vidfdvAtZero
@@ -1820,19 +2134,31 @@ class MomentDerivation(Derivation):
         momentHarmonic: int,
         momentOrder: int,
         multConst: float = 1.0,
-        varPowers: List[float] = [],
-        gVec: Union[Profile, None] = None,
-        container: Union[DerivationContainer, None] = None,
+        varPowers: Optional[List[int]] = None,
+        gVec: Optional[Profile] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
-        super().__init__(name, 1 + len(varPowers), container=container)
+        """Derivation taking the moment of a single harmonic of a distribution variable (optionally multiplied by a velocity space vector), optionally multiplying it with a variables raised to powers and a scalar. If variables are present, it is assumed that the first argument of the derivation is the distribution, and then the variables in order.
+
+        Args:
+            name (str): Name of the derivation
+            grid (Grid): Grid object used to check consistency of velocity space vector
+            momentHarmonic (int): Harmonic to take moment of
+            momentOrder (int): Moment order
+            multConst (float, optional): Constant to multiply the moment with. Defaults to 1.0.
+            varPowers (Optional[List[int]], optional): Optional fluid variable argument powers. Defaults to None.
+            gVec (Optional[Profile], optional): Optional velocity space vector to multiply the distribution with before taking the moment. Defaults to None.
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
+        self.__varPowers__: List[int] = varPowers if varPowers is not None else []
+        super().__init__(name, 1 + len(self.__varPowers__), container=container)
         self.__momentHarmonic__ = momentHarmonic
         self.__momentOrder__ = momentOrder
         self.__multConst__ = multConst
-        self.__varPowers__ = varPowers
         self.__grid__ = grid
         if gVec is not None:
             assert (
-                gVec.dim == "V" and len(gVec.data) == grid.numV()
+                gVec.dim == "V" and len(gVec.data) == grid.numV
             ), "gVec size does not conform to velocity grid"
         self.__gVec__ = gVec
 
@@ -1921,8 +2247,18 @@ class GenIntPolynomialDerivation(Derivation):
         polyCoeffs: np.ndarray,
         multConst: float = 1.0,
         funcName: Union[None, str] = None,
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Generalised polynomial derivation with integer powers. Calculates a polynomial in multiple variables and optionally applies a function to the result with a multiplicative constant - multConst * fun(sum c_i prod vars**powers), where prod vars**powers is shorthand for the product of passed variables raised to powers corresponding to polynomial coefficient c_i
+
+        Args:
+            name (str): Name of the derivation
+            polyPowers (np.ndarray): An n x m matrix where n corresponds to the coefficient, and m corresponds to the variable. For example, for a function of two variables, this is an n x 2 matrix, so that the contribution to the polynomial of the i-th element is c_i * var1**polyPowers[i,0] * var2**polyPowers[i,1].
+            polyCoeffs (np.ndarray): Polynomial coefficients corresponding to each product of variables raised to powers
+            multConst (float, optional): Optional multiplicative constant to multiply the result of the derivation with. Defaults to 1.0.
+            funcName (Union[None, str], optional): Optional Fortran function name to apply to the polynomial result before multiplication by multConst. For allowed functions see MultiplicativeDerivation. Defaults to None.
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, polyPowers.shape[1], container=container)
         self.__polyPowers__ = polyPowers
         self.__polyCoeffs__ = polyCoeffs
@@ -1943,7 +2279,7 @@ class GenIntPolynomialDerivation(Derivation):
             "erfc": special.erfc,
         }
 
-        self.__funcName__: Union[str, None] = funcName
+        self.__funcName__: Optional[str] = funcName
         self.__fun__: Union[Callable, None] = None
         if self.__funcName__ is not None:
             assert (
@@ -1987,8 +2323,10 @@ class GenIntPolynomialDerivation(Derivation):
         ), "Unexpected number of arguments in GenIntPolynomialDerivation evaluate() call"
         result = np.zeros(args[0].shape)
         for ind, coeff in np.ndenumerate(self.__polyCoeffs__):
+            temp = coeff
             for j, arg in enumerate(args):
-                result += coeff * arg ** self.__polyPowers__[ind[0], j]
+                temp *= arg ** self.__polyPowers__[ind[0], j]
+            result += temp
         if self.__funcName__ is not None:
             result = cast(Callable, self.__fun__)(result)
         return result * self.__multConst__
@@ -2001,13 +2339,21 @@ class LocValExtractorDerivation(Derivation):
         name: str,
         grid: Grid,
         targetX: int,
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """Derivation extracting a scalar value at a given spatial location from a fluid variable
+
+        Args:
+            name (str): Name of the derivation
+            grid (Grid): Grid object used for bounds checking
+            targetX (int): Target spatial index (Fortran 1-indexing)
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, 1, container=container)
         self.__grid__ = grid
         self.__targetX__ = targetX
         assert (
-            targetX > 0 and targetX <= grid.numX()
+            targetX > 0 and targetX <= grid.numX
         ), "LocValExtractorDerivation targetX out of bounds"
 
     def dict(self) -> Dict:
@@ -2024,7 +2370,7 @@ class LocValExtractorDerivation(Derivation):
             len(args) == self.numArgs
         ), "LocValExtractorDerivation evaluate() call unexpected number of arguments"
         assert args[0].shape == (
-            self.__grid__.numX(),
+            self.__grid__.numX,
         ), "LocValExtractorDerivation evaluate() argument does not conform to the X dimension of the grid"
         return np.array([args[0][self.__targetX__ - 1]])
 
@@ -2040,8 +2386,16 @@ class NDInterpolationDerivation(Derivation):
         name: str,
         grids: List[np.ndarray],
         data: np.ndarray,
-        container: Union[DerivationContainer, None] = None,
+        container: Optional[DerivationContainer] = None,
     ) -> None:
+        """N-dimensional linear interpolation assuming data on Cartesian N-D grid. Values outside of the hypercube are set to 0.
+
+        Args:
+            name (str): Name of the derivation
+            grids (List[np.ndarray]): Coordinates of individual dimensions
+            data (np.ndarray): N-dimensional data corresponding to the points determined by the grids
+            container (Optional[DerivationContainer], optional): Optional container to register the derivation in at construction. Defaults to None.
+        """
         super().__init__(name, len(grids), container=container)
         self.__grids__ = grids
         self.__data__ = data
