@@ -831,7 +831,7 @@ class Textbook(DerivationContainer):
                     + names[0][6:]
                     + ","
                     + names[1]
-                    + "}\\left($0,$1\\right)",
+                    + "}\\left($0,$1,$2,$3\\right)",
                 )
 
             raise KeyError()
