@@ -411,7 +411,12 @@ class RMKContext:
 
     @property
     def norms(self):
-        return skn.calculateNorms(self.__normTemp__, self.__normDens__, self.__normZ__)
+        return skn.calculateNorms(
+            self.__normTemp__,
+            self.__normDens__,
+            self.__normZ__,
+            self.textbook.removeLogLeiDiscontinuity,
+        )
 
     @property
     def grid(self):

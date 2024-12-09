@@ -185,6 +185,7 @@ class Grid:
 
         self.__xJacobian__ = values
 
+    @property
     def numX(self) -> int:
         """Get number of spatial cells in grid
 
@@ -193,6 +194,7 @@ class Grid:
         """
         return len(self.__xGrid__)
 
+    @property
     def numV(self) -> int:
         """Get number of velocity cells in grid
 
@@ -201,6 +203,7 @@ class Grid:
         """
         return len(self.__vGrid__)
 
+    @property
     def numH(self) -> int:
         """Get total number of harmonics
 
@@ -339,11 +342,11 @@ class Grid:
             len(np.shape(distFun)) < 4
         ), "Unsupported dimensionality of distFun in velocityMoment"
         assert (
-            np.shape(distFun)[-1] == self.numV()
+            np.shape(distFun)[-1] == self.numV
         ), "The velocity dimension of distFun does not conform to size of velocity grid"
         if len(np.shape(distFun)) == 3:
             assert (
-                momentHarmonic <= self.numH()
+                momentHarmonic <= self.numH
             ), "momentHarmonic out of bounds in velocityMoment"
             moment = (
                 4
@@ -375,7 +378,7 @@ class Grid:
             np.ndarray: Data integrated along x
         """
         assert (
-            data.shape[0] == self.numX()
+            data.shape[0] == self.numX
         ), "data passed to domainIntegral must have its first dimension conform to the spatial grid"
 
         dV = (
@@ -399,7 +402,7 @@ class Grid:
             np.ndarray: Interpolated data on dual grid
         """
         assert data.shape == (
-            self.numX(),
+            self.numX,
         ), "data passed to gridToDual must be 1D and on the x grid"
 
         x = self.xGridDual
@@ -427,7 +430,7 @@ class Grid:
             np.ndarray: Interpolated data on regular grid
         """
         assert data.shape == (
-            self.numX(),
+            self.numX,
         ), "data passed to gridToDual must be 1D and on the x grid"
 
         xp = self.xGridDual
@@ -456,15 +459,15 @@ class Grid:
             np.ndarray: Distribution data where all harmonics live on the regular grid
         """
         assert data.shape == (
-            self.numX(),
-            self.numH(),
-            self.numV(),
+            self.numX,
+            self.numH,
+            self.numV,
         ), "data passed to staggeredDistToGrid must be 3D and on the x,h,v grids"
 
         result: np.ndarray = np.copy(data)
         for h, l in enumerate(self.lGrid):
             if l % 2 == 1:
-                for v in range(self.numV()):
+                for v in range(self.numV):
                     result[:, h, v] = self.dualToGrid(data[:, h, v])
 
         return result
@@ -479,15 +482,15 @@ class Grid:
             np.ndarray: Distribution with all harmonics living on the dual grid
         """
         assert data.shape == (
-            self.numX(),
-            self.numH(),
-            self.numV(),
+            self.numX,
+            self.numH,
+            self.numV,
         ), "data passed to staggeredDistToGrid must be 3D and on the x,h,v grids"
 
         result: np.ndarray = np.copy(data)
         for h, l in enumerate(self.lGrid):
             if l % 2 == 0:
-                for v in range(self.numV()):
+                for v in range(self.numV):
                     result[:, h, v] = self.gridToDual(data[:, h, v])
 
         return result
@@ -518,7 +521,7 @@ class Grid:
             Profile: Bounds-checked Profile
         """
         assert dim in ["X", "H", "V"], "Profile can only be in X, H, or V dimensions"
-        dims = {"X": self.numX(), "H": self.numH(), "V": self.numV()}
+        dims = {"X": self.numX, "H": self.numH, "V": self.numV}
         assert (
             dims[dim],
         ) == data.shape, (

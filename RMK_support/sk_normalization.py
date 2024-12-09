@@ -18,31 +18,35 @@ def velNorm(Te: float) -> float:
     return np.sqrt(2 * elCharge * Te / elMass)
 
 
-def logLei(Te: float, ne: float, Z: float) -> float:
+def logLei(Te: float, ne: float, Z: float, removeDiscontinuity=False) -> float:
     """Calculate Coulomb logarithm for electron-ion collisions (NRL Formulary 2013 page 34 equation b). Assumes Te > TiZm_e/m_i
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeDiscontinuity (bool, optional): If true will remove the discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         float: e-i Coulomb logarithm
     """
-
-    if Te < 10 * Z**2:
+    cutoff = 10
+    if removeDiscontinuity:
+        cutoff = np.exp(2)
+    if Te < cutoff * Z**2:
         return 23.0 - np.log(np.sqrt(ne * 1e-6) * Z * Te ** (-3 / 2))
 
     return 24.0 - np.log(np.sqrt(ne * 1e-6) / Te)
 
 
-def collTimeei(Te: float, ne: float, Z: float) -> float:
+def collTimeei(Te: float, ne: float, Z: float, removeDiscontinuity=False) -> float:
     """Calculate electron-ion collision time in seconds. This is not the Braginskii time, which can be calculated as this value multiplied by 3 sqrt(pi)/4 .
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeDiscontinuity (bool, optional): If true will remove the LogLei discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         float: e-i collision time in s
@@ -54,23 +58,24 @@ def collTimeei(Te: float, ne: float, Z: float) -> float:
         * epsilon0**2
         * np.sqrt(elMass / elCharge)
         * (2 * Te) ** (3 / 2)
-        / (Z * logLei(Te, ne, Z) * ne * elCharge**2)
+        / (Z * logLei(Te, ne, Z, removeDiscontinuity) * ne * elCharge**2)
     )
 
 
-def lenNorm(Te: float, ne: float, Z: float) -> float:
+def lenNorm(Te: float, ne: float, Z: float, removeDiscontinuity=False) -> float:
     """Calculate length norm in meters as t_ei * v_th. Convert to Braginskii by multiplying with 3 sqrt(pi/2)/4
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeDiscontinuity (bool, optional): If true will remove the LogLei discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         float: Length norm in e-i collision
     """
 
-    return collTimeei(Te, ne, Z) * velNorm(Te)
+    return collTimeei(Te, ne, Z, removeDiscontinuity) * velNorm(Te)
 
 
 def heatFluxNorm(Te: float, ne: float) -> float:
@@ -87,43 +92,52 @@ def heatFluxNorm(Te: float, ne: float) -> float:
     return elMass * ne * velNorm(Te) ** 3 / 2
 
 
-def crossSectionNorm(Te: float, ne: float, Z: float) -> float:
+def crossSectionNorm(
+    Te: float, ne: float, Z: float, removeDiscontinuity=False
+) -> float:
     """Calculate cross section normalization as 1/(ne*lenNorm). Note: this is NOT the SOL-KiT normalization.
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeDiscontinuity (bool, optional): If true will remove the LogLei discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         float: Cross section normalization in m^2
     """
 
-    return 1 / (ne * lenNorm(Te, ne, Z))
+    return 1 / (ne * lenNorm(Te, ne, Z, removeDiscontinuity))
 
 
-def eFieldNorm(Te: float, ne: float, Z: float) -> float:
+def eFieldNorm(Te: float, ne: float, Z: float, removeDiscontinuity=False) -> float:
     """Electric field normalization given by me * v_th / (e*t_ei)
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeDiscontinuity (bool, optional): If true will remove the LogLei discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         float: E-field normalization
     """
 
-    return elMass * velNorm(Te) / (elCharge * collTimeei(Te, ne, Z))
+    return (
+        elMass * velNorm(Te) / (elCharge * collTimeei(Te, ne, Z, removeDiscontinuity))
+    )
 
 
-def calculateNorms(Te: float, ne: float, Z: float) -> dict:
+def calculateNorms(
+    Te: float, ne: float, Z: float, removeLogLeiDiscontinuity=False
+) -> dict:
     """Calculates all norms in ReMKiT1D-compatible dictionary form
 
     Args:
         Te (float): Electron temperature in eV
         ne (float): Electron density in m^{-3}
         Z (float): Ion charge
+        removeLogLeiDiscontinuity (bool, optional): If true will remove the LogLei discontinuity at 10eV by shifting the cut-off to e**2 eV. Defaults to False.
 
     Returns:
         dict: Dictionary containing all norms with corresponding ReMKiT1D keys
@@ -133,11 +147,11 @@ def calculateNorms(Te: float, ne: float, Z: float) -> dict:
         "eVTemperature": Te,
         "density": ne,
         "referenceIonZ": Z,
-        "time": collTimeei(Te, ne, Z),
+        "time": collTimeei(Te, ne, Z, removeLogLeiDiscontinuity),
         "velGrid": velNorm(Te),
         "speed": velNorm(Te),
-        "EField": eFieldNorm(Te, ne, Z),
+        "EField": eFieldNorm(Te, ne, Z, removeLogLeiDiscontinuity),
         "heatFlux": heatFluxNorm(Te, ne),
-        "crossSection": crossSectionNorm(Te, ne, Z),
-        "length": lenNorm(Te, ne, Z),
+        "crossSection": crossSectionNorm(Te, ne, Z, removeLogLeiDiscontinuity),
+        "length": lenNorm(Te, ne, Z, removeLogLeiDiscontinuity),
     }
