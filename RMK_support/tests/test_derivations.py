@@ -1,7 +1,7 @@
 import RMK_support.derivations as dv
 from RMK_support import Variable, VariableContainer, Grid
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator #type:ignore
+from scipy.interpolate import RegularGridInterpolator  # type:ignore
 import pytest
 
 
