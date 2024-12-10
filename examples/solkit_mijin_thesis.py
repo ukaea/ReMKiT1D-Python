@@ -390,8 +390,8 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         logne,logTe = ams.AMJUELLogVars(rk.norms,ne,Te)
         rk.variables.add(logne,logTe)
         recombPartEnergy = DerivationClosure(ams.AMJUELDeriv("recombPartEnergy","2.1.8","H.4",timeNorm=timeNorm,densNorm=densNorm,tempNorm=-tempNorm/13.6,amjuelFilename=amjuelPath),logne,logTe)
-        recombPart = DerivationClosure(amjuelDerivs["recombEnergy"],logne,logTe)
-        recombEnergyTotal = recombPart + recombPartEnergy
+        recombEnergy = DerivationClosure(amjuelDerivs["recombEnergy"],logne,logTe)
+        recombEnergyTotal = recombEnergy + recombPartEnergy
         
 
         ionizationTransition = crm.DerivedTransition("ionAMJUEL",[electronSpecies,neutralSpecies[0]],[electronSpecies,electronSpecies,ionSpecies],rateDeriv=DerivationClosure(amjuelDerivs["ionPart"],logne,logTe),energyRateDeriv=DerivationClosure(amjuelDerivs["ionEnergy"],logne,logTe))
