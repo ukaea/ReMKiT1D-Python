@@ -1,17 +1,23 @@
 import numpy as np
 import json
-from typing import List, Dict, Union, cast
+from typing import List, Dict, Union, cast, Optional
 from itertools import accumulate
 from numpy.polynomial.polynomial import polyval, polyfit
 
-# TODO: docs
-
 
 class Profile:
+    """Wrapper for profiles in x,h,v spaces in ReMKiT1D"""
 
     def __init__(
-        self, data: np.ndarray, dim: str = "X", latexName: Union[str, None] = None
+        self, data: np.ndarray, dim: str = "X", latexName: Optional[str] = None
     ):
+        """Wrapper for profiles in one of ReMKiT1D's dimensions
+
+        Args:
+            data (np.ndarray): Data - should conform to the dimension
+            dim (str, optional): Profile dimension - of of ["X","H","V"]. Defaults to "X".
+            latexName (Optiona[s], optional): Latex representation of the profile. Defaults to None, using dim.
+        """
         self.__data__ = data
         assert dim in ["X", "H", "V"], "Profile can only be in X, H, or V dimensions"
         self.__dim__ = dim

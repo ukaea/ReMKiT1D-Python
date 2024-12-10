@@ -171,6 +171,8 @@ class MultiplicativeArgument:
 
 
 class Variable(DerivationArgument):
+    """ReMKiT1D variable class used for defining and manipulating variable data"""
+
     def __init__(self, name: str, gridObj: Grid, **kwargs) -> None:
         """Construct a variable with given name on a given grid
 
@@ -701,6 +703,7 @@ def varAndDual(
 
 
 class VariableContainer:
+    """Container object for Variables"""
 
     def __init__(self, gridObj: Grid, timestamps: np.ndarray = np.array([])) -> None:
         """Container object for Variables
