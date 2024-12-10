@@ -440,7 +440,7 @@ def advectionEx(
 
     Args:
         distribution (Variable): Implicit electron distribution function
-        eField (Variable): Implicit electrix field
+        eField (Variable): Implicit electric field
         grid (Grid): Used grid object
         norms (Dict[str,float]): Normalisation dictionary (expects standard normalisation from RMKContext)
 
