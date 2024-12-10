@@ -634,7 +634,7 @@ class CustomFluid1DStencil(Stencil):
             fixedColumnVecs (Tuple[Profile, ...]): Tuple of spatial profiles, one for each entry in the stencil, corresponding to that column.
             varContColumnVars (Optional[Tuple[Optional[Variable], ...]], optional): Tuple of global fluid variables to multiply the fixed column vectors with, one for each stencil entry. If a specific column does not require a variable use None in that column. Defaults to None.
             mbDataColumnVars (Optional[Tuple[Optional[Variable], ...]], optional): Tuple of modelbound fluid variables to multiply the fixed column vectors with, one for each stencil entry. If a specific column does not require a variable use None in that column. Defaults to None.
-            latexTemplate (Optional[str], optional): _description_. Defaults to None.
+            latexTemplate (Optional[str], optional): Stencil LaTeX template - must contain $0 - this is where the argument will go. Defaults to None.
         """
         assert len(fixedColumnVecs) == len(
             xStencil
