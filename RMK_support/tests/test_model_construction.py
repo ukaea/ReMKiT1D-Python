@@ -1,6 +1,6 @@
 import RMK_support.derivations as dv
 import RMK_support.model_construction as mc
-from RMK_support import Variable, VariableContainer, Grid, varAndDual
+from RMK_support import Variable, Grid, varAndDual
 import numpy as np
 import pytest
 
