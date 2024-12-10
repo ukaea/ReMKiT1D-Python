@@ -13,6 +13,7 @@ from scipy.interpolate import RegularGridInterpolator  # type: ignore
 
 
 class DerivBase(ABC):
+    """Abstract base for derivation-like objects"""
 
     @property
     @abstractmethod
@@ -25,6 +26,7 @@ class DerivBase(ABC):
 
 
 class DerivationArgument(ABC):
+    """Abstract base class for potential arguments of derivation - used primarily for Variables"""
 
     def __init__(self):
         super().__init__()
@@ -143,6 +145,7 @@ class Species:
 
 
 class SpeciesContainer:
+    """Container of multiple species"""
 
     def __init__(self, *args: Species):
         self.__species__ = list(args)
@@ -210,6 +213,7 @@ class SpeciesContainer:
 
 
 class DerivationContainer(ABC):
+    """Abstract base class for derivation containers"""
 
     @abstractmethod
     def register(self, deriv: DerivBase, ignoreDuplicates=False) -> None:
@@ -217,6 +221,7 @@ class DerivationContainer(ABC):
 
 
 class Derivation(DerivBase):
+    """Abstract Derivation class"""
 
     def __init__(
         self,
@@ -314,6 +319,7 @@ class Derivation(DerivBase):
 
 
 class GenericDerivation(Derivation):
+    """Generic derivation for wrapping ReMKiT1D dictionary representations of derivations"""
 
     def __init__(
         self,
@@ -359,6 +365,7 @@ class GenericDerivation(Derivation):
 
 
 class NodeDerivation(Derivation):
+    """Derivation based on calculation tree"""
 
     def __init__(
         self,
@@ -407,6 +414,7 @@ class NodeDerivation(Derivation):
 
 
 class SimpleDerivation(Derivation):
+    """Simple derivation object which calculates its value as multConst * prod(vars**powers)"""
 
     def __init__(
         self,
@@ -483,6 +491,7 @@ class SimpleDerivation(Derivation):
 
 
 class BuiltInDerivation(Derivation):
+    """Abstract class for built-in derivations"""
 
     def __init__(
         self,
@@ -499,6 +508,7 @@ class BuiltInDerivation(Derivation):
 
 
 class InterpolationDerivation(BuiltInDerivation):
+    """Built-in interpolation derivation"""
 
     def __init__(self, grid: Grid, ontoDual=True, onDistribution=False):
         """Built-in interpolation derivation
@@ -547,6 +557,7 @@ class InterpolationDerivation(BuiltInDerivation):
 
 
 class Textbook(DerivationContainer):
+    """Standard derivation container offering built-in derivations"""
 
     def __init__(
         self,
@@ -927,6 +938,7 @@ class Textbook(DerivationContainer):
 
 
 class MultiplicativeDerivation(Derivation):
+    """Multiplicative composite derivation"""
 
     def __init__(
         self,
@@ -1083,6 +1095,7 @@ class MultiplicativeDerivation(Derivation):
 
 
 class AdditiveDerivation(Derivation):
+    """Additive composite derivation"""
 
     def __init__(
         self,
@@ -1230,6 +1243,7 @@ class AdditiveDerivation(Derivation):
 
 
 class DerivationClosure(Derivation):
+    """Derivation closure, allowing for storing a derivation and fixing one or more of its arguments. If all arguments are fixed, the closure can be used in additive and multiplicative arithmetic, producing new closures."""
 
     def __init__(
         self,
@@ -1538,6 +1552,7 @@ def funApply(funName: str, closure: DerivationClosure) -> DerivationClosure:
 
 
 class PolynomialDerivation(GenericDerivation):
+    """Polynomial derivation with arbitrary powers"""
 
     def __init__(
         self,
@@ -1602,6 +1617,7 @@ class PolynomialDerivation(GenericDerivation):
 
 
 class RangeFilterDerivation(Derivation):
+    """A wrapper for a derivation, filtering it based on the values of arguments. All arguments, as well as the output of the derivation should conform in size."""
 
     def __init__(
         self,
@@ -1704,6 +1720,7 @@ class RangeFilterDerivation(Derivation):
 
 
 class BoundedExtrapolationDerivation(Derivation):
+    """Bounded extrapolation derivation, extrapolating a variable to one of the boundaries and optionally applying a lower and/or upper bound to the extrapolated value."""
 
     def __init__(
         self,
@@ -1914,6 +1931,7 @@ def shkarofskyJIntegralDeriv(name: str, index: int):
 
 
 class HarmonicExtractorDerivation(Derivation):
+    """Harmonic extractor derivation, producing a single harmonic variable from a distribution"""
 
     def __init__(
         self,
@@ -1963,6 +1981,7 @@ class HarmonicExtractorDerivation(Derivation):
 
 
 class DDVDerivation(Derivation):
+    """Velocity derivative derivation acting on a harmonic of a distribution variable with optional velocity function inside and/or outside of the derivative v_o * d(v_i * f)/dv"""
 
     def __init__(
         self,
@@ -2043,6 +2062,7 @@ class DDVDerivation(Derivation):
 
 
 class D2DV2Derivation(Derivation):
+    """Velocity space diffusion derivation acting on a single harmonic of a distribution variable. Can set outer and/or inner velocity profiles to calculate v_o * d(v_i * df/dv)/dv"""
 
     def __init__(
         self,
@@ -2126,6 +2146,7 @@ class D2DV2Derivation(Derivation):
 
 
 class MomentDerivation(Derivation):
+    """Derivation taking the moment of a single harmonic of a distribution variable (optionally multiplied by a velocity space vector), optionally multiplying it with a variables raised to powers and a scalar."""
 
     def __init__(
         self,
@@ -2239,6 +2260,7 @@ class MomentDerivation(Derivation):
 
 
 class GenIntPolynomialDerivation(Derivation):
+    """Generalised polynomial derivation with integer powers. Calculates a polynomial in multiple variables and optionally applies a function to the result with a multiplicative constant - multConst * fun(sum c_i prod vars**powers), where prod vars**powers is shorthand for the product of passed variables raised to powers corresponding to polynomial coefficient c_i"""
 
     def __init__(
         self,
@@ -2333,6 +2355,7 @@ class GenIntPolynomialDerivation(Derivation):
 
 
 class LocValExtractorDerivation(Derivation):
+    """Derivation extracting a scalar value at a given spatial location from a fluid variable"""
 
     def __init__(
         self,
@@ -2380,6 +2403,7 @@ class LocValExtractorDerivation(Derivation):
 
 
 class NDInterpolationDerivation(Derivation):
+    """N-dimensional linear interpolation assuming data on Cartesian N-D grid. Values outside of the hypercube are set to 0."""
 
     def __init__(
         self,

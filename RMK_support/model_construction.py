@@ -1,20 +1,17 @@
 from typing import Union, List, Dict, cast, Tuple, Optional
 from .variable_container import VariableContainer, Variable, MultiplicativeArgument
-from .derivations import Derivation, Textbook, GenericDerivation
+from .derivations import Textbook, GenericDerivation, DerivationClosure
 from typing_extensions import Self
 from .grid import Profile, Grid
-import numpy as np
 import warnings
 from abc import ABC, abstractmethod
-from copy import deepcopy, copy
-from math import isclose
+from copy import deepcopy
 import pylatex as tex  # type: ignore
 from .tex_parsing import numToScientificTex
 
-# TODO: docs
-
 
 class ModelboundData(ABC):
+    """Abstract base class for modelbound data"""
 
     @abstractmethod
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
@@ -38,19 +35,20 @@ class ModelboundData(ABC):
 
 
 class Term(ABC):
+    """Abstract base term class"""
 
     def __init__(
         self,
         name: str,
         evolvedVar: Optional[Variable] = None,
-        implicitGroups: List[int] = [],
-        generalGroups: List[int] = [],
+        implicitGroups: Optional[List[int]] = None,
+        generalGroups: Optional[List[int]] = None,
     ) -> None:
         super().__init__()
         self.__name__ = name
         self.__evolvedVar__ = evolvedVar
-        self.__implicitGroups__ = implicitGroups
-        self.__generalGroups__ = generalGroups
+        self.__implicitGroups__ = implicitGroups if implicitGroups is not None else []
+        self.__generalGroups__ = generalGroups if generalGroups is not None else []
 
     @property
     def name(self):
@@ -61,6 +59,11 @@ class Term(ABC):
         self.__name__ = name
 
     def rename(self, name: str):
+        """Return a renamed copy of this term
+
+        Args:
+            name (str): New term name
+        """
         newTerm = deepcopy(self)
         newTerm.__name__ = name
         return newTerm
@@ -74,6 +77,11 @@ class Term(ABC):
         self.__evolvedVar__ = name
 
     def withEvolvedVar(self, name: str) -> Self:
+        """Change the evolved variable of this term and return the term
+
+        Args:
+            name (str): New evolved variable name
+        """
         self.evolvedVar = name
         return self
 
@@ -85,9 +93,21 @@ class Term(ABC):
     def generalGroups(self):
         return self.__generalGroups__
 
-    def regroup(self, implicitGroups: List[int] = [], generalGroups: List[int] = []):
-        self.__implicitGroups__ = implicitGroups
-        self.__generalGroups__ = generalGroups
+    def regroup(
+        self,
+        implicitGroups: Optional[List[int]] = None,
+        generalGroups: Optional[List[int]] = None,
+    ):
+        """Change the implicit/general groups of the term and return the temr
+
+        Args:
+            implicitGroups (Optional[List[int]], optional): If present, will change the implicit groups of the term. Defaults to None.
+            generalGroups (Optional[List[int]], optional): If present, will change the general groups of the term. Defaults to None.
+        """
+        if implicitGroups is not None:
+            self.__implicitGroups__ = implicitGroups
+        if generalGroups is not None:
+            self.__generalGroups__ = generalGroups
         return self
 
     @abstractmethod
@@ -134,6 +154,7 @@ class Term(ABC):
 
 
 class TermCollection:
+    """A collection of terms evolving a single variable. Provides access to the underlying terms via their names, as well as handling some term arithmetic operations."""
 
     def __init__(
         self,
@@ -142,6 +163,14 @@ class TermCollection:
         latexName: str,
         derivativeTex: str = "\\partial",
     ):
+        """A collection of terms evolving a single variable. Provides access to the underlying terms via their names, as well as handling some term arithmetic operations.
+
+        Args:
+            evolvedVar (Variable): The evolved variable (common to all terms in the collection)
+            modelName (str): Name of the model this collection belongs to
+            latexName (str): LaTeX-compatible string name for this collection
+            derivativeTex (str, optional): The derivative symbol used in the time derivative representation of this collection. Defaults to "\\partial".
+        """
         self.__evolvedVar__ = evolvedVar
         self.__modelName__ = modelName
         self.__latexName__ = latexName
@@ -166,10 +195,12 @@ class TermCollection:
 
     @property
     def activeImplicitGroups(self):
+        """Return list of active implicit groups in the collection (with duplicates)"""
         return sum([term.implicitGroups for term in self.__terms__], [])
 
     @property
     def activeGeneralGroups(self):
+        """Return list of active general groups in the collection (with duplicates)"""
         return sum([term.generalGroups for term in self.__terms__], [])
 
     def __getitem__(self, key: str):
@@ -271,8 +302,32 @@ class TermCollection:
 
         return newCollection
 
-    def filterByGroup(self, group: int, general: bool = False):
+    def __neg__(self):
+        newCollection = TermCollection(
+            self.evolvedVar, self.modelName, self.__latexName__, self.__derivativeTex__
+        )
+        for term in self.terms:
+            newCollection -= term
+        return newCollection
 
+    def withSuffix(self, suffix: str):
+        """Append a suffix to all terms in this collection and return as copy
+
+        Args:
+            suffix (str): Suffix to append
+        """
+        newCollection = deepcopy(self)
+        for term in newCollection.terms:
+            term.name += suffix
+        return newCollection
+
+    def filterByGroup(self, group: int, general: bool = False):
+        """Produce a new term collection containing only terms in a given group
+
+        Args:
+            group (int): Group index (Fortran 1-indexing)
+            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit gorups. Defaults to False.
+        """
         newCollection = TermCollection(
             self.evolvedVar,
             modelName=self.modelName,
@@ -304,23 +359,37 @@ class TermCollection:
 
 
 class VarData:
+    """A container for required variable data in matrix terms"""
 
     def __init__(
         self,
-        reqRowVars: MultiplicativeArgument = MultiplicativeArgument(),
-        reqColVars: MultiplicativeArgument = MultiplicativeArgument(),
-        reqMBRowVars: MultiplicativeArgument = MultiplicativeArgument(),
-        reqMBColVars: MultiplicativeArgument = MultiplicativeArgument(),
+        reqRowVars: Optional[MultiplicativeArgument] = None,
+        reqColVars: Optional[MultiplicativeArgument] = None,
+        reqMBRowVars: Optional[MultiplicativeArgument] = None,
+        reqMBColVars: Optional[MultiplicativeArgument] = None,
     ) -> None:
+        """A container for required variable data in matrix terms
 
-        self.__reqRowVars___ = list(reqRowVars.argMultiplicity.keys())
-        self.__reqRowPowers___ = list(reqRowVars.argMultiplicity.values())
-        self.__reqColVars___ = list(reqColVars.argMultiplicity.keys())
-        self.__reqColPowers___ = list(reqColVars.argMultiplicity.values())
-        self.__reqMBRowVars___ = list(reqMBRowVars.argMultiplicity.keys())
-        self.__reqMBRowPowers___ = list(reqMBRowVars.argMultiplicity.values())
-        self.__reqMBColVars___ = list(reqMBColVars.argMultiplicity.keys())
-        self.__reqMBColPowers___ = list(reqMBColVars.argMultiplicity.values())
+        Args:
+            reqRowVars (MultiplicativeArgument, optional): Required row variables. Defaults to MultiplicativeArgument().
+            reqColVars (MultiplicativeArgument, optional): Required column variables. Defaults to MultiplicativeArgument().
+            reqMBRowVars (MultiplicativeArgument, optional): Required row modelbound variables. Defaults to MultiplicativeArgument().
+            reqMBColVars (MultiplicativeArgument, optional): Required column modelbound variables. Defaults to MultiplicativeArgument().
+        """
+        rrV = reqRowVars if reqRowVars is not None else MultiplicativeArgument()
+        rcV = reqColVars if reqColVars is not None else MultiplicativeArgument()
+        rmbrV = reqMBRowVars if reqMBRowVars is not None else MultiplicativeArgument()
+
+        rmbcV = reqMBColVars if reqMBColVars is not None else MultiplicativeArgument()
+
+        self.__reqRowVars___ = list(rrV.argMultiplicity.keys())
+        self.__reqRowPowers___ = list(rrV.argMultiplicity.values())
+        self.__reqColVars___ = list(rcV.argMultiplicity.keys())
+        self.__reqColPowers___ = list(rcV.argMultiplicity.values())
+        self.__reqMBRowVars___ = list(rmbrV.argMultiplicity.keys())
+        self.__reqMBRowPowers___ = list(rmbrV.argMultiplicity.values())
+        self.__reqMBColVars___ = list(rmbcV.argMultiplicity.keys())
+        self.__reqMBColPowers___ = list(rmbcV.argMultiplicity.values())
 
     def checkRowColVars(
         self,
@@ -329,13 +398,6 @@ class VarData:
         colVarOnDual=False,
         mbData: Optional[ModelboundData] = None,
     ):
-        """Check whether required variables exist in the variable container and are on the correct grids
-
-        Args:
-            varCont (VariableContainer): Variable container used to check
-            rowVarOnDual (bool, optional): True if the row variables should be on the dual grid. Defaults to False.
-            colVarOnDual (bool, optional): True if the column variables should be on the dual grid. Defaults to False.
-        """
 
         for var in self.__reqRowVars___:
             assert var in varCont.varNames, (
@@ -413,11 +475,7 @@ class VarData:
                     )
 
     def dict(self):
-        """Returns dictionary form of VarData to be used in json output
 
-        Returns:
-            dict: Dictionary form of VarData to be added to individual custom term properties
-        """
         varData = {
             "requiredRowVarNames": self.__reqRowVars___,
             "requiredRowVarPowers": self.__reqRowPowers___,
@@ -434,10 +492,14 @@ class VarData:
 
 # TODO: rework this class
 class TimeSignalData:
-    """Container for custom term time dependence options"""
+    """Container for matrix term time dependence options"""
 
     def __init__(
-        self, signalType="none", period=0.0, params: List[float] = [], realPeriod=False
+        self,
+        signalType="none",
+        period=0.0,
+        params: Optional[List[float]] = None,
+        realPeriod=False,
     ) -> None:
         """TimeSignalData constructor
 
@@ -453,15 +515,11 @@ class TimeSignalData:
 
         self.__signalType__ = signalType
         self.__period__ = period
-        self.__params__ = params
+        self.__params__: List[float] = params if params is not None else []
         self.__realPeriod__ = realPeriod
 
     def dict(self):
-        """Returns dictionary form of TimeSignalData to be used in json output
 
-        Returns:
-            dict: Dictionary form of TimeSignalData to be added to individual custom term properties
-        """
         tData = {
             "timeSignalType": self.__signalType__,
             "timeSignalPeriod": self.__period__,
@@ -476,6 +534,7 @@ class TimeSignalData:
 
 
 class AbstractStencil(ABC):
+    """Abstract stencil base class"""
 
     @abstractmethod
     def latex(self, arg: MultiplicativeArgument, **kwargs) -> str:
@@ -494,38 +553,80 @@ class AbstractStencil(ABC):
 
 
 class MatrixTerm(Term):
+    """Matrix terms are of the form :math:`LHS=M_{ij}u_j` where the indices correspond to the evolved (row) and implicit (column) variables, and u is the implicit variable. The matrix M has the following form: :math:`M_{ij} = c*X_i*H_i*V_i*T_i*R_i*S_{ij}*C_j`"""
+
     def __init__(
         self,
         name: str,
         stencil: AbstractStencil,
         evolvedVar: Optional[Variable] = None,
         implicitVar: Optional[Variable] = None,
-        profiles: Dict[str, Profile] = {},
-        R: MultiplicativeArgument = MultiplicativeArgument(),
-        modelboundR: MultiplicativeArgument = MultiplicativeArgument(),
-        C: MultiplicativeArgument = MultiplicativeArgument(),
-        modelboundC: MultiplicativeArgument = MultiplicativeArgument(),
+        profiles: Optional[Dict[str, Profile]] = None,
+        R: Optional[MultiplicativeArgument] = None,
+        modelboundR: Optional[MultiplicativeArgument] = None,
+        C: Optional[MultiplicativeArgument] = None,
+        modelboundC: Optional[MultiplicativeArgument] = None,
         T: Optional[TimeSignalData] = None,
-        implicitGroups=[1],
-        generalGroups: List[int] = [],
+        implicitGroups: Optional[List[int]] = None,
+        generalGroups: Optional[List[int]] = None,
         **kwargs,
     ) -> None:
+        """Matrix terms are of the form :math:`LHS=M_{ij}u_j` where the indices correspond to the evolved (row) and implicit (column) variables, and u is the implicit variable. The matrix M has the following form: :math:`M_{ij} = c*X_i*H_i*V_i*T_i*R_i*S_{ij}*C_j`, where this constructor sets the individual components.
 
-        super().__init__(name, evolvedVar, implicitGroups, generalGroups)
+        This constructor intentionally produces incomplete MatrixTerms, and shouldn't be invoked explicitly except in low level code.
+
+        Args:
+            name (str): Name of the term
+            stencil (AbstractStencil): Stencil - S in the above formula
+            evolvedVar (Optional[Variable], optional): Evolved variable of this term. Defaults to None.
+            implicitVar (Optional[Variable], optional): Implicit variable - u in the above formula. Defaults to None.
+            profiles (Optional[Dict[str, Profile]], optional): Profile dictionary with possible keys in ["X","V","H"], corresponding to the X,V, and H in the above formula. Defaults to None.
+            R (Optional[MultiplicativeArgument], optional): Row variables, together with the multiplicative constant c in the above formula. Defaults to None.
+            modelboundR (Optional[MultiplicativeArgument], optional): Modelbound row variables in R in the above formula. Defaults to None.
+            C (Optional[MultiplicativeArgument], optional): Column variables in the above formula. Defaults to None.
+            modelboundC (Optional[MultiplicativeArgument], optional): Modelbound column variable in the above formula. Defaults to None.
+            T (Optional[TimeSignalData], optional): Time signal component of the matrix term. Defaults to None.
+            implicitGroups (Optional[List[int]], optional): Implicit groups this term belongs to. Defaults to None, resulting in [1].
+            generalGroups (Optional[List[int]], optional): General groups this term belongs to. Defaults to None.
+
+        kwargs:
+
+            skipPattern (bool): If true, assumes that the same stencil acting on the same implicit variable and with the same evolved variable has been used elsewhere. This is an optimisation flag to speed up the setup of large kinetic stencils. Defaults to False.
+
+            fixedMatrix (bool): If true will assume that the matrix is constant and that it doesn't need to be updated during the run. This is an optimisation flag useful with large constant matrices. Defaults to False.
+
+            copyTermName (Optional[str]): Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape. Defaults to None.
+
+            evaluatedTermGroup (int): Term group in parent model to be optionally evaluated as additional row variable (multiplying R in the above formula). Defaults to 0, not evaluating any group.
+
+            constLatex (Optional[str]): LaTeX representation of the multiplicative scalar component of the term. Defaults to None, using the numerical value.
+        """
+        super().__init__(
+            name,
+            evolvedVar,
+            implicitGroups if implicitGroups is not None else [1],
+            generalGroups,
+        )
 
         self.__stencil__ = stencil
 
         self.__implicitVar__ = implicitVar
-        assert all(
-            [k in ["X", "H", "V"] for k in profiles.keys()]
-        ), "Profiles in MatrixTerm constructor must have keys X,H, or V"
-        self.__profiles__ = profiles
 
-        self.__R__ = R
-        self.__C__ = C
-        self.__modelboundR__ = modelboundR
-        self.__modelboundC__ = modelboundC
-        self.__T__ = T
+        self.__profiles__: Dict[str, Profile] = profiles if profiles is not None else {}
+
+        assert all(
+            k in ["X", "H", "V"] for k in self.__profiles__.keys()
+        ), "Profiles in MatrixTerm constructor must have keys X,H, or V"
+
+        self.__R__ = R if R is not None else MultiplicativeArgument()
+        self.__C__ = C if C is not None else MultiplicativeArgument()
+        self.__modelboundR__ = (
+            modelboundR if modelboundR is not None else MultiplicativeArgument()
+        )
+        self.__modelboundC__ = (
+            modelboundC if modelboundC is not None else MultiplicativeArgument()
+        )
+        self.__T__: Union[TimeSignalData, None] = T
         self.__skipPattern__ = kwargs.get("skipPattern", False)
         self.__fixedMatrix__ = kwargs.get("fixedMatrix", False)
         self.__copyTermName__: Optional[str] = kwargs.get("copyTermName", None)
@@ -546,6 +647,7 @@ class MatrixTerm(Term):
 
     @property
     def constLatex(self):
+        """LaTeX representation of the multiplicative constant. If None, used the numerical value."""
         return self.__constLatex__
 
     @constLatex.setter
@@ -554,24 +656,37 @@ class MatrixTerm(Term):
 
     @property
     def fixedMatrix(self):
+        """Return true if this term has a fixed matrix - i.e. it does not evolve"""
         return self.__fixedMatrix__
 
     def withFixedMatrix(self, fixed=True):
+        """Return a copy of this term with fixed/variable matrix
+
+        Args:
+            fixed (bool, optional): Set to true if the new term should have its matrix fixed. Defaults to True.
+        """
         newTerm = deepcopy(self)
         newTerm.__fixedMatrix__ = fixed
         return newTerm
 
     @property
     def skipPattern(self):
+        """Set to true if a term with the same evolved and implicit variables as well as the stencil has already been added and this term should be skipped when calculating the sparsity pattern. This is an optimisation option for large kinetic simulations."""
         return self.__skipPattern__
 
     def withSkippingPattern(self, skip=True):
+        """Return a copy of this term with the sparsity pattern addition skipped/included
+
+        Args:
+            skip (bool, optional): True if the sparsity pattern addition should be skipped. Defaults to True.
+        """
         newTerm = deepcopy(self)
         newTerm.__skipPattern__ = skip
         return newTerm
 
     @property
     def multConst(self):
+        """Term multiplicative scalar constant"""
         return self.__R__.scalar * self.__modelboundR__.scalar
 
     def checkTerm(
@@ -581,6 +696,7 @@ class MatrixTerm(Term):
 
         Args:
             varCont (VariableContainer): Variable container to be used with this term
+            mbData (Optional[ModelboundData]): Modelbound data to check modelbound row and column vars. Defaults to None.
         """
 
         super().checkTerm(varCont)
@@ -604,11 +720,7 @@ class MatrixTerm(Term):
         vData.checkRowColVars(varCont, rowVarOnDual, colVarOnDual, mbData)
 
     def dict(self):
-        """Returns dictionary form of GeneralMatrixTerm to be used in json output
 
-        Returns:
-            dict: Dictionary form of GeneralMatrixTerm to be used as individual custom term properties
-        """
         assert (
             self.evolvedVar is not None
         ), "Called dict() on MatrixTerm without setting evolved variable"
@@ -728,12 +840,19 @@ class MatrixTerm(Term):
 
 
 class Stencil(AbstractStencil):
+    """Generic stencil class"""
 
     def __init__(
         self,
         latexTemplate: Optional[str] = None,
         properties: Optional[Dict[str, object]] = None,
     ):
+        """Generic stencil class
+
+        Args:
+            latexTemplate (Optional[str], optional): Stencil LaTeX template - must contain $0 - this is where the argument will go. Defaults to None.
+            properties (Optional[Dict[str, object]], optional): ReMKiT1D JSON representation of the stencil. Defaults to None.
+        """
         super().__init__()
         if latexTemplate is not None:
             assert (
@@ -794,6 +913,7 @@ class Stencil(AbstractStencil):
 
 
 class DiagonalStencil(Stencil):
+    """Diagonal stencil allowing for evolving only specific grid points. If row and column variables are on different grids this stencil will perform linear interpolation/extrapolation."""
 
     def __init__(
         self,
@@ -801,6 +921,13 @@ class DiagonalStencil(Stencil):
         evolvedHarmonics: Optional[List[int]] = None,
         evolvedVCells: Optional[List[int]] = None,
     ):
+        """Diagonal stencil allowing for evolving only specific grid points. If row and column variables are on different grids this stencil will perform linear interpolation/extrapolation.
+
+        Args:
+            evolvedXCells (Optional[List[int]], optional): List of evolved spatial cells (Fortran 1-indexing). Defaults to None, evolving all cells.
+            evolvedHarmonics (Optional[List[int]], optional): List of evolved harmonics (Fortran 1-indexing). Defaults to None, evolving all harmonics.
+            evolvedVCells (Optional[List[int]], optional): List of evolved velocity cells. Defaults to None, evolving all cells.
+        """
         properties: Dict[str, object] = {
             "stencilType": "diagonalStencil",
             "evolvedXCells": evolvedXCells if evolvedXCells is not None else [],
@@ -813,18 +940,17 @@ class DiagonalStencil(Stencil):
 
 
 class DerivationTerm(Term):
-    """Derivation-based explicit term options used to construct custom models. The result of evaluating a derivation term is the result of the derivation optionally multiplied by a modelbound variable. Does not support evolving distributions."""
+    """Derivation-based explicit term. The result of evaluating a derivation term is the result of the derivation optionally multiplied by a modelbound variable. Does not support evolving distributions."""
 
     def __init__(
         self,
         name: str,
-        derivation: Derivation,
-        derivationArgs: List[str],
+        closure: DerivationClosure,
         evolvedVar: Optional[Variable] = None,
         mbVar: Optional[Variable] = None,
-        generalGroups=[1],
+        generalGroups: Optional[List[int]] = None,
     ) -> None:
-        """Derivation term constructor
+        """Derivation term
 
         Args:
             evolvedVar (str): Name of the evolved variable. Distributions not supported.
@@ -833,10 +959,12 @@ class DerivationTerm(Term):
             generalGroups (list, optional): General groups this term belongs to within its model. Defaults to [1].
         """
 
-        super().__init__(name, evolvedVar, [], generalGroups)
+        assert closure.numArgs == 0, "DerivationTerm requires complete closure"
+        super().__init__(
+            name, evolvedVar, [], generalGroups if generalGroups is not None else [1]
+        )
 
-        self.__derivation__ = derivation
-        self.__derivationArgs__ = derivation.fillArgs(*tuple(derivationArgs))
+        self.__derivation__ = closure
         self.__mbVar__ = mbVar
 
     def checkTerm(
@@ -850,7 +978,8 @@ class DerivationTerm(Term):
 
         super().checkTerm(varCont)
 
-        for name in self.__derivationArgs__:
+        derivArgs = self.__derivation__.fillArgs()
+        for name in derivArgs:
             assert name in varCont.varNames, (
                 "Required derivation variable "
                 + name
@@ -875,24 +1004,20 @@ class DerivationTerm(Term):
                 )
 
     def dict(self):
-        """Returns dictionary form of DerivationTerm to be used in json output
 
-        Returns:
-            dict: Dictionary form of DerivationTerm to be used as individual custom term properties
-        """
         gTerm = {
             "termType": "derivationTerm",
-            "evolvedVar": self.evolvedVar,
+            "evolvedVar": self.evolvedVar.name,
             "generalGroups": self.generalGroups,
         }
 
         if self.__mbVar__ is not None:
-            gTerm["requiredMBVarName"] = self.__mbVar__
+            gTerm["requiredMBVarName"] = self.__mbVar__.name
 
         gTerm.update(
             {
                 "ruleName": self.__derivation__.name,
-                "requiredVarNames": self.__derivationArgs__,
+                "requiredVarNames": self.__derivation__.fillArgs(),
             }
         )
 
@@ -906,7 +1031,7 @@ class DerivationTerm(Term):
                 if arg in latexRemap
                 else "\\text{" + arg.replace("_", r"\_") + "}"
             )
-            for arg in self.__derivationArgs__
+            for arg in self.__derivation__.fillArgs()
         )
         result = " " + self.__derivation__.latex(*remappedArgs)
         if self.__mbVar__ is not None:
@@ -929,18 +1054,18 @@ class DerivationTerm(Term):
 
 
 class TermGenerator(ABC):
-    """Term generator class used to track the term groups into which the generators will put their turns"""
+    """Abstract term generator class"""
 
     def __init__(
         self,
         name: str,
-        implicitGroups: List[int] = [1],
-        generalGroups: List[int] = [],
+        implicitGroups: Optional[List[int]] = None,
+        generalGroups: Optional[List[int]] = None,
     ) -> None:
         super().__init__
         self.__name__ = name
-        self.__implicitGroups__ = implicitGroups
-        self.__generalGroups__ = generalGroups
+        self.__implicitGroups__ = implicitGroups if implicitGroups is not None else [1]
+        self.__generalGroups__ = generalGroups if generalGroups is not None else []
 
     @property
     def name(self):
@@ -956,11 +1081,7 @@ class TermGenerator(ABC):
 
     @abstractmethod
     def dict(self) -> dict:
-        """Produce dictionary form of TermGenerator
 
-        Returns:
-            dict: Dictionary ready to be added to the config file
-        """
         tgDict: Dict[str, object] = {
             "implicitGroups": self.__implicitGroups__,
             "generalGroups": self.__generalGroups__,
@@ -983,6 +1104,7 @@ class TermGenerator(ABC):
 
 
 class DDT:
+    """Wrapper for term collections in models, providing indexing based on variables"""
 
     def __init__(self, modelName: str, modelLatexName: str):
         self.__termCollections__: List[TermCollection] = []
@@ -1023,11 +1145,18 @@ class DDT:
 
 
 class Model:
-    """Model object property container"""
+    """A container for terms, term generators, and modelbound data"""
 
     def __init__(
         self, name: str, latexName: Optional[str] = None, isIntegrable=True
     ) -> None:
+        """A container for terms, term generators, and modelbound data
+
+        Args:
+            name (str): Name of the model
+            latexName (Optional[str], optional): Optional LaTeX-compatible string for the model name. Defaults to None.
+            isIntegrable (bool, optional): Optional flag for integrable models. Defaults to True.
+        """
         self.__name__ = name
         self.__latexName__ = (
             latexName
@@ -1100,6 +1229,7 @@ class Model:
         self.__isIntegrable__ = integrable
 
     def onlyEvolving(self, *args: Variable) -> Self:
+        """Produce a new model only evolving a given list of variables"""
         newModel = Model(self.name, self.__latexName__, self.isIntegrable)
 
         for arg in args:
@@ -1166,11 +1296,7 @@ class Model:
             tc.checkTerms(varCont, self.mbData)
 
     def dict(self):
-        """Returns dictionary form of CustomModel to be used in json output
 
-        Returns:
-            dict: Dictionary form of CustomModel to be used to update model properties
-        """
         cModel = {
             "type": "customModel",
             "termTags": sum([tc.termNames for tc in self.ddt.__termCollections__], []),
@@ -1193,6 +1319,7 @@ class Model:
 
 
 class ModelCollection:
+    """Container object for models"""
 
     def __init__(self, *args: Model):
         self.__models__: List[Model] = list(args)
@@ -1244,6 +1371,7 @@ class ModelCollection:
                 model.addLatexToDoc(doc, **kwargs)
 
     def onlyEvolving(self, *args: Variable) -> Self:
+        """Produce a model collection from this one only evolving a given list of variables"""
         newCollection = ModelCollection()
 
         for model in self.__models__:
@@ -1257,7 +1385,7 @@ class ModelCollection:
             model.checkTerms(varCont)
 
     def numGroups(self) -> Tuple[int, int]:
-
+        """Calculate the total number of implicit and general groups needed by this model collection"""
         numImplicitGroups = max(
             max([1] + model.activeImplicitGroups) for model in self.__models__
         )
@@ -1268,7 +1396,11 @@ class ModelCollection:
         return numImplicitGroups, numGeneralGroups
 
     def getTermsThatEvolveVar(self, var: Variable) -> List[Tuple[str, str]]:
+        """Get a list of (model,term) tuples containing the model and term names evolving a given variable
 
+        Args:
+            var (Variable): Evolved variable to get tuples for
+        """
         result = []
         for model in self.models:
             if var.name in model.evolvedVars:
@@ -1283,7 +1415,7 @@ class ModelCollection:
 
 
 class VarlikeModelboundData(ModelboundData):
-    """Variable-like modelbound data class used for easier instantiation of varlike modelbound data for models"""
+    """Variable-like modelbound data"""
 
     def __init__(self) -> None:
         self.__variables__: List[Variable] = []
@@ -1358,6 +1490,7 @@ class VarlikeModelboundData(ModelboundData):
 
 
 class LBCModelboundData(ModelboundData):
+    """Modelbound data needed for the Logical BC for kinetic electrons"""
 
     def __init__(
         self,
@@ -1371,7 +1504,19 @@ class LBCModelboundData(ModelboundData):
         bisTol: float = 1e-12,
         leftBoundary=False,
     ):
+        """Modelbound data needed for the logical boundary condition for the electrons in kinetic mode. Matches the electron current with ion current, potentially taking into account a target total current as well.
 
+        Args:
+            grid (Grid): Used grid object
+            ionCurrent (Variable): Ion current the electrons need to match (up to totalCurrent values, see below)- scalar variable
+            distFun (Variable): Electron distribution variable
+            density (Variable): Electron density variable
+            densityDual (Optional[Variable], optional): Dual electron density variable - needed when using staggered grids. Defaults to None.
+            densityOnBoundary (Optional[Variable], optional): Value of the electron density on the boundary - if not present will only extrapolate the distribution to the cell centre closes to the boundary, assuming it stays constant from that point to the boundary - scalar variable. Defaults to None.
+            totalCurrent (Optional[Variable], optional): Total current variable - scalar. Defaults to None, effectively setting the total current to 0.
+            bisTol (float, optional): Bisection tolerance for the solver trying to match the electron flux to the ion flux. Defaults to 1e-12.
+            leftBoundary (bool, optional): True if on left boundary. Defaults to False.
+        """
         assert ionCurrent.isScalar, "ionCurrent in LBCModelboundData must be a scalar"
         self.__ionCurrent__ = ionCurrent
 
