@@ -1,7 +1,6 @@
 from typing import Union, List, Dict, cast, Tuple
 from typing_extensions import Self
 import numpy as np
-import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import pylatex as tex  # type: ignore
@@ -9,9 +8,9 @@ from .tex_parsing import numToScientificTex
 from . import model_construction as mc
 from .variable_container import Variable, VariableContainer, MultiplicativeArgument
 
-
 class Integrator(ABC):
-
+    """Abstract integrator base class
+    """
     def __init__(self, name: str):
         super().__init__()
         self.__name__ = name
@@ -30,7 +29,8 @@ class Integrator(ABC):
 
 
 class IntegrationRule:
-
+    """Integration rule, encapsulating how a given model should be evaluated/updated in an integration step
+    """
     def __init__(
         self,
         model: mc.Model,
@@ -38,7 +38,14 @@ class IntegrationRule:
         evaluatedGroups: Union[List[int], None] = None,
         updateModelData=True,
     ):
+        """Integration rule for a given model
 
+        Args:
+            model (mc.Model): Model whose contributions are being integrated
+            updatedGroups (Union[List[int], None], optional): Groups in the model that need updating - Fortran 1-indexing with implicit groups indexed first, followed by general groups, i.e. if there are 3 total implicit groups, group 4 will be the first general group (the  total number of implicit groups should be determined at the level of ModelCollection). Defaults to None.
+            evaluatedGroups (Union[List[int], None], optional): Groups in the model whose contributions are evaluated and used in equations- Fortran 1-indexing with implicit groups indexed first, followed by general groups . Defaults to None.
+            updateModelData (bool, optional): True if the modelbound data should be updated in the step containing this rule. Defaults to True.
+        """
         self.__updatedGroups__ = updatedGroups
         self.__evaluatedGroups__ = evaluatedGroups
         self.__updateModelData__ = updateModelData
@@ -75,7 +82,11 @@ class IntegrationRule:
         self.__updateModelData__ = update
 
     def defaultGroups(self, implicitGroups: int):
+        """Set default evaluated groups to all active implicit and general groups in the model
 
+        Args:
+            implicitGroups (int): Total number of implicit groups in the ReMKiT1D simulation
+        """
         if self.evaluatedGroups is None:
             self.evaluatedGroups = self.__model__.activeImplicitGroups + [
                 implicitGroups + g for g in self.__model__.activeGeneralGroups
@@ -99,7 +110,7 @@ class IntegrationRule:
 
 
 class IntegrationStepBase(ABC):
-
+    """Abstract base class for integration steps"""
     @property
     @abstractmethod
     def name(self):
@@ -120,7 +131,8 @@ class IntegrationStepBase(ABC):
 
 
 class IntegrationStepSequence:
-
+    """Container class for integration steps, allowing for their chaining using the multiplication operator
+    """
     def __init__(self, *args: IntegrationStepBase):
         self.__steps__: List[IntegrationStepBase] = list(args)
 
@@ -173,48 +185,72 @@ class IntegrationStepSequence:
             with doc.create(tex.Subsection(step.name)):
                 step.addLatexToDoc(doc, implicitGroups, **kwargs)
 
+class Rules:
+    """Container for integration rules providing Model-based indexing
+    """
+    def __init__(self) -> None:
+        self.__rules__: List[IntegrationRule] = []
+
+    def __getitem__(self, model: mc.Model):
+        if model.name not in self.evolvedModels:
+            raise KeyError()
+        return self.__rules__[self.evolvedModels.index(model.name)]
+
+    def __setitem__(self, model: mc.Model, rule: IntegrationRule):
+        if model.name not in self.evolvedModels:
+            self.__rules__.append(rule)
+            return
+        self.__rules__[self.evolvedModels.index(model.name)] = rule
+
+    def __delitem__(self, model: mc.Model):
+        if model.name not in self.evolvedModels:
+            raise KeyError()
+        del self.__rules__[self.evolvedModels.index(model.name)]
+
+    @property
+    def evolvedModels(self):
+        return [m.modelName for m in self.__rules__]
 
 class IntegrationStep(IntegrationStepBase):
     """Class containing integration step data"""
 
     def __init__(self, name: str, integrator: Integrator, **kwargs) -> None:
+        """Integration step comprised of an integrator and integration rules
+
+        Args:
+            name (str): Name of the integration step
+            integrator (Integrator): Integrator used for this integtion step
+
+        kwargs: 
+
+            globalStepFraction (float): The fraction of the global timestep taken by this integration step. This can be set using __call__ and composing this step with others using multiplication. Defaults to 1.0
+
+            allowTimeEvolution (bool): If true, the time variable is evolved at the end of the step, otherwise the value of the time variable at the end of the step is reverted back to the value at the start of the step. Defaults to True
+
+            useInitialInput (bool): If true, and if this step is in a sequence of multiple steps, it will treat as its initial condition the state of the system at the start of the sequence, otherwise it will continue where the previous step in the sequence stopped. Defaults to False.
+        """
         self.__name__ = name
         self.__integrator__ = integrator
         self.__globalStepFraction__ = kwargs.get("globalStepFraction", 1.0)
         self.__allowTimeEvolution__ = kwargs.get("allowTimeEvolution", True)
         self.__useInitialInput__ = kwargs.get("useInitialInput", False)
-        self.__rules__: List[IntegrationRule] = []
-
-        selfOuter = self
-
-        class Rules:
-            def __getitem__(self, model: mc.Model):
-                if model.name not in selfOuter.evolvedModels:
-                    raise KeyError()
-                return selfOuter.__rules__[selfOuter.evolvedModels.index(model.name)]
-
-            def __setitem__(self, model: mc.Model, rule: IntegrationRule):
-                if model.name not in selfOuter.evolvedModels:
-                    selfOuter.__rules__.append(rule)
-                    return
-                selfOuter.__rules__[selfOuter.evolvedModels.index(model.name)] = rule
-
-            def __delitem__(self, model: mc.Model):
-                if model.name not in selfOuter.evolvedModels:
-                    raise KeyError()
-                del selfOuter.__rules__[selfOuter.evolvedModels.index(model.name)]
-
+        
         self.rules = Rules()
 
     @property
     def evolvedModels(self):
-        return [m.modelName for m in self.__rules__]
+        return self.rules.evolvedModels
 
     @property
     def name(self):
         return self.__name__
 
     def rename(self, name: str):
+        """Return a copy of this integration step with a different name
+
+        Args:
+            name (str): New name for the step
+        """
         newStep = deepcopy(self)
         newStep.__name__ = name
         return newStep
@@ -237,18 +273,25 @@ class IntegrationStep(IntegrationStepBase):
         return self.__useInitialInput__
 
     def disableTimeEvo(self):
+        """Disable the time evolution in this step and return it
+        """
         self.__allowTimeEvolution__ = False
         return self
 
     def enableTimeEvo(self):
+        """Enable the time evolution in this step and return it
+        """
         self.__allowTimeEvolution__ = True
         return self
 
     def startFromZero(self):
+        """Set this step to start from the initial state at the start of the integration step sequence and return it
+        """
         self.__useInitialInput__ = True
         return self
 
     def startFromLast(self):
+        """Set this step to start from the state after the previous step in the integration step sequence and return it"""
         self.__useInitialInput__ = False
         return self
 
@@ -261,6 +304,8 @@ class IntegrationStep(IntegrationStepBase):
         self.__integrator__ = integ
 
     def add(self, *args: Union[IntegrationRule, mc.Model, mc.ModelCollection]) -> None:
+        """Add any number of integration rules, models, or model collections to this this. If models or model collections are added, their integration rules will be constructed with default options.
+        """
         for arg in args:
             assert isinstance(
                 arg, (mc.Model, IntegrationRule, mc.ModelCollection)
@@ -286,11 +331,6 @@ class IntegrationStep(IntegrationStepBase):
         return rhs.__rmul__(self)
 
     def dict(self, implicitGroups: int) -> dict:
-        """Return ReMKiT1D-readable dictionary object
-
-        Returns:
-            dict: Integration step property dictionary
-        """
 
         step = {
             "integratorTag": self.integrator.name,
@@ -300,7 +340,7 @@ class IntegrationStep(IntegrationStepBase):
             "useInitialInput": self.__useInitialInput__,
         }
 
-        for rule in self.__rules__:
+        for rule in self.rules.__rules__:
             rule.defaultGroups(implicitGroups)
             step.update(
                 {
@@ -330,14 +370,19 @@ class IntegrationStep(IntegrationStepBase):
             self.integrator.addLatexToDoc(doc, **kwargs)
         with doc.create(tex.Subsubsection("Integration rules")):
             with doc.create(tex.Itemize()) as itemize:
-                for rule in self.__rules__:
+                for rule in self.rules.__rules__:
                     rule.defaultGroups(implicitGroups)
                     itemize.add_item(tex.NoEscape(rule.latex()))
 
-
 class Timestep:
-
+    """Wrapper for the setting of the integration timestep, including scaling controls
+    """
     def __init__(self, timestep: Union[Variable, MultiplicativeArgument, float]):
+        """Wrapper for the setting of the integration timestep, including scaling controls
+
+        Args:
+            timestep (Union[Variable, MultiplicativeArgument, float]): Timestep value - if the timestep is a float, it will be kept constant, otherwise it will be evaluated on the spatial grid and the minimum (or maximum, see below) value will be used as the step value
+        """
         self.__timestep__: MultiplicativeArgument = MultiplicativeArgument() * timestep
         self.__max__ = False
 
@@ -346,10 +391,14 @@ class Timestep:
         return self.__max__
 
     def max(self) -> Self:
+        """Set the Timestep to using the maximum value of the evaluated quantities, and return the Timestep
+        """
         self.__max__ = True
         return self
 
     def min(self) -> Self:
+        """Set the Timestep to using the minimum value of the evaluated quantities, and return the Timestep
+        """
         self.__max__ = False
         return self
 
@@ -397,14 +446,23 @@ class Timestep:
 
 
 class IntegrationScheme:
-
+    """Integration scheme to be used in a ReMKiT1D simulation
+    """
     def __init__(
         self,
-        dt=Union[Timestep, float],
+        dt:Union[Timestep, float],
         steps: Union[
             IntegrationStepSequence, IntegrationStep
         ] = IntegrationStepSequence(),
     ):
+        """Integration scheme to be used in a ReMKiT1D simulation encapsulating both the steps and the rule for calculating the timestep
+
+        The scheme defaults to doing a single step and outputting the values after it. See member functions for setting the mode and options for the timestepping/output.
+
+        Args:
+            dt (Union[Timestep, float]): Timestep length.
+            steps (Union[ IntegrationStepSequence, IntegrationStep ], optional): Integration step sequence or a single integration step to start the sequence (can be the only step). Defaults to IntegrationStepSequence() which is an empty sequence.
+        """
         self.__timestep__ = dt if isinstance(dt, Timestep) else Timestep(dt)
         self.__stepSequence__: IntegrationStepSequence = (
             steps
@@ -428,6 +486,8 @@ class IntegrationScheme:
 
     @property
     def steps(self):
+        """Get the individual steps in the step sequence of the scheme
+        """
         return self.__stepSequence__.steps
 
     @steps.setter
@@ -435,12 +495,22 @@ class IntegrationScheme:
         self.__stepSequence__ = seq
 
     def setFixedNumTimesteps(self, numTimesteps=1, outputInterval=1):
+        """Set the mode of the integration scheme to running for a fixed number of timesteps and outputting every set number of timesteps
 
+        Args:
+            numTimesteps (int, optional): Number of timesteps to run for. Defaults to 1.
+            outputInterval (int, optional): Number of timesteps between outputting variable data. Defaults to 1.
+        """
         self.__mode__ = "fixedNumSteps"
         self.__numTimesteps__ = numTimesteps
         self.__outputInterval__ = outputInterval
 
     def setOutputPoints(self, outputPoints: List[float]):
+        """Set the timestepping mode to output at particular values of the time variable. Step lengths are adjusted before output points, but never below the set Timestep values
+
+        Args:
+            outputPoints (List[float]): List of positive monotonically increasing values of the time variable at which the code should produce output
+        """
         assert all(
             point > 0 for point in outputPoints
         ), "All output points must be positive"
@@ -503,8 +573,40 @@ class IntegrationScheme:
 
 
 class BDEIntegrator(Integrator):
-
+    """Backwards difference Euler integrator with fixed-point iterations used to solve non-linear systems"""
     def __init__(self, name: str, **kwargs):
+        """Backwards difference Euler integrator with fixed-point iterations used to solve non-linear systems
+
+        Args:
+            name (str): Name of the integrator
+
+        kwargs: 
+
+        maxNonlinIters (int): Maximum allowed nonlinear (Picard/fixed point) iterations. Defaults to 100.
+        
+        nonlinTol (float): Relative convergence tolerance on 2-norm. Defaults to 1.0e-12.
+        absTol (float): Absolute tolerance in machine precision units (epsilon in Fortran - 2.22e-16 for double precision). Defaults to 1.0.
+        
+        convergenceVars (List[str]): Variables used to check for convergence. Defaults to [], which results in all implicit variables.
+        
+        associatedPETScGroup (int): PETSc object group this integrator is associated with. Defaults to 1.
+        
+        use2Norm (bool): True if 2-norm should be used (benefits distributions). Defaults to False.
+        
+        internalStepControl (bool): True if integrator is allowed to control its internal steps based on convergence. Defaults to False.
+        
+        initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1.
+        
+        stepMultiplier (int): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
+        
+        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
+        
+        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        
+        maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
+        
+        relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+        """
         super().__init__(name)
         self.__maxNonlinIters__: int = kwargs.get("maxNonlinIters", 100)
         self.__nonlinTol__: float = kwargs.get("nonlinTol", 1.0e-12)
@@ -554,8 +656,15 @@ class BDEIntegrator(Integrator):
 
 
 class RKIntegrator(Integrator):
-
+    """Runge-Kutta integrator of given order (supports 1-4 currently)
+    """
     def __init__(self, name: str, order: int):
+        """Runge-Kutta integrator of given order
+
+        Args:
+            name (str): Name of the integrator
+            order (int): RK order (1-4 supported)
+        """
         self.__order__ = order
         super().__init__(name)
 
@@ -569,9 +678,37 @@ class RKIntegrator(Integrator):
 
 
 class CVODEIntegrator(Integrator):
-
+    """CVODE integrator See https://sundials.readthedocs.io/en/latest/index.html"""
     def __init__(self, name: str, **kwargs):
+        """CVODE integrator See https://sundials.readthedocs.io/en/latest/index.html
 
+        Args:
+            name (str): Name of the integrator
+
+        kwargs:
+
+        relTol (float): CVODE solver relative tolerance. Defaults to 1e-5.
+        
+        absTol (float): CVODE solver absolute tolerance. Defaults to 1e-10.
+        
+        maxGMRESRestarts (int): SPGMR maximum number of restarts. Defaults to 0.
+        
+        CVODEBBDPreParams (List[int]): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
+        
+        useAdamsMoulton (bool): If true will use Adams Moulton method instead of the default BDF. Defaults to False.
+        
+        useStabLimitDet (bool): If true will use stability limit detection. Defaults to False.
+        
+        maxOrder (int): Maximum integrator order (set to BDF default, AM default is 12). Defaults to 5.
+        
+        maxInternalStep (int): Maximum number of internal CVODE steps per ReMKiT1D timestep. Defaults to 500.
+        
+        minTimestep (float): Minimum allowed internal timestep. Defaults to 0.0.
+        
+        maxTimestep (float): Maximum allowed internal timestep. Defaults to 0.0, resulting in no limit.
+        
+        initTimestep (float): Initial internal timestep. Defaults to 0.0, letting CVODE decide.
+        """
         self.__relTol__: float = kwargs.get("relTol", 1e-5)
         self.__absTol__: float = kwargs.get("absTol", 1e-10)
         self.__maxGMRESRestarts__: int = kwargs.get("maxGMRESRestarts", 0)
