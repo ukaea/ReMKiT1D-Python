@@ -1,5 +1,5 @@
 import RMK_support.derivations as dv
-from RMK_support import Variable, VariableContainer, Grid
+from RMK_support import Variable, VariableContainer, Grid, node
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator  # type:ignore
 import pytest
@@ -369,6 +369,22 @@ def test_range_filter_deriv(grid):
 
     assert filtered.enclosedArgs == 1
 
+def test_filtered_node_deriv(grid):
+
+    deriv = dv.NodeDerivation("deriv",node=node(Variable("a",grid)))
+
+    vals = np.linspace(0, 10, grid.numX)
+    filtered = dv.RangeFilterDerivation(
+        "f", deriv, [(Variable("p", grid, data=vals), 3, 6)]
+    )
+
+    assert filtered.enclosedArgs == 2
+
+    assert filtered.numArgs == 0
+
+    assert filtered.fillArgs("a") == ["p", "a"]
+
+    assert all(filtered(np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0))
 
 def test_bounded_ext_deriv(grid):
 
