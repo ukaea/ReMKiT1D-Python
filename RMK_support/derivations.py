@@ -383,9 +383,7 @@ class NodeDerivation(Derivation):
             resultProperties (Dict[str, object], optional): List of result properties in the form of kwargs for the Variable constructor. Defaults to {}.
             container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation on construction. Defaults to None.
         """
-        super().__init__(
-            name, 0, latexTemplate, container=container
-        )
+        super().__init__(name, 0, latexTemplate, container=container)
         self.__node__ = node
 
     def dict(self) -> dict:
@@ -414,7 +412,7 @@ class NodeDerivation(Derivation):
 
     @property
     def enclosedArgs(self):
-        return len(ct.getLeafVars(self.__node__)) 
+        return len(ct.getLeafVars(self.__node__))
 
     def fillArgs(self, *args: str) -> List[str]:
         return ct.getLeafVars(self.__node__)
