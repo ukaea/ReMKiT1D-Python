@@ -384,7 +384,7 @@ class NodeDerivation(Derivation):
             container (Optional[DerivationContainer], optional): Optional derivation container to register the derivation on construction. Defaults to None.
         """
         super().__init__(
-            name, len(ct.getLeafVars(node)), latexTemplate, container=container
+            name, 0, latexTemplate, container=container
         )
         self.__node__ = node
 
@@ -393,14 +393,14 @@ class NodeDerivation(Derivation):
 
     def evaluate(self, *args) -> np.ndarray:
         assert (
-            len(args) == self.numArgs
+            len(args) == self.enclosedArgs
         ), "evaluate() called with args not conforming to the number of expected arguments"
 
         return self.__node__.evaluate(dict(zip(ct.getLeafVars(self.__node__), args)))
 
     def latex(self, *args: str) -> str:
         assert (
-            len(args) == self.numArgs
+            len(args) == self.enclosedArgs
         ), "latex() called with args not conforming to the number of expected arguments"
         if self.latexTemplate is None:
             remap = dict(zip(ct.getLeafVars(self.__node__), args))
@@ -411,6 +411,13 @@ class NodeDerivation(Derivation):
     @property
     def node(self):
         return self.__node__
+
+    @property
+    def enclosedArgs(self):
+        return len(ct.getLeafVars(self.__node__)) 
+
+    def fillArgs(self, *args: str) -> List[str]:
+        return ct.getLeafVars(self.__node__)
 
 
 class SimpleDerivation(Derivation):
@@ -1713,9 +1720,13 @@ class RangeFilterDerivation(Derivation):
     def registerComponents(self, container: DerivationContainer):
         container.register(self.__deriv__)
 
+    @property
+    def enclosedArgs(self):
+        return len(self.__filtering__) + self.__deriv__.enclosedArgs
+
     def fillArgs(self, *args: str) -> List[str]:
         argNames = [var.name for var, _, _ in self.__filtering__]
-        argNames += list(args)
+        argNames += self.__deriv__.fillArgs(*args)
         return argNames
 
 
