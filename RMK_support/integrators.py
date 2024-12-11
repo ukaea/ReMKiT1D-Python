@@ -8,9 +8,10 @@ from .tex_parsing import numToScientificTex
 from . import model_construction as mc
 from .variable_container import Variable, VariableContainer, MultiplicativeArgument
 
+
 class Integrator(ABC):
-    """Abstract integrator base class
-    """
+    """Abstract integrator base class"""
+
     def __init__(self, name: str):
         super().__init__()
         self.__name__ = name
@@ -29,8 +30,8 @@ class Integrator(ABC):
 
 
 class IntegrationRule:
-    """Integration rule, encapsulating how a given model should be evaluated/updated in an integration step
-    """
+    """Integration rule, encapsulating how a given model should be evaluated/updated in an integration step"""
+
     def __init__(
         self,
         model: mc.Model,
@@ -111,6 +112,7 @@ class IntegrationRule:
 
 class IntegrationStepBase(ABC):
     """Abstract base class for integration steps"""
+
     @property
     @abstractmethod
     def name(self):
@@ -131,8 +133,8 @@ class IntegrationStepBase(ABC):
 
 
 class IntegrationStepSequence:
-    """Container class for integration steps, allowing for their chaining using the multiplication operator
-    """
+    """Container class for integration steps, allowing for their chaining using the multiplication operator"""
+
     def __init__(self, *args: IntegrationStepBase):
         self.__steps__: List[IntegrationStepBase] = list(args)
 
@@ -185,9 +187,10 @@ class IntegrationStepSequence:
             with doc.create(tex.Subsection(step.name)):
                 step.addLatexToDoc(doc, implicitGroups, **kwargs)
 
+
 class Rules:
-    """Container for integration rules providing Model-based indexing
-    """
+    """Container for integration rules providing Model-based indexing"""
+
     def __init__(self) -> None:
         self.__rules__: List[IntegrationRule] = []
 
@@ -211,6 +214,7 @@ class Rules:
     def evolvedModels(self):
         return [m.modelName for m in self.__rules__]
 
+
 class IntegrationStep(IntegrationStepBase):
     """Class containing integration step data"""
 
@@ -221,7 +225,7 @@ class IntegrationStep(IntegrationStepBase):
             name (str): Name of the integration step
             integrator (Integrator): Integrator used for this integtion step
 
-        kwargs: 
+        kwargs:
 
             globalStepFraction (float): The fraction of the global timestep taken by this integration step. This can be set using __call__ and composing this step with others using multiplication. Defaults to 1.0
 
@@ -234,7 +238,7 @@ class IntegrationStep(IntegrationStepBase):
         self.__globalStepFraction__ = kwargs.get("globalStepFraction", 1.0)
         self.__allowTimeEvolution__ = kwargs.get("allowTimeEvolution", True)
         self.__useInitialInput__ = kwargs.get("useInitialInput", False)
-        
+
         self.rules = Rules()
 
     @property
@@ -273,20 +277,17 @@ class IntegrationStep(IntegrationStepBase):
         return self.__useInitialInput__
 
     def disableTimeEvo(self):
-        """Disable the time evolution in this step and return it
-        """
+        """Disable the time evolution in this step and return it"""
         self.__allowTimeEvolution__ = False
         return self
 
     def enableTimeEvo(self):
-        """Enable the time evolution in this step and return it
-        """
+        """Enable the time evolution in this step and return it"""
         self.__allowTimeEvolution__ = True
         return self
 
     def startFromZero(self):
-        """Set this step to start from the initial state at the start of the integration step sequence and return it
-        """
+        """Set this step to start from the initial state at the start of the integration step sequence and return it"""
         self.__useInitialInput__ = True
         return self
 
@@ -304,8 +305,7 @@ class IntegrationStep(IntegrationStepBase):
         self.__integrator__ = integ
 
     def add(self, *args: Union[IntegrationRule, mc.Model, mc.ModelCollection]) -> None:
-        """Add any number of integration rules, models, or model collections to this this. If models or model collections are added, their integration rules will be constructed with default options.
-        """
+        """Add any number of integration rules, models, or model collections to this this. If models or model collections are added, their integration rules will be constructed with default options."""
         for arg in args:
             assert isinstance(
                 arg, (mc.Model, IntegrationRule, mc.ModelCollection)
@@ -374,9 +374,10 @@ class IntegrationStep(IntegrationStepBase):
                     rule.defaultGroups(implicitGroups)
                     itemize.add_item(tex.NoEscape(rule.latex()))
 
+
 class Timestep:
-    """Wrapper for the setting of the integration timestep, including scaling controls
-    """
+    """Wrapper for the setting of the integration timestep, including scaling controls"""
+
     def __init__(self, timestep: Union[Variable, MultiplicativeArgument, float]):
         """Wrapper for the setting of the integration timestep, including scaling controls
 
@@ -391,14 +392,12 @@ class Timestep:
         return self.__max__
 
     def max(self) -> Self:
-        """Set the Timestep to using the maximum value of the evaluated quantities, and return the Timestep
-        """
+        """Set the Timestep to using the maximum value of the evaluated quantities, and return the Timestep"""
         self.__max__ = True
         return self
 
     def min(self) -> Self:
-        """Set the Timestep to using the minimum value of the evaluated quantities, and return the Timestep
-        """
+        """Set the Timestep to using the minimum value of the evaluated quantities, and return the Timestep"""
         self.__max__ = False
         return self
 
@@ -446,11 +445,11 @@ class Timestep:
 
 
 class IntegrationScheme:
-    """Integration scheme to be used in a ReMKiT1D simulation
-    """
+    """Integration scheme to be used in a ReMKiT1D simulation"""
+
     def __init__(
         self,
-        dt:Union[Timestep, float],
+        dt: Union[Timestep, float],
         steps: Union[
             IntegrationStepSequence, IntegrationStep
         ] = IntegrationStepSequence(),
@@ -461,7 +460,7 @@ class IntegrationScheme:
 
         Args:
             dt (Union[Timestep, float]): Timestep length.
-            steps (Union[ IntegrationStepSequence, IntegrationStep ], optional): Integration step sequence or a single integration step to start the sequence (can be the only step). Defaults to IntegrationStepSequence() which is an empty sequence.
+            steps (Union[ IntegrationStepSequence, IntegrationStep ], optional): Integration step sequence or a single integration step (the only step). Defaults to IntegrationStepSequence() which is an empty sequence.
         """
         self.__timestep__ = dt if isinstance(dt, Timestep) else Timestep(dt)
         self.__stepSequence__: IntegrationStepSequence = (
@@ -486,8 +485,7 @@ class IntegrationScheme:
 
     @property
     def steps(self):
-        """Get the individual steps in the step sequence of the scheme
-        """
+        """Get the individual steps in the step sequence of the scheme"""
         return self.__stepSequence__.steps
 
     @steps.setter
@@ -574,37 +572,38 @@ class IntegrationScheme:
 
 class BDEIntegrator(Integrator):
     """Backwards difference Euler integrator with fixed-point iterations used to solve non-linear systems"""
+
     def __init__(self, name: str, **kwargs):
         """Backwards difference Euler integrator with fixed-point iterations used to solve non-linear systems
 
         Args:
             name (str): Name of the integrator
 
-        kwargs: 
+        kwargs:
 
         maxNonlinIters (int): Maximum allowed nonlinear (Picard/fixed point) iterations. Defaults to 100.
-        
+
         nonlinTol (float): Relative convergence tolerance on 2-norm. Defaults to 1.0e-12.
         absTol (float): Absolute tolerance in machine precision units (epsilon in Fortran - 2.22e-16 for double precision). Defaults to 1.0.
-        
+
         convergenceVars (List[str]): Variables used to check for convergence. Defaults to [], which results in all implicit variables.
-        
+
         associatedPETScGroup (int): PETSc object group this integrator is associated with. Defaults to 1.
-        
+
         use2Norm (bool): True if 2-norm should be used (benefits distributions). Defaults to False.
-        
+
         internalStepControl (bool): True if integrator is allowed to control its internal steps based on convergence. Defaults to False.
-        
+
         initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1.
-        
+
         stepMultiplier (int): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
-        
+
         stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
-        
+
         minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
-        
+
         maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
-        
+
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
         """
         super().__init__(name)
@@ -656,8 +655,8 @@ class BDEIntegrator(Integrator):
 
 
 class RKIntegrator(Integrator):
-    """Runge-Kutta integrator of given order (supports 1-4 currently)
-    """
+    """Runge-Kutta integrator of given order (supports 1-4 currently)"""
+
     def __init__(self, name: str, order: int):
         """Runge-Kutta integrator of given order
 
@@ -679,6 +678,7 @@ class RKIntegrator(Integrator):
 
 class CVODEIntegrator(Integrator):
     """CVODE integrator See https://sundials.readthedocs.io/en/latest/index.html"""
+
     def __init__(self, name: str, **kwargs):
         """CVODE integrator See https://sundials.readthedocs.io/en/latest/index.html
 
@@ -688,25 +688,25 @@ class CVODEIntegrator(Integrator):
         kwargs:
 
         relTol (float): CVODE solver relative tolerance. Defaults to 1e-5.
-        
+
         absTol (float): CVODE solver absolute tolerance. Defaults to 1e-10.
-        
+
         maxGMRESRestarts (int): SPGMR maximum number of restarts. Defaults to 0.
-        
+
         CVODEBBDPreParams (List[int]): BBD preconditioner parameters in order [mudq,mldq,mukeep,mlkeep]. Defaults to [0,0,0,0].
-        
+
         useAdamsMoulton (bool): If true will use Adams Moulton method instead of the default BDF. Defaults to False.
-        
+
         useStabLimitDet (bool): If true will use stability limit detection. Defaults to False.
-        
+
         maxOrder (int): Maximum integrator order (set to BDF default, AM default is 12). Defaults to 5.
-        
+
         maxInternalStep (int): Maximum number of internal CVODE steps per ReMKiT1D timestep. Defaults to 500.
-        
+
         minTimestep (float): Minimum allowed internal timestep. Defaults to 0.0.
-        
+
         maxTimestep (float): Maximum allowed internal timestep. Defaults to 0.0, resulting in no limit.
-        
+
         initTimestep (float): Initial internal timestep. Defaults to 0.0, letting CVODE decide.
         """
         self.__relTol__: float = kwargs.get("relTol", 1e-5)
@@ -730,7 +730,7 @@ class CVODEIntegrator(Integrator):
             "relTol": self.__relTol__,
             "absTol": self.__absTol__,
             "maxRestarts": self.__maxGMRESRestarts__,
-            "CVODEPreBBDParams": self.__CVODEBBDPreParams__,
+            "CVODEPreBBDParams": list(self.__CVODEBBDPreParams__),
             "CVODEUseAdamsMoulton": self.__useAdamsMoulton__,
             "CVODEUseStabLimDet": self.__useStabLimitDet__,
             "CVODEMaxOrder": self.__maxOrder__,
