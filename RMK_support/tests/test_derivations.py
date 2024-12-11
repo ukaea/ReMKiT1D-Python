@@ -367,6 +367,8 @@ def test_range_filter_deriv(grid):
 
     assert filtered.fillArgs("a") == ["p", "a"]
 
+    assert filtered.enclosedArgs == 1
+
 
 def test_bounded_ext_deriv(grid):
 
