@@ -369,9 +369,10 @@ def test_range_filter_deriv(grid):
 
     assert filtered.enclosedArgs == 1
 
+
 def test_filtered_node_deriv(grid):
 
-    deriv = dv.NodeDerivation("deriv",node=node(Variable("a",grid)))
+    deriv = dv.NodeDerivation("deriv", node=node(Variable("a", grid)))
 
     vals = np.linspace(0, 10, grid.numX)
     filtered = dv.RangeFilterDerivation(
@@ -385,6 +386,7 @@ def test_filtered_node_deriv(grid):
     assert filtered.fillArgs("a") == ["p", "a"]
 
     assert all(filtered(np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0))
+
 
 def test_bounded_ext_deriv(grid):
 
