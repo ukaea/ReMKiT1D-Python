@@ -2330,7 +2330,7 @@ class GenIntPolynomialDerivation(Derivation):
         assert (
             len(args) == self.numArgs
         ), "Unexpected number of arguments in GenIntPolynomialDerivation latex() call"
-        expression = numToScientificTex(self.__multConst__)
+        expression = numToScientificTex(self.__multConst__,removeUnity=True)
         innerExpr = "\\sum_i c_i " + " ".join(
             [arg + "^{p_{i," + str(j) + "}}" for j, arg in enumerate(args)]
         )
