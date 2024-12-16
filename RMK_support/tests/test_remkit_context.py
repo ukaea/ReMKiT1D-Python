@@ -64,3 +64,30 @@ def test_wrapper_init(grid: Grid):
     assert rk.manipulators.dict() == {"tags": []}
 
     assert rk.integrationScheme == None
+
+
+def test_set_norm():
+    rk = RMKContext()
+
+    # Get default norm values
+    oldTemp = rk.normTemperature
+    oldDensity = rk.normDensity
+    oldZ = rk.normZ
+
+    newTemp = 99
+    rk.normTemperature = newTemp
+    assert rk.normTemperature == newTemp
+
+    newDensity = 9.9e19
+    rk.normDensity = newDensity
+    assert rk.normDensity == newDensity
+
+    newZ = 9
+    rk.normZ = newZ
+    assert rk.normZ == newZ
+
+    # Reset values to defaults and check values again
+    rk = RMKContext()
+    assert rk.normTemperature == oldTemp
+    assert rk.normDensity == oldDensity
+    assert rk.normZ == oldZ
