@@ -211,20 +211,27 @@ def test_species(grid: Grid):
 
     rk.grid = grid
 
-    # The species container is empty
-    assert rk.species.dict() == {"names": []}
+    # Initialize species container
+    speciesCont = dv.SpeciesContainer()
+    assert rk.species.dict() == speciesCont.dict()
 
+    # Add species to the container
     na = Variable("na", rk.grid, isCommunicated=True)
     rk.variables.add(na)
 
     speciesA = dv.Species(
         name="a", speciesID=-1, atomicA=1, charge=+1, associatedVars=[na]
     )
-    rk.species.add(speciesA)
+    speciesCont.add(speciesA)
 
     speciesB = dv.Species("b", 0)
-    rk.species.add(speciesB)
+    speciesCont.add(speciesB)
+
+    rk.species = speciesCont
 
     assert rk.species.dict()["names"] == ["a", "b"]
+
     assert rk.species.dict()["a"] == speciesA.dict()
+    assert rk.species.dict()["a"]["associatedVars"] == [na.name]
+
     assert rk.species.dict()["b"] == speciesB.dict()
