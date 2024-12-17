@@ -104,11 +104,13 @@ def test_add_var(grid: Grid):
     xHaloWidth = 1
     rk.mpiContext = MPIContext(numProcsX, numProcsH, xHaloWidth)
 
-    # Add implicit variables
+    # Test the empty variable container
+    assert rk.variables.dict() == vc.VariableContainer(grid).dict()
+
+    # Now define variables to add to the variable container
     a = Variable("a", rk.grid, isCommunicated=True)
     b = Variable("b", rk.grid, isDerived=True, isScalar=True, isCommunicated=True)
 
-    # Add derived variables
     var, var_dual = vc.varAndDual(
         "var",
         rk.grid,
@@ -117,20 +119,20 @@ def test_add_var(grid: Grid):
         derivation=dv.NodeDerivation("testDerivation", node=vc.node(a) + vc.node(b)),
     )
 
-    # Add additional properties to a variable, e.g. scalarHostProcess
+    # Set additional properties of a variable, e.g. scalarHostProcess
     b.scalarHostProcess = rk.mpiContext.fluidProcs[-1]
     assert b.scalarHostProcess == (numProcsX - 1) * numProcsH
 
-    # Add the same variables to another variable container and compare with the rk.variables container
-    rk.variables.add(a, b, var, var_dual)
+    # Add the variables to another variable container and set the rk.variables container
+    varCont = vc.VariableContainer(grid)
+    varCont.add(a, b, var, var_dual)
 
-    compVariableContainer = vc.VariableContainer(grid)
-    compVariableContainer.add(a, b, var, var_dual)
+    rk.variables = varCont
 
-    assert rk.variables.dict() == compVariableContainer.dict()
+    assert rk.variables.dict() == varCont.dict()
 
 
-def test_io(grid):
+def test_io(grid: Grid):
 
     rk = RMKContext()
 
@@ -179,3 +181,50 @@ def test_io(grid):
     # Setting rk.IOContext with a pre-built IOContext
     rk.IOContext = ioCont
     assert rk.IOContext.dict() == ioCont.dict()
+
+
+def test_set_petsc():
+    rk = RMKContext()
+
+    rk.setPETScOptions(
+        relTol=1e-14, absTol=1e-15, divTol=1e6, maxIters=2000, kspSolverType="gmres"
+    )
+
+    assert rk.optionsPETSc == {
+        "active": True,
+        "solverOptions": {
+            "solverToleranceRel": 1.0e-14,
+            "solverToleranceAbs": 1.0e-15,
+            "solverToleranceDiv": 0.1e7,
+            "maxSolverIters": 2000,
+            "kspSolverType": "gmres",
+            "hyprePCType": "",
+            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
+        },
+        "objGroups": 1,
+    }
+
+
+def test_species(grid: Grid):
+
+    rk = RMKContext()
+
+    rk.grid = grid
+
+    # The species container is empty
+    assert rk.species.dict() == {"names": []}
+
+    na = Variable("na", rk.grid, isCommunicated=True)
+    rk.variables.add(na)
+
+    speciesA = dv.Species(
+        name="a", speciesID=-1, atomicA=1, charge=+1, associatedVars=[na]
+    )
+    rk.species.add(speciesA)
+
+    speciesB = dv.Species("b", 0)
+    rk.species.add(speciesB)
+
+    assert rk.species.dict()["names"] == ["a", "b"]
+    assert rk.species.dict()["a"] == speciesA.dict()
+    assert rk.species.dict()["b"] == speciesB.dict()
