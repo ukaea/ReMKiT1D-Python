@@ -1,8 +1,8 @@
 import numpy as np
-from RMK_support.remkit_context import RMKContext, IOContext, MPIContext
-from RMK_support.variable_container import VariableContainer
+from RMK_support.remkit_context import RMKContext, IOContext, MPIContext, Variable
 from RMK_support.grid import Grid
-from RMK_support import derivations as dv
+import RMK_support.derivations as dv
+import RMK_support.variable_container as vc
 import RMK_support.sk_normalization as skn
 
 import pytest
@@ -37,7 +37,7 @@ def test_wrapper_init(grid: Grid):
 
     assert rk.species.dict() == dv.SpeciesContainer().dict()
 
-    assert rk.variables.dict() == VariableContainer(grid).dict()
+    assert rk.variables.dict() == vc.VariableContainer(grid).dict()
 
     assert rk.mpiContext.dict(varCont=rk.variables) == MPIContext(1).dict(
         varCont=rk.variables
@@ -91,3 +91,49 @@ def test_set_norm():
     assert rk.normTemperature == oldTemp
     assert rk.normDensity == oldDensity
     assert rk.normZ == oldZ
+
+
+def test_add_var(grid: Grid):
+
+    rk = RMKContext()
+
+    grid = Grid(
+        np.geomspace(5.0, 0.2, 128),
+        np.geomspace(0.01, 0.8, 120),
+        1,
+        0,
+        interpretXGridAsWidths=True,
+        interpretVGridAsWidths=True,
+    )
+
+    rk.grid = grid
+
+    numProcsX = 10
+    numProcsH = 2
+    xHaloWidth = 1
+    rk.mpiContext = MPIContext(numProcsX, numProcsH, xHaloWidth)
+
+    # Add implicit variables
+    a = Variable("a", rk.grid, isCommunicated=True)
+    b = Variable("b", rk.grid, isDerived=True, isScalar=True, isCommunicated=True)
+
+    # Add derived variables
+    var, var_dual = vc.varAndDual(
+        "var",
+        rk.grid,
+        primaryOnDualGrid=True,
+        isDerived=True,
+        derivation=dv.NodeDerivation("testDerivation", node=vc.node(a) + vc.node(b)),
+    )
+
+    # Add additional properties to a variable, e.g. scalarHostProcess
+    b.scalarHostProcess = rk.mpiContext.fluidProcs[-1]
+    assert b.scalarHostProcess == (numProcsX - 1) * numProcsH
+
+    # Add the same variables to another variable container and compare with the rk.variables container
+    rk.variables.add(a, b, var, var_dual)
+
+    compVariableContainer = vc.VariableContainer(grid)
+    compVariableContainer.add(a, b, var, var_dual)
+
+    assert rk.variables.dict() == compVariableContainer.dict()
