@@ -1,9 +1,18 @@
 import numpy as np
-from RMK_support.remkit_context import RMKContext, IOContext, MPIContext, Variable
+from RMK_support.remkit_context import (
+    Manipulator,
+    ManipulatorCollection,
+    RMKContext,
+    IOContext,
+    MPIContext,
+    Variable,
+)
 from RMK_support.grid import Grid
+import RMK_support.remkit_context as rmk
 import RMK_support.derivations as dv
-import RMK_support.variable_container as vc
+import RMK_support.model_construction as mc
 import RMK_support.sk_normalization as skn
+import RMK_support.variable_container as vc
 
 import pytest
 
@@ -183,6 +192,45 @@ def test_io(grid: Grid):
     assert rk.IOContext.dict() == ioCont.dict()
 
 
+def test_models_and_manipulators(grid):
+    rk = RMKContext()
+
+    rk.grid = grid
+
+    # Adding a Model (collection)
+    assert rk.models.dict() == mc.ModelCollection().dict()
+
+    model = mc.Model("newModel")
+
+    a, b, c, d = (Variable(name, rk.grid) for name in "abcd")
+
+    model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
+    model.addTerm("c", -mc.DiagonalStencil()(c).withEvolvedVar(a))
+    model.ddt[b] += -model.ddt[a].withSuffix("_b")
+    model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
+
+    modelCollection = mc.ModelCollection()
+    modelCollection.add(model)
+
+    rk.models = modelCollection
+
+    assert rk.models.dict() == modelCollection.dict()
+
+    # Adding a Manipulator (collection)
+
+    assert rk.manipulators.dict() == ManipulatorCollection().dict()
+
+    # manipulatorCollection = ManipulatorCollection()
+    # manipulatorCollection.add(
+    #     rmk.GroupEvaluator(
+    #         "groupEval",
+    #         model,
+    #         termGroup=1,
+    #         resultVar=Variable("groupEvalResult", rk.grid),
+    #     )
+    # )
+
+
 def test_set_petsc():
     rk = RMKContext()
 
@@ -206,7 +254,6 @@ def test_set_petsc():
 
 
 def test_species(grid: Grid):
-
     rk = RMKContext()
 
     rk.grid = grid
