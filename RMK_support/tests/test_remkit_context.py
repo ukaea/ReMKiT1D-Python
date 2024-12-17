@@ -136,6 +136,9 @@ def test_io(grid):
 
     rk.grid = grid
 
+    rk.mpiContext = MPIContext(1)
+
+    # Add basic settings
     jsonFilepath = "./testing.json"
     rk.IOContext.jsonFilepath = jsonFilepath
     assert rk.IOContext.jsonFilepath == jsonFilepath
@@ -145,11 +148,12 @@ def test_io(grid):
     assert rk.IOContext.HDF5Dir == HDF5Dir
 
     inputFile = "./input_file.nc"
-    inputVars = [Variable("a", rk.grid), Variable("b", rk.grid)]
+    inputVars = [Variable("in1", rk.grid), Variable("in2", rk.grid)]
     rk.IOContext.setHDF5InputOptions(inputFile, inputVars)
     assert rk.IOContext.dict()["timeloop"]["loadInitValsFromHDF5"] == True
     assert rk.IOContext.dict()["timeloop"]["initValFilename"] == inputFile
 
+    # Add restart settings
     restartOptions = {
         "save": False,
         "load": True,
@@ -159,3 +163,12 @@ def test_io(grid):
     }
     rk.IOContext.setRestartOptions(**restartOptions)
     assert rk.IOContext.dict()["timeloop"]["restart"] == restartOptions
+
+    # Add output variables
+    outputVar1 = Variable("out1", rk.grid)
+    outputVar2 = Variable("out2", rk.grid)
+    rk.variables.add(outputVar1, outputVar2)
+    rk.IOContext.populateOutputVars(rk.variables)
+    # Check if the output variables were added to IOContext. Output variable 0 is always "time"
+    assert rk.IOContext.__outputVars__[1].__dict__ == outputVar1.__dict__
+    assert rk.IOContext.__outputVars__[2].__dict__ == outputVar2.__dict__
