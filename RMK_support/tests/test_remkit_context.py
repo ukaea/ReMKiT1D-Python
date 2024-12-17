@@ -97,15 +97,6 @@ def test_add_var(grid: Grid):
 
     rk = RMKContext()
 
-    grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        1,
-        0,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
-    )
-
     rk.grid = grid
 
     numProcsX = 10
@@ -137,3 +128,34 @@ def test_add_var(grid: Grid):
     compVariableContainer.add(a, b, var, var_dual)
 
     assert rk.variables.dict() == compVariableContainer.dict()
+
+
+def test_io(grid):
+
+    rk = RMKContext()
+
+    rk.grid = grid
+
+    jsonFilepath = "./testing.json"
+    rk.IOContext.jsonFilepath = jsonFilepath
+    assert rk.IOContext.jsonFilepath == jsonFilepath
+
+    HDF5Dir = "./testingDir/"
+    rk.IOContext.HDF5Dir = HDF5Dir
+    assert rk.IOContext.HDF5Dir == HDF5Dir
+
+    inputFile = "./input_file.nc"
+    inputVars = [Variable("a", rk.grid), Variable("b", rk.grid)]
+    rk.IOContext.setHDF5InputOptions(inputFile, inputVars)
+    assert rk.IOContext.dict()["timeloop"]["loadInitValsFromHDF5"] == True
+    assert rk.IOContext.dict()["timeloop"]["initValFilename"] == inputFile
+
+    restartOptions = {
+        "save": False,
+        "load": True,
+        "frequency": 9999,
+        "resetTime": False,
+        "initialOutputIndex": 100,
+    }
+    rk.IOContext.setRestartOptions(**restartOptions)
+    assert rk.IOContext.dict()["timeloop"]["restart"] == restartOptions
