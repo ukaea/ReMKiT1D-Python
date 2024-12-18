@@ -392,7 +392,9 @@ def test_models_manipulators_terms(grid: Grid):
 
         # Modelbound data extractor
 
-        assert MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict() == {
+        mbExtract = MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict()
+
+        assert mbExtract == {
             "type": "modelboundDataExtractor",
             "modelTag": model.name,
             "modelboundDataName": dModelbound.name,
