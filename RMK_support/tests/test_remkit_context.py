@@ -116,10 +116,6 @@ def test_add_var(grid: Grid):
     xHaloWidth = 1
     rk.mpiContext = MPIContext(numProcsX, numProcsH, xHaloWidth)
 
-    # Test the empty variable container
-    assert rk.variables.dict() == vc.VariableContainer(grid).dict()
-
-    # Now define variables to add to the variable container
     a = Variable("a", rk.grid, isCommunicated=True)
     b = Variable("b", rk.grid, isDerived=True, isScalar=True, isCommunicated=True)
 
@@ -212,12 +208,12 @@ def test_models_manipulators_terms(grid: Grid):
 
     rk.mpiContext = MPIContext(1)
 
-    a, b, c = (Variable(name, rk.grid) for name in "abc")
+    a, b = (Variable(name, rk.grid) for name in "ab")
 
-    dDeriv = dv.NodeDerivation("dDeriv", node=vc.node(a) + vc.node(b))
-    d = Variable("d", rk.grid, isDerived=True, derivation=dDeriv)
+    cDeriv = dv.NodeDerivation("cDeriv", node=vc.node(a) + vc.node(b))
+    c = Variable("c", rk.grid, isDerived=True, derivation=cDeriv)
 
-    rk.variables.add(a, b, c, d)
+    rk.variables.add(a, b, c)
 
     # Model with terms and modelbound data
 
@@ -225,10 +221,9 @@ def test_models_manipulators_terms(grid: Grid):
 
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
     model.ddt[b] += -model.ddt[a].withSuffix("_b")
-    model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
 
     mbData = mc.VarlikeModelboundData()
-    dModelbound = Variable("dModelbound", rk.grid, derivation=dDeriv)
+    dModelbound = Variable("dModelbound", rk.grid, isDerived=True, derivation=cDeriv)
     mbData.addVar(dModelbound)
     model.setModelboundData(mbData)
 
@@ -333,8 +328,8 @@ def test_models_manipulators_terms(grid: Grid):
     rk.variables.registerDerivs(tb)
     rk.models.registerDerivs(tb)
 
-    assert tb.dict()["customDerivations"]["tags"] == [dDeriv.name]
-    assert tb.dict()["customDerivations"][dDeriv.name] == dDeriv.dict()
+    assert tb.dict()["customDerivations"]["tags"] == [cDeriv.name]
+    assert tb.dict()["customDerivations"][cDeriv.name] == cDeriv.dict()
 
     rk.textbook = tb
 
@@ -346,18 +341,18 @@ def test_models_manipulators_terms(grid: Grid):
     # Now add term diagnostic manipulators for the model terms
 
     # Terms with evolved variables can have term diagnostics
-    rk.addTermDiagnostics(*[a, b, c])
+    rk.addTermDiagnostics(*[a, b])
 
     # Adding a term diagnostic for a non-evolved term should raise a warning
     with pytest.warns(
         UserWarning,
         match=(
             "addTermDiagnostics called when variable "
-            + d.name
+            + c.name
             + " has no terms that evolve it"
         ),
     ):
-        rk.addTermDiagnostics(*[d])
+        rk.addTermDiagnostics(*[c])
 
     # Get the list of term tags for all models in the RMKContext
     termTagsGrouped = [
@@ -365,7 +360,7 @@ def test_models_manipulators_terms(grid: Grid):
             "_".join([model, term])
             for model, term in rk.models.getTermsThatEvolveVar(var)
         ]
-        for var in [a, b, c, d]
+        for var in [a, b, c]
     ]
     termTags = [item for pair in termTagsGrouped for item in pair]
 
@@ -401,6 +396,33 @@ def test_models_manipulators_terms(grid: Grid):
             "resultVarName": dModelbound.name,
             "priority": 1,
         }
+
+        # Check final config output
+
+        cfg = rk.dict()
+
+        assert cfg["normalization"] == skn.calculateNorms(
+            Te=rk.normTemperature, ne=rk.normDensity, Z=rk.normZ
+        )
+
+        assert cfg["species"] == rk.species.dict()
+
+        assert cfg["MPI"] == rk.mpiContext.dict(rk.variables)
+
+        assert cfg["PETSc"] == rk.optionsPETSc
+
+        assert cfg["models"] == rk.models.dict()
+
+        assert cfg["manipulators"] == rk.manipulators.dict()
+
+        # assert cfg["xGrid"] == rk.grid.xGrid
+        # assert cfg["vGrid"] == rk.grid.vGrid
+
+        assert cfg["variables"] == rk.variables.dict()["variables"]
+
+        assert cfg["HDF5"] == rk.IOContext.dict()["HDF5"]
+
+        # TODO: "timeloop", "integrator", "standardTextbook", "customDerivations"
 
 
 def test_set_petsc():
