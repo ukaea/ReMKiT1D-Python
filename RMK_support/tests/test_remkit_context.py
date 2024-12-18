@@ -210,10 +210,6 @@ def test_models_manipulators_terms(grid: Grid):
 
     rk.mpiContext = MPIContext(1)
 
-    # Model Collection
-
-    model = mc.Model("newModel")
-
     a, b, c = (Variable(name, rk.grid) for name in "abc")
 
     dDeriv = dv.NodeDerivation("dDeriv", node=vc.node(a) + vc.node(b))
@@ -221,8 +217,11 @@ def test_models_manipulators_terms(grid: Grid):
 
     rk.variables.add(a, b, c, d)
 
+    # Model Collection
+
+    model = mc.Model("newModel")
+
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
-    model.addTerm("c", -mc.DiagonalStencil()(c).withEvolvedVar(a))
     model.ddt[b] += -model.ddt[a].withSuffix("_b")
     model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
 
@@ -269,6 +268,21 @@ def test_models_manipulators_terms(grid: Grid):
         "tags": ["groupEval"],
         groupEvaluator.name: groupEvaluator.dict(),
     }
+
+    # Test ManipulatorCollection getter and setter (by checking, removing and re-adding groupEvaluator)
+
+    assert (
+        manipulatorCollection.__getitem__(groupEvaluator.name).dict()
+        == groupEvaluator.dict()
+    )
+
+    manipulatorCollection.__delitem__(groupEvaluator.name)
+    assert groupEvaluator.name not in manipulatorCollection.manipNames
+
+    manipulatorCollection.__setitem__(groupEvaluator.name, groupEvaluator)
+    assert manipulatorCollection.dict()[groupEvaluator.name] == groupEvaluator.dict()
+
+    # Set the RMKContext ManipulatorCollection
 
     rk.manipulators = manipulatorCollection
 
@@ -346,7 +360,7 @@ def test_models_manipulators_terms(grid: Grid):
     ]
     termTags = [item for pair in termTagsGrouped for item in pair]
 
-    # Should now have the existing evaluator manipulator plus the newly added term diagnostics
+    # RMKContext should now contain the existing evaluator manipulator plus the newly added term diagnostics
     assert rk.manipulators.dict()["tags"] == [groupEvaluator.name] + termTags
 
     for term in rk.models[model.name].dict()["termTags"]:
