@@ -2,6 +2,7 @@ import numpy as np
 from RMK_support.remkit_context import (
     Manipulator,
     ManipulatorCollection,
+    MBDataExtractor,
     RMKContext,
     IOContext,
     MPIContext,
@@ -203,6 +204,7 @@ def test_models_manipulators_terms(grid: Grid):
     - integrationScheme
     - textbook, set with a custom derivation
     - term diagnostics via termEvaluator
+    - MBDataExtractor
     """
     rk = RMKContext()
 
@@ -217,13 +219,20 @@ def test_models_manipulators_terms(grid: Grid):
 
     rk.variables.add(a, b, c, d)
 
-    # Model Collection
+    # Model with terms and modelbound data
 
     model = mc.Model("newModel")
 
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
     model.ddt[b] += -model.ddt[a].withSuffix("_b")
     model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
+
+    mbData = mc.VarlikeModelboundData()
+    dModelbound = Variable("dModelbound", rk.grid, derivation=dDeriv)
+    mbData.addVar(dModelbound)
+    model.setModelboundData(mbData)
+
+    # Model Collection
 
     modelCollection = mc.ModelCollection()
 
@@ -380,6 +389,16 @@ def test_models_manipulators_terms(grid: Grid):
         }
 
         assert rk.manipulators.dict()[tag] == termEvaluator.dict()
+
+        # Modelbound data extractor
+
+        assert MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict() == {
+            "type": "modelboundDataExtractor",
+            "modelTag": model.name,
+            "modelboundDataName": dModelbound.name,
+            "resultVarName": dModelbound.name,
+            "priority": 1,
+        }
 
 
 def test_set_petsc():
