@@ -6,6 +6,7 @@ from RMK_support.remkit_context import (
     IOContext,
     MPIContext,
     Variable,
+    TermEvaluator,
 )
 from RMK_support.grid import Grid
 import RMK_support.remkit_context as rmk
@@ -193,7 +194,16 @@ def test_io(grid: Grid):
     assert rk.IOContext.dict() == ioCont.dict()
 
 
-def test_models_and_manipulators(grid):
+def test_models_manipulators_terms(grid: Grid):
+    """Testing minimum features of RMKContext, including:
+
+    - Model with evolved variables, derived variables and terms
+    - modelCollection
+    - manipulatorCollection with groupEvaluator
+    - integrationScheme
+    - textbook, set with a custom derivation
+    - term diagnostics via termEvaluator
+    """
     rk = RMKContext()
 
     rk.grid = grid
@@ -204,7 +214,11 @@ def test_models_and_manipulators(grid):
 
     model = mc.Model("newModel")
 
-    a, b, c, d = (Variable(name, rk.grid) for name in "abcd")
+    a, b, c = (Variable(name, rk.grid) for name in "abc")
+
+    dDeriv = dv.NodeDerivation("dDeriv", node=vc.node(a) + vc.node(b))
+    d = Variable("d", rk.grid, isDerived=True, derivation=dDeriv)
+
     rk.variables.add(a, b, c, d)
 
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
@@ -233,7 +247,7 @@ def test_models_and_manipulators(grid):
 
     resultVar = Variable("groupEvalResult", rk.grid, isDerived=True)
 
-    evaluator = rmk.GroupEvaluator(
+    groupEvaluator = rmk.GroupEvaluator(
         "groupEval",
         model,
         termGroup=99,
@@ -241,7 +255,7 @@ def test_models_and_manipulators(grid):
         priority=1,
     )
 
-    assert evaluator.dict() == {
+    assert groupEvaluator.dict() == {
         "type": "groupEvaluator",
         "modelTag": model.name,
         "evaluatedTermGroup": 99,
@@ -249,11 +263,11 @@ def test_models_and_manipulators(grid):
         "priority": 1,
     }
 
-    manipulatorCollection.add(evaluator)
+    manipulatorCollection.add(groupEvaluator)
 
     assert manipulatorCollection.dict() == {
         "tags": ["groupEval"],
-        evaluator.name: evaluator.dict(),
+        groupEvaluator.name: groupEvaluator.dict(),
     }
 
     rk.manipulators = manipulatorCollection
@@ -287,6 +301,71 @@ def test_models_and_manipulators(grid):
     ) == integrationScheme.dict(
         implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
     )
+
+    # Textbook
+
+    # Test the textbook setter by registering the derivation in another textbook, then setting RMKContext.textbook
+    tb = dv.Textbook(grid)
+
+    rk.variables.registerDerivs(tb)
+    rk.models.registerDerivs(tb)
+
+    assert tb.dict()["customDerivations"]["tags"] == [dDeriv.name]
+    assert tb.dict()["customDerivations"][dDeriv.name] == dDeriv.dict()
+
+    rk.textbook = tb
+
+    assert rk.textbook.dict() == tb.dict()
+
+    # Term diagnostics
+
+    # Currently the only manipulator should be the "groupEval" manipulator added earlier
+    # Now add term diagnostic manipulators for the model terms
+
+    # Terms with evolved variables can have term diagnostics
+    rk.addTermDiagnostics(*[a, b, c])
+
+    # Adding a term diagnostic for a non-evolved term should raise a warning
+    with pytest.warns(
+        UserWarning,
+        match=(
+            "addTermDiagnostics called when variable "
+            + d.name
+            + " has no terms that evolve it"
+        ),
+    ):
+        rk.addTermDiagnostics(*[d])
+
+    # Get the list of term tags for all models in the RMKContext
+    termTagsGrouped = [
+        [
+            "_".join([model, term])
+            for model, term in rk.models.getTermsThatEvolveVar(var)
+        ]
+        for var in [a, b, c, d]
+    ]
+    termTags = [item for pair in termTagsGrouped for item in pair]
+
+    # Should now have the existing evaluator manipulator plus the newly added term diagnostics
+    assert rk.manipulators.dict()["tags"] == [groupEvaluator.name] + termTags
+
+    for term in rk.models[model.name].dict()["termTags"]:
+        tag = "_".join([model.name, term])
+        termEvaluator = TermEvaluator(
+            tag, [(model.name, term)], resultVar=rk.variables[tag]
+        )
+
+        assert termEvaluator.dict() == {
+            "type": "termEvaluator",
+            "evaluatedModelNames": [model.name],
+            "evaluatedTermNames": [term],
+            "resultVarName": tag,
+            "priority": 4,
+            "update": False,
+            "accumulate": False,
+        }
+
+        assert rk.manipulators.dict()[tag] == termEvaluator.dict()
 
 
 def test_set_petsc():
