@@ -10,6 +10,7 @@ from RMK_support.remkit_context import (
 from RMK_support.grid import Grid
 import RMK_support.remkit_context as rmk
 import RMK_support.derivations as dv
+import RMK_support.integrators as it
 import RMK_support.model_construction as mc
 import RMK_support.sk_normalization as skn
 import RMK_support.variable_container as vc
@@ -68,9 +69,9 @@ def test_wrapper_init(grid: Grid):
         "objGroups": 1,
     }
 
-    assert rk.models.dict() == {"tags": []}
+    assert rk.models.dict() == mc.ModelCollection().dict()
 
-    assert rk.manipulators.dict() == {"tags": []}
+    assert rk.manipulators.dict() == ManipulatorCollection().dict()
 
     assert rk.integrationScheme == None
 
@@ -197,12 +198,14 @@ def test_models_and_manipulators(grid):
 
     rk.grid = grid
 
-    # Adding a Model (collection)
-    assert rk.models.dict() == mc.ModelCollection().dict()
+    rk.mpiContext = MPIContext(1)
+
+    # Model Collection
 
     model = mc.Model("newModel")
 
     a, b, c, d = (Variable(name, rk.grid) for name in "abcd")
+    rk.variables.add(a, b, c, d)
 
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
     model.addTerm("c", -mc.DiagonalStencil()(c).withEvolvedVar(a))
@@ -210,25 +213,80 @@ def test_models_and_manipulators(grid):
     model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
 
     modelCollection = mc.ModelCollection()
+
+    assert modelCollection.dict() == {"tags": []}
+
     modelCollection.add(model)
+
+    assert modelCollection.numGroups() == (1, 1)
+    implicitGroups = modelCollection.numGroups()[1]
 
     rk.models = modelCollection
 
     assert rk.models.dict() == modelCollection.dict()
 
-    # Adding a Manipulator (collection)
+    # Manipulator Collection
 
-    assert rk.manipulators.dict() == ManipulatorCollection().dict()
+    manipulatorCollection = ManipulatorCollection()
 
-    # manipulatorCollection = ManipulatorCollection()
-    # manipulatorCollection.add(
-    #     rmk.GroupEvaluator(
-    #         "groupEval",
-    #         model,
-    #         termGroup=1,
-    #         resultVar=Variable("groupEvalResult", rk.grid),
-    #     )
-    # )
+    assert manipulatorCollection.dict() == {"tags": []}
+
+    resultVar = Variable("groupEvalResult", rk.grid, isDerived=True)
+
+    evaluator = rmk.GroupEvaluator(
+        "groupEval",
+        model,
+        termGroup=99,
+        resultVar=resultVar,
+        priority=1,
+    )
+
+    assert evaluator.dict() == {
+        "type": "groupEvaluator",
+        "modelTag": model.name,
+        "evaluatedTermGroup": 99,
+        "resultVarName": resultVar.name,
+        "priority": 1,
+    }
+
+    manipulatorCollection.add(evaluator)
+
+    assert manipulatorCollection.dict() == {
+        "tags": ["groupEval"],
+        evaluator.name: evaluator.dict(),
+    }
+
+    rk.manipulators = manipulatorCollection
+
+    assert rk.manipulators.dict() == manipulatorCollection.dict()
+
+    # Integration Scheme
+
+    # The RMKContext integrationScheme is initially empty, so raises an error
+    with pytest.raises(AssertionError) as e_info:
+        rk.dict()
+    assert e_info.value.args[0] == "IntegrationScheme not set"
+
+    integrationScheme = it.IntegrationScheme(
+        dt=0.1,
+        steps=it.IntegrationStep(
+            "BDEStep",
+            it.BDEIntegrator(
+                "BDE",
+                nonlinTol=1e-12,
+                absTol=10.0,
+                convergenceVars=[Variable("a", rk.grid)],
+            ),
+        ),
+    )
+
+    rk.integrationScheme = integrationScheme
+
+    assert rk.integrationScheme.dict(
+        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+    ) == integrationScheme.dict(
+        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+    )
 
 
 def test_set_petsc():
