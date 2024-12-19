@@ -177,3 +177,33 @@ def test_derived_transition(grid: Grid):
         e_info.value.args[0]
         == "energyRateDeriv must be a full closure in DerivedTransition"
     )
+
+
+def test_simple_transition(grid: Grid):
+
+    na = vc.Variable("na", grid)
+    a = Species("a", 1, associatedVars=[na])
+
+    nb = vc.Variable("nb", grid)
+    b = Species("b", 2, associatedVars=[nb])
+
+    transitionEnergy = 13.7
+    transitionRate = 99.0
+
+    assert crm.SimpleTransition(
+        "trans", a, b, transitionEnergy, transitionRate
+    ).dict() == {
+        "type": "simpleTransition",
+        "ingoingState": a.speciesID,
+        "outgoingState": b.speciesID,
+        "fixedEnergy": transitionEnergy,
+        "rate": transitionRate,
+    }
+
+    # Raise error if Transition rate is negative
+    with pytest.raises(AssertionError) as e_info:
+        crm.SimpleTransition("trans", a, b, transitionEnergy, transitionRate=-1.0)
+    assert (
+        e_info.value.args[0]
+        == "Negative transition rate in SimpleTransition not allowed"
+    )
