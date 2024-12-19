@@ -1,5 +1,6 @@
 from RMK_support.grid import Grid
 import RMK_support.crm_support as crm
+import RMK_support.derivations as dv
 import RMK_support.model_construction as mc
 import RMK_support.variable_container as vc
 from RMK_support.derivations import Derivation, Species
@@ -83,3 +84,96 @@ def test_crm_el_energy_term_generator(grid: Grid):
         "electronEnergyDensity": W.name,
         "includedTransitionIndices": [],
     }
+
+
+def test_derived_transition(grid: Grid):
+
+    na = vc.Variable("na", grid)
+    a = Species("a", 1, associatedVars=[na])
+
+    nb = vc.Variable("nb", grid)
+    b = Species("b", 2, associatedVars=[nb])
+
+    rateDeriv = dv.SimpleDerivation("rateDeriv", 1.0, [1.0, 1.0])
+    rateDerivClosure = dv.DerivationClosure(rateDeriv, na, nb)
+
+    energyDeriv = dv.SimpleDerivation("energyDeriv", 1.0, [2.0, 2.0])
+    energyDerivClosure = dv.DerivationClosure(energyDeriv, na, nb)
+
+    transitionEnergy = 10.0
+
+    # Derived transition with a derived rate and energy
+    trans = crm.DerivedTransition(
+        "derivTrans",
+        inStates=[a],
+        outStates=[b],
+        rateDeriv=rateDerivClosure,
+        energyRateDeriv=dv.DerivationClosure(energyDeriv, na, nb),
+        transitionEnergy=transitionEnergy,
+    )
+
+    assert trans.dict() == {
+        "type": "derivedTransition",
+        "ingoingStates": [a.speciesID],
+        "outgoingStates": [b.speciesID],
+        "fixedEnergy": transitionEnergy,
+        "ruleName": rateDeriv.name,
+        "requiredVarNames": [arg.name for arg in rateDerivClosure.__args__],
+        "momentumRateDerivationRule": "none",
+        "momentumRateDerivationReqVarNames": [],
+        "energyRateDerivationRule": "energyDeriv",
+        "energyRateDerivationReqVarNames": ["na", "nb"],
+    }
+
+    # Register the transition's derivations in a textbook
+    tb = dv.Textbook(grid)
+
+    trans.registerDerivs(tb)
+
+    assert tb.dict()["customDerivations"] == {
+        "tags": [rateDeriv.name, energyDeriv.name],
+        rateDeriv.name: rateDeriv.dict(),
+        energyDeriv.name: energyDeriv.dict(),
+    }
+
+    # Bad cases
+
+    # Raise error if trying to build a DerivedTransition without an energy equation or fixed energy
+    with pytest.raises(AssertionError) as e_info:
+        crm.DerivedTransition(
+            "derivTrans",
+            inStates=[a],
+            outStates=[b],
+            rateDeriv=rateDerivClosure,
+        )
+    assert (
+        e_info.value.args[0]
+        == "DerivedTransition must either have the energy rate derivation or a fixed energy"
+    )
+
+    # Raise error if trying to build a DerivedTransition with a partial closure
+    # ...for density rate
+    with pytest.raises(AssertionError) as e_info:
+        crm.DerivedTransition(
+            "derivTrans",
+            inStates=[a],
+            outStates=[b],
+            rateDeriv=dv.DerivationClosure(rateDeriv, na),
+            energyRateDeriv=energyDerivClosure,
+        )
+    assert (
+        e_info.value.args[0] == "rateDeriv must be a full closure in DerivedTransition"
+    )
+    # ...for energy rate
+    with pytest.raises(AssertionError) as e_info:
+        crm.DerivedTransition(
+            "derivTrans",
+            inStates=[a],
+            outStates=[b],
+            rateDeriv=rateDerivClosure,
+            energyRateDeriv=dv.DerivationClosure(energyDeriv, na),
+        )
+    assert (
+        e_info.value.args[0]
+        == "energyRateDeriv must be a full closure in DerivedTransition"
+    )
