@@ -32,79 +32,6 @@ def grid():
     )
 
 
-def test_wrapper_init(grid: Grid):
-    rk = RMKContext()
-
-    rk.grid = grid
-    assert rk.grid.dict() == grid.dict()
-
-    assert rk.normDensity == 1e19
-    assert rk.normTemperature == 10
-    assert rk.normZ == 1
-    assert rk.norms == skn.calculateNorms(
-        Te=rk.normTemperature, ne=rk.normDensity, Z=rk.normZ
-    )
-
-    assert rk.textbook.dict() == dv.Textbook(grid).dict()
-
-    assert rk.species.dict() == dv.SpeciesContainer().dict()
-
-    assert rk.variables.dict() == vc.VariableContainer(grid).dict()
-
-    assert rk.mpiContext.dict(varCont=rk.variables) == MPIContext(1).dict(
-        varCont=rk.variables
-    )
-
-    assert rk.IOContext.dict() == IOContext().dict()
-
-    assert rk.optionsPETSc == {
-        "active": True,
-        "solverOptions": {
-            "solverToleranceRel": 0.1e-16,
-            "solverToleranceAbs": 1.0e-20,
-            "solverToleranceDiv": 0.1e8,
-            "maxSolverIters": 10000,
-            "kspSolverType": "bcgs",
-            "hyprePCType": "",
-            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
-        },
-        "objGroups": 1,
-    }
-
-    assert rk.models.dict() == mc.ModelCollection().dict()
-
-    assert rk.manipulators.dict() == ManipulatorCollection().dict()
-
-    assert rk.integrationScheme == None
-
-
-def test_set_norm():
-    rk = RMKContext()
-
-    # Get default norm values
-    oldTemp = rk.normTemperature
-    oldDensity = rk.normDensity
-    oldZ = rk.normZ
-
-    newTemp = 99
-    rk.normTemperature = newTemp
-    assert rk.normTemperature == newTemp
-
-    newDensity = 9.9e19
-    rk.normDensity = newDensity
-    assert rk.normDensity == newDensity
-
-    newZ = 9
-    rk.normZ = newZ
-    assert rk.normZ == newZ
-
-    # Reset values to defaults and check values again
-    rk = RMKContext()
-    assert rk.normTemperature == oldTemp
-    assert rk.normDensity == oldDensity
-    assert rk.normZ == oldZ
-
-
 def test_add_var(grid: Grid):
 
     rk = RMKContext()
@@ -191,16 +118,97 @@ def test_io(grid: Grid):
     assert rk.IOContext.dict() == ioCont.dict()
 
 
-def test_models_manipulators_terms(grid: Grid):
-    """Testing minimum features of RMKContext, including:
+def test_set_norm():
+    rk = RMKContext()
+
+    # Get default norm values
+    oldTemp = rk.normTemperature
+    oldDensity = rk.normDensity
+    oldZ = rk.normZ
+
+    newTemp = 99
+    rk.normTemperature = newTemp
+    assert rk.normTemperature == newTemp
+
+    newDensity = 9.9e19
+    rk.normDensity = newDensity
+    assert rk.normDensity == newDensity
+
+    newZ = 9
+    rk.normZ = newZ
+    assert rk.normZ == newZ
+
+    # Reset values to defaults and check values again
+    rk = RMKContext()
+    assert rk.normTemperature == oldTemp
+    assert rk.normDensity == oldDensity
+    assert rk.normZ == oldZ
+
+
+def test_set_petsc():
+    rk = RMKContext()
+
+    rk.setPETScOptions(
+        relTol=1e-14, absTol=1e-15, divTol=1e6, maxIters=2000, kspSolverType="gmres"
+    )
+
+    assert rk.optionsPETSc == {
+        "active": True,
+        "solverOptions": {
+            "solverToleranceRel": 1.0e-14,
+            "solverToleranceAbs": 1.0e-15,
+            "solverToleranceDiv": 0.1e7,
+            "maxSolverIters": 2000,
+            "kspSolverType": "gmres",
+            "hyprePCType": "",
+            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
+        },
+        "objGroups": 1,
+    }
+
+
+def test_species(grid: Grid):
+    rk = RMKContext()
+
+    rk.grid = grid
+
+    # Initialize species container
+    speciesCont = dv.SpeciesContainer()
+    assert rk.species.dict() == speciesCont.dict()
+
+    # Add species to the container
+    na = Variable("na", rk.grid, isCommunicated=True)
+    rk.variables.add(na)
+
+    speciesA = dv.Species(
+        name="a", speciesID=-1, atomicA=1, charge=+1, associatedVars=[na]
+    )
+    speciesCont.add(speciesA)
+
+    speciesB = dv.Species("b", 0)
+    speciesCont.add(speciesB)
+
+    rk.species = speciesCont
+
+    assert rk.species.dict()["names"] == ["a", "b"]
+
+    assert rk.species.dict()["a"] == speciesA.dict()
+    assert rk.species.dict()["a"]["associatedVars"] == [na.name]
+
+    assert rk.species.dict()["b"] == speciesB.dict()
+
+
+def test_wrapper(grid: Grid):
+    """Testing a minimum functional RMKContext wrapper, containing:
 
     - Model with evolved variables, derived variables and terms
-    - modelCollection
-    - manipulatorCollection with groupEvaluator
-    - integrationScheme
-    - textbook, set with a custom derivation
-    - term diagnostics via termEvaluator
-    - MBDataExtractor
+    - ModelCollection Class
+    - ManipulatorCollection Class with groupEvaluator
+    - IntegrationScheme Class
+    - Textbook, set with a custom derivation
+    - Term diagnostics via termEvaluator
+    - MBDataExtractor Class
+    - Config output via rk.dict()
     """
     rk = RMKContext()
 
@@ -236,7 +244,8 @@ def test_models_manipulators_terms(grid: Grid):
     modelCollection.add(model)
 
     assert modelCollection.numGroups() == (1, 1)
-    implicitGroups = modelCollection.numGroups()[1]
+
+    implicitGroups, generalGroups = modelCollection.numGroups()
 
     rk.models = modelCollection
 
@@ -385,94 +394,112 @@ def test_models_manipulators_terms(grid: Grid):
 
         assert rk.manipulators.dict()[tag] == termEvaluator.dict()
 
-        # Modelbound data extractor
+    # Modelbound data extractor
 
-        mbExtract = MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict()
+    mbExtract = MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict()
 
-        assert mbExtract == {
-            "type": "modelboundDataExtractor",
-            "modelTag": model.name,
-            "modelboundDataName": dModelbound.name,
-            "resultVarName": dModelbound.name,
-            "priority": 1,
-        }
+    assert mbExtract == {
+        "type": "modelboundDataExtractor",
+        "modelTag": model.name,
+        "modelboundDataName": dModelbound.name,
+        "resultVarName": dModelbound.name,
+        "priority": 1,
+    }
 
-        # Check final config output
+    # Check final config output, updating dictionary keys where needed
 
-        cfg = rk.dict()
+    cfg = rk.dict()
 
-        assert cfg["normalization"] == skn.calculateNorms(
-            Te=rk.normTemperature, ne=rk.normDensity, Z=rk.normZ
-        )
+    assert cfg["normalization"] == skn.calculateNorms(
+        Te=rk.normTemperature, ne=rk.normDensity, Z=rk.normZ
+    )
 
-        assert cfg["species"] == rk.species.dict()
+    assert cfg["species"] == rk.species.dict()
 
-        assert cfg["MPI"] == rk.mpiContext.dict(rk.variables)
+    assert cfg["MPI"] == rk.mpiContext.dict(rk.variables)
 
-        assert cfg["PETSc"] == rk.optionsPETSc
+    assert cfg["PETSc"] == rk.optionsPETSc
 
-        assert cfg["models"] == rk.models.dict()
+    assert cfg["models"] == rk.models.dict()
 
-        assert cfg["manipulators"] == rk.manipulators.dict()
+    assert cfg["manipulators"] == rk.manipulators.dict()
 
-        # assert cfg["xGrid"] == rk.grid.xGrid
-        # assert cfg["vGrid"] == rk.grid.vGrid
+    assert cfg["xGrid"] == rk.grid.dict()["xGrid"]
 
-        assert cfg["variables"] == rk.variables.dict()["variables"]
+    assert cfg["vGrid"] == rk.grid.dict()["vGrid"]
 
-        assert cfg["HDF5"] == rk.IOContext.dict()["HDF5"]
+    assert cfg["variables"] == rk.variables.dict()["variables"]
 
-        # TODO: "timeloop", "integrator", "standardTextbook", "customDerivations"
+    assert cfg["HDF5"] == rk.IOContext.dict()["HDF5"]
+
+    assert cfg["timeloop"] == {
+        **rk.integrationScheme.dict(
+            implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+        )["timeloop"],
+        **rk.IOContext.dict()["timeloop"],
+    }
+
+    assert cfg["integrator"] == {
+        **rk.integrationScheme.dict(
+            implicitGroups, rk.mpiContext.dict(rk.variables)["commData"]
+        )["integrator"],
+        "numImplicitGroups": implicitGroups,
+        "numGeneralGroups": generalGroups,
+    }
+
+    assert cfg["standardTextbook"] == rk.textbook.dict()["standardTextbook"]
+
+    assert cfg["customDerivations"] == rk.textbook.dict()["customDerivations"]
+
+    # Special cases requiring a fully-integrated RMKContext:
+
+    # If rk.textbook is initially None, rk.dict() sets this to a default textbook
+    rk.textbook = None
+    assert rk.dict()["standardTextbook"] == dv.Textbook(grid).dict()["standardTextbook"]
 
 
-def test_set_petsc():
+def test_wrapper_init(grid: Grid):
+    """Tests the initial values of a blank RMKContext."""
     rk = RMKContext()
 
-    rk.setPETScOptions(
-        relTol=1e-14, absTol=1e-15, divTol=1e6, maxIters=2000, kspSolverType="gmres"
+    rk.grid = grid
+    assert rk.grid.dict() == grid.dict()
+
+    assert rk.normDensity == 1e19
+    assert rk.normTemperature == 10
+    assert rk.normZ == 1
+    assert rk.norms == skn.calculateNorms(
+        Te=rk.normTemperature, ne=rk.normDensity, Z=rk.normZ
     )
+
+    assert rk.textbook.dict() == dv.Textbook(grid).dict()
+
+    assert rk.species.dict() == dv.SpeciesContainer().dict()
+
+    assert rk.variables.dict() == vc.VariableContainer(grid).dict()
+
+    assert rk.mpiContext.dict(varCont=rk.variables) == MPIContext(1).dict(
+        varCont=rk.variables
+    )
+
+    assert rk.IOContext.dict() == IOContext().dict()
 
     assert rk.optionsPETSc == {
         "active": True,
         "solverOptions": {
-            "solverToleranceRel": 1.0e-14,
-            "solverToleranceAbs": 1.0e-15,
-            "solverToleranceDiv": 0.1e7,
-            "maxSolverIters": 2000,
-            "kspSolverType": "gmres",
+            "solverToleranceRel": 0.1e-16,
+            "solverToleranceAbs": 1.0e-20,
+            "solverToleranceDiv": 0.1e8,
+            "maxSolverIters": 10000,
+            "kspSolverType": "bcgs",
             "hyprePCType": "",
             "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
         },
         "objGroups": 1,
     }
 
+    assert rk.models.dict() == mc.ModelCollection().dict()
 
-def test_species(grid: Grid):
-    rk = RMKContext()
+    assert rk.manipulators.dict() == ManipulatorCollection().dict()
 
-    rk.grid = grid
-
-    # Initialize species container
-    speciesCont = dv.SpeciesContainer()
-    assert rk.species.dict() == speciesCont.dict()
-
-    # Add species to the container
-    na = Variable("na", rk.grid, isCommunicated=True)
-    rk.variables.add(na)
-
-    speciesA = dv.Species(
-        name="a", speciesID=-1, atomicA=1, charge=+1, associatedVars=[na]
-    )
-    speciesCont.add(speciesA)
-
-    speciesB = dv.Species("b", 0)
-    speciesCont.add(speciesB)
-
-    rk.species = speciesCont
-
-    assert rk.species.dict()["names"] == ["a", "b"]
-
-    assert rk.species.dict()["a"] == speciesA.dict()
-    assert rk.species.dict()["a"]["associatedVars"] == [na.name]
-
-    assert rk.species.dict()["b"] == speciesB.dict()
+    assert rk.integrationScheme == None
