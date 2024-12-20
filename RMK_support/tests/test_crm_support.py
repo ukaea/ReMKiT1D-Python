@@ -293,3 +293,108 @@ def test_simple_transition(grid: Grid):
         e_info.value.args[0]
         == "Negative transition rate in SimpleTransition not allowed"
     )
+
+
+def test_janev_transitions(grid: Grid):
+
+    temperature = vc.Variable("T", grid)
+    electronDistribution = vc.Variable("f", grid, isDistribution=True)
+
+    mbData = crm.CRMModelboundData(grid)
+
+    lowestCellEnergy = 0
+
+    energyNorm = 1.0
+
+    maxState = 10
+
+    crm.addJanevTransitionsToCRMData(
+        mbData,
+        maxState,
+        energyNorm,
+        electronDistribution,
+        temperature,
+        lowestCellEnergy,
+    )
+
+    mbData.dict()
+
+    for fixedEnergyIndex, tag in enumerate(mbData.transitionTags):
+        startState, endState = -1, -1
+        if "JanevEx" in tag:
+            startState, endState = map(int, tag.replace("JanevEx", "").split("-"))
+
+            trans = crm.CollExIonJanevTransition(
+                tag,
+                startState,
+                endState,
+                energyNorm,
+                electronDistribution,
+                lowestCellEnergy,
+            )
+
+        if "JanevDeex" in tag:
+            startState, endState = map(int, tag.replace("JanevDeex", "").split("-"))
+
+            directTransitionName = "JanevEx" + str(endState) + "-" + str(startState)
+
+            trans = crm.CollDeexRecombJanevTransition(
+                tag,
+                startState,
+                endState,
+                energyNorm,
+                electronDistribution,
+                temperature,
+                directTransitionName,
+                crmData=mbData,
+                lowestCellEnergy=lowestCellEnergy,
+                csUpdatePriority=0,
+            )
+
+        if "JanevIon" in tag:
+            startState = int(tag.replace("JanevIon", ""))
+            endState = 0
+
+            trans = crm.CollExIonJanevTransition(
+                tag,
+                startState,
+                endState,
+                energyNorm,
+                electronDistribution,
+                lowestCellEnergy,
+            )
+
+        if "JanevRecomb" in tag:
+            if "Rad" in tag:
+                # JanevRecombRad
+                endState = int(tag.replace("JanevRecombRad", ""))
+
+                directTransitionName = "JanevRecombRad" + str(endState)
+
+                trans = crm.RadRecombJanevTransition(tag, endState, temperature)
+
+            else:
+                # JanevRecomb
+                startState, endState = map(
+                    int, tag.replace("JanevRecomb", "").split("b")
+                )
+
+                directTransitionName = "JanevIon" + str(endState)
+
+                trans = crm.CollDeexRecombJanevTransition(
+                    tag,
+                    0,
+                    endState,
+                    energyNorm,
+                    electronDistribution,
+                    temperature,
+                    directTransitionName,
+                    crmData=mbData,
+                    lowestCellEnergy=lowestCellEnergy,
+                    csUpdatePriority=0,
+                )
+
+        # Transition fixedEnergyIndex must be set before dict() is called
+        trans.setFixedEnergyIndex(fixedEnergyIndex)
+
+        assert mbData.dict()["transitions"][tag] == trans.dict()
