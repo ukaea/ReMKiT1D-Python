@@ -20,6 +20,78 @@ def grid():
     )
 
 
+def test_crm_mbdata(grid: Grid):
+    mbData = crm.CRMModelboundData(grid)
+
+    # Default settings of mbData (initialized with grid only)
+    assert crm.CRMModelboundData(grid).dict() == {
+        "modelboundDataType": "modelboundCRMData",
+        "transitionTags": [],
+        "inelasticGridData": {
+            "active": False,
+            "fixedTransitionEnergies": [],
+        },
+        "transitions": {},
+        "electronStateID": 0,
+    }
+    assert mbData.energyResolution == 1e-16
+
+    # Add fixed transition energies
+    fixedTransitionEnergies = np.linspace(1.0, 3.0, 3)
+    mbData = crm.CRMModelboundData(grid, fixedTransitionEnergies)
+
+    np.testing.assert_array_equal(
+        mbData.fixedTransitionEnergies, fixedTransitionEnergies
+    )
+
+    assert mbData.dict()["inelasticGridData"] == {
+        "active": True,
+        "fixedTransitionEnergies": fixedTransitionEnergies.tolist(),
+    }
+
+    # Registering transitions in a new mbData object
+    na = vc.Variable("na", grid)
+    a = Species("a", 1, associatedVars=[na])
+
+    nb = vc.Variable("nb", grid)
+    b = Species("b", 2, associatedVars=[nb])
+
+    transitionEnergy = 13.7
+    transitionRate = 99.0
+
+    transition = crm.SimpleTransition("trans", a, b, transitionEnergy, transitionRate)
+
+    mbData = crm.CRMModelboundData(grid)
+
+    mbData.addTransition(transition)
+
+    assert mbData.getTransitionIndices(transition.name) == [1]
+
+    assert mbData.dict() == {
+        "modelboundDataType": "modelboundCRMData",
+        "transitionTags": [transition.name],
+        "inelasticGridData": {
+            "active": True,
+            "fixedTransitionEnergies": [transitionEnergy],
+        },
+        "transitions": {transition.name: transition.dict()},
+        "electronStateID": 0,
+    }
+
+    # Raise Error if fixed transition energies are closer apart than a threshold value (default 1e-16)
+
+    with pytest.raises(AssertionError) as e_info:
+        mbData = crm.CRMModelboundData(
+            grid,
+            fixedTransitionEnergies=np.array([1e-16, 2e-16]),
+            energyResolution=1e-16,
+        )
+    assert (
+        e_info.value.args[0]
+        == "fixedTransitionEnergies in ModelboundCRMData contain elements closer than allowed energy resolution"
+    )
+
+
 def test_add_spontaneous_emission(grid: Grid):
     mbData = crm.CRMModelboundData(grid)
 
@@ -121,20 +193,34 @@ def test_derived_transition(grid: Grid):
         "requiredVarNames": [arg.name for arg in rateDerivClosure.__args__],
         "momentumRateDerivationRule": "none",
         "momentumRateDerivationReqVarNames": [],
-        "energyRateDerivationRule": "energyDeriv",
-        "energyRateDerivationReqVarNames": ["na", "nb"],
+        "energyRateDerivationRule": energyDeriv.name,
+        "energyRateDerivationReqVarNames": [na.name, nb.name],
     }
 
-    # Register the transition's derivations in a textbook
+    # Register the transition's derivations
+    # Method 1: in a textbook
     tb = dv.Textbook(grid)
 
     trans.registerDerivs(tb)
 
-    assert tb.dict()["customDerivations"] == {
+    tbWithDeriv = {
         "tags": [rateDeriv.name, energyDeriv.name],
         rateDeriv.name: rateDeriv.dict(),
         energyDeriv.name: energyDeriv.dict(),
     }
+
+    assert tb.dict()["customDerivations"] == tbWithDeriv
+
+    # Method 2: via CRMModelboundData.registerDerivs(textbook)
+    tb = dv.Textbook(grid)
+
+    mbData = crm.CRMModelboundData(grid)
+
+    mbData.addTransition(trans)
+
+    mbData.registerDerivs(tb)
+
+    assert tb.dict()["customDerivations"] == tbWithDeriv
 
     # Bad cases
 
