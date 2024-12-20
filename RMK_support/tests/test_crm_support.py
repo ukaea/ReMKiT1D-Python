@@ -297,6 +297,9 @@ def test_simple_transition(grid: Grid):
 
 def test_janev_transitions(grid: Grid):
 
+    # TODO: Test mbData.varNames and mbData.getRate, which each return the "rate(...)index(...)" format name for a given transition
+    # mbData.getRate needs to be changed to point to the correct dictionary key.
+
     temperature = vc.Variable("T", grid)
     electronDistribution = vc.Variable("f", grid, isDistribution=True)
 
