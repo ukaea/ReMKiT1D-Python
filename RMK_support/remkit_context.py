@@ -1,4 +1,3 @@
-import numpy as np
 from .grid import Grid
 from typing import Union, List, Dict, cast, Tuple, Optional
 from typing_extensions import Self
@@ -16,6 +15,7 @@ from abc import ABC, abstractmethod
 
 
 class IOContext:
+    """Class containing IO-related ReMKiT1D options"""
 
     def __init__(
         self,
@@ -23,6 +23,26 @@ class IOContext:
         HDF5Dir: str = "./RMKOutput/",
         **kwargs,
     ):
+        """IO option container for ReMKiT1D
+
+        Args:
+            jsonFilepath (str, optional): JSON config file path. Defaults to "./config.json".
+            HDF5Dir (str, optional): Directory for HDF5 file IO. Defaults to "./RMKOutput/".
+
+        kwargs:
+
+            initValFilename (str): HDF5 file containing initial values
+
+            restartSave (bool): Set to true if restart checkpoints should be saved
+
+            restartLoad (bool): Set to true if the run should restart from the latest checkpoint in the HDF5 directory
+
+            restartFrequency (int): Number of timesteps between restart checkpoints
+
+            restartResetTime (bool): If true will reset the time variable on restart
+
+            restartInitialOutputIndex: The first output file index after restarting. Defaults to 0.
+        """
 
         self.__jsonFilepath__ = jsonFilepath
         self.__HDF5Dir__ = HDF5Dir
@@ -56,6 +76,17 @@ class IOContext:
         self.__HDF5Dir__ = dir
 
     def setRestartOptions(self, **kwargs) -> None:
+        """
+        save (bool): Set to true if restart checkpoints should be saved
+
+        load (bool): Set to true if the run should restart from the latest checkpoint in the HDF5 directory
+
+        frequency (int): Number of timesteps between restart checkpoints
+
+        resetTime (bool): If true will reset the time variable on restart
+
+        initialOutputIndex: The first output file index after restarting. Defaults to 0.
+        """
         if "save" in kwargs:
             self.__restartSave__ = cast(bool, kwargs.get("save"))
 
@@ -74,17 +105,27 @@ class IOContext:
             )
 
     def populateOutputVars(self, variables: VariableContainer):
+        """Uses the options on variables in a container to populate which variables should be in the code output
 
+        Args:
+            variables (VariableContainer): Variable container in the ReMKiT1D context
+        """
         self.__outputVars__ = []
         for var in variables.varNames:
             if variables[var].inOutput:
                 self.__outputVars__.append(variables[var])
 
     def setHDF5InputOptions(
-        self, inputFile: Union[str, None], inputVars: List[Variable] = []
+        self, inputFile: Union[str, None], inputVars: Optional[List[Variable]] = None
     ):
+        """Set options for using HDF5 input files
+
+        Args:
+            inputFile (Union[str, None]): Name of the input file (without h5 extension!)
+            inputVars (Optional[List[Variable]], optional): Variables to load from the input file. Defaults to None.
+        """
         self.__inputHDF5File__ = inputFile
-        self.__inputVars__ = inputVars
+        self.__inputVars__ = inputVars if inputVars is not None else []
 
     def dict(self) -> dict:
 
@@ -111,8 +152,15 @@ class IOContext:
 
 
 class Manipulator(ABC):
+    """Abstract manipulator class"""
 
     def __init__(self, name: str, priority: int = 4) -> None:
+        """Abstract manipulator class
+
+        Args:
+            name (str): Name of the manipulator
+            priority (int, optional): Manipulator priority (0 called at every internal integrator iteration, 1 called at every integrator substep, 2 called between integration steps in a single global step, 3 called after each global integrator step, 4 called only before IO operations). Defaults to 4.
+        """
         self.__name__ = name
         self.__priority__ = priority
 
@@ -134,6 +182,7 @@ class Manipulator(ABC):
 
 
 class GroupEvaluator(Manipulator):
+    """Manipulator evaluating one term group in a model"""
 
     def __init__(
         self,
@@ -143,6 +192,15 @@ class GroupEvaluator(Manipulator):
         resultVar: Variable,
         priority: int = 4,
     ) -> None:
+        """Manipulator evaluating one term group in a model
+
+        Args:
+            name (str): Name of the manipulator
+            model (mc.Model): Model containing the evaluated group
+            termGroup (int): Term group index (for general groups add number of implicit groups to the general group index)
+            resultVar (Variable): Variable to store the evaluation result in
+            priority (int, optional): Manipulator priority (0 called at every internal integrator iteration, 1 called at every integrator substep, 2 called between integration steps in a single global step, 3 called after each global integrator step, 4 called only before IO operations). Defaults to 4.
+        """
         super().__init__(name, priority)
         self.__model__ = model
         self.__termGroup__ = termGroup
@@ -182,6 +240,7 @@ class GroupEvaluator(Manipulator):
 
 
 class TermEvaluator(Manipulator):
+    """Manipulator evaluating terms by model+term names"""
 
     def __init__(
         self,
@@ -192,6 +251,16 @@ class TermEvaluator(Manipulator):
         update=False,
         priority: int = 4,
     ) -> None:
+        """Manipulator evaluating terms by model+term names
+
+        Args:
+            name (str): Name of the manipulator
+            modelTermTags (List[Tuple[str, str]]): List of model,term name tuples representing the model+term pairs to be evaluated by this manipulator
+            resultVar (Variable): Variable to store the evaluation result in
+            accumulate (bool, optional): If true will accumulate the values into the result variable instead of overwriting. Defaults to False.
+            update (bool, optional): If true will independently request updates for the evaluated terms/models. Defaults to False.
+            priority (int, optional): Manipulator priority (0 called at every internal integrator iteration, 1 called at every integrator substep, 2 called between integration steps in a single global step, 3 called after each global integrator step, 4 called only before IO operations). Defaults to 4.
+        """
         super().__init__(name, priority)
         self.__resultVar__ = resultVar
         assert (
@@ -238,15 +307,25 @@ class TermEvaluator(Manipulator):
 
 
 class MBDataExtractor(Manipulator):
+    """Manipulator extracting a variable from the modelbound data within a given model"""
 
     def __init__(
         self,
-        name,
+        name: str,
         model: mc.Model,
         mbVar: Variable,
         resultVar: Optional[Variable] = None,
         priority=4,
     ):
+        """Manipulator extracting a variable from the modelbound data within a given model
+
+        Args:
+            name (str): Name of the manipulator
+            model (mc.Model): Model containing the modelbound data
+            mbVar (Variable): Modelbound data variable to extract
+            resultVar (Optional[Variable], optional): Variable to put the extracted mbVar result to. Defaults to None, using the mbVar itself, assuming it is also in the global VariableContainer.
+            priority (int, optional): Manipulator priority (0 called at every internal integrator iteration, 1 called at every integrator substep, 2 called between integration steps in a single global step, 3 called after each global integrator step, 4 called only before IO operations). Defaults to 4.
+        """
         super().__init__(name, priority)
         self.__model__ = model
         assert model.mbData is not None, "MBDataExtractor model does not have mbData"
@@ -290,8 +369,10 @@ class MBDataExtractor(Manipulator):
 
 
 class ManipulatorCollection:
+    """Manipulator container object providing accessors methods"""
 
     def __init__(self: Self):
+        """Manipulator container object providing accessors methods"""
         self.__manipulators__: List[Manipulator] = []
 
     @property
@@ -319,6 +400,7 @@ class ManipulatorCollection:
         del self.__manipulators__[self.manipNames.index(key)]
 
     def add(self, *args: Manipulator):
+        """Add manipulators to the container"""
         for manip in args:
             assert manip.name not in self.manipNames, (
                 "Duplicate Manipulator name " + manip.name
@@ -348,8 +430,10 @@ class ManipulatorCollection:
 
 
 class RMKContext:
-    def __init__(self) -> None:
+    """Central object in ReMKiT1D Python package - centralises the construction of ReMKiT1D simulations"""
 
+    def __init__(self) -> None:
+        """Central object in ReMKiT1D Python package - centralises the construction of ReMKiT1D simulations"""
         self.__normDens__: float = 1e19
         self.__normTemp__: float = 10
         self.__normZ__: float = 1
@@ -387,6 +471,7 @@ class RMKContext:
 
     @property
     def normDensity(self):
+        """Density normalisation in m^{-3}"""
         return self.__normDens__
 
     @normDensity.setter
@@ -395,6 +480,7 @@ class RMKContext:
 
     @property
     def normTemperature(self):
+        """Temperature normalisation in eV"""
         return self.__normTemp__
 
     @normTemperature.setter
@@ -403,6 +489,7 @@ class RMKContext:
 
     @property
     def normZ(self):
+        """Reference ion charge"""
         return self.__normZ__
 
     @normZ.setter
@@ -411,6 +498,7 @@ class RMKContext:
 
     @property
     def norms(self):
+        """Normalisation dictionary containing all basic and default derived normalisation values - requires that the textbook component of the context is set is set"""
         return skn.calculateNorms(
             self.__normTemp__,
             self.__normDens__,
@@ -420,6 +508,7 @@ class RMKContext:
 
     @property
     def grid(self):
+        """Grid component of the context containing spatial and velocity space data"""
         return self.__gridObj__
 
     @grid.setter
@@ -428,6 +517,7 @@ class RMKContext:
 
     @property
     def textbook(self):
+        """Textbook component of the context containing the various derivations registered in the context"""
         if self.__textbook__ is None:
             assert (
                 self.grid is not None
@@ -441,6 +531,7 @@ class RMKContext:
 
     @property
     def species(self):
+        """Species container component of the context - containing Species information used in the ReMKiT1D simulation"""
         return self.__species__
 
     @species.setter
@@ -449,6 +540,7 @@ class RMKContext:
 
     @property
     def variables(self):
+        """Variable container component of the context - contains all of the globally defined variables in the ReMKiT1D simulation"""
         if self.__variables__ is None:
             assert (
                 self.grid is not None
@@ -462,6 +554,7 @@ class RMKContext:
 
     @property
     def mpiContext(self):
+        """MPI options component of the contextd"""
         return self.__mpiContext__
 
     @mpiContext.setter
@@ -470,10 +563,12 @@ class RMKContext:
 
     @property
     def optionsPETSc(self):
+        """PETSc library options used by this context"""
         return self.__optionsPETSc__
 
     @property
     def models(self):
+        """Model container component of the context"""
         if self.__models__ is None:
             self.__models__ = mc.ModelCollection()
         return self.__models__
@@ -484,6 +579,7 @@ class RMKContext:
 
     @property
     def integrationScheme(self):
+        """Time integration scheme used by this context"""
         return self.__integrationScheme__
 
     @integrationScheme.setter
@@ -492,6 +588,7 @@ class RMKContext:
 
     @property
     def IOContext(self):
+        """IO option container component of this simulation context"""
         return self.__IOContext__
 
     @IOContext.setter
@@ -500,6 +597,7 @@ class RMKContext:
 
     @property
     def manipulators(self):
+        """Manipulator container component of this simulation context"""
         return self.__manipulators__
 
     @manipulators.setter
@@ -557,7 +655,7 @@ class RMKContext:
         self.__optionsPETSc__["objGroups"] = objGroups
 
     def checkAll(self):
-
+        """Perform all consistency checks within the components"""
         assert self.__gridObj__ is not None, "Grid not set"
         assert self.__variables__ is not None, "VariableContainer not set"
         assert self.__models__ is not None, "Models not set"
@@ -571,11 +669,6 @@ class RMKContext:
         self.__models__.registerDerivs(self.__textbook__)
 
     def dict(self) -> dict:
-        """Convert wrapper into config.json compatible dictionary
-
-        Returns:
-            dict: Immediately writable config.json dictionary
-        """
 
         self.checkAll()
 
@@ -612,7 +705,7 @@ class RMKContext:
         return configFile
 
     def writeConfigFile(self) -> None:
-        """Generate a config file based on the current state of the wrapper"""
+        """Generate a config file based on the current state of the context"""
         try:
             os.remove(self.IOContext.jsonFilepath)
         except FileNotFoundError:
@@ -623,6 +716,13 @@ class RMKContext:
     def generatePDF(
         self, latexFilename="ReMKiT1D", latexRemap: Dict[str, str] = {}, cleanTex=True
     ):
+        """Generate a LaTeX pdf summary of the simulation context
+
+        Args:
+            latexFilename (str, optional): Name of the pdf file without the extension. Defaults to "ReMKiT1D".
+            latexRemap (Dict[str, str], optional): Dictionary remapping variable names (for example "v":"\\vec{v}"). Defaults to {}.
+            cleanTex (bool, optional): Remove all generated tex files. Defaults to True.
+        """
 
         self.checkAll()
 
@@ -655,6 +755,14 @@ class RMKContext:
     def loadSimulation(
         self, onlySteps: Optional[List[int]] = None
     ) -> VariableContainer:
+        """Load the simulation output from the HDF5 directory set in the IOContext component
+
+        Args:
+            onlySteps (Optional[List[int]], optional): Output file indices to load. Defaults to None - loading all detected output files.
+
+        Returns:
+            VariableContainer: Variable container containing the loaded data
+        """
 
         filenames = [
             self.IOContext.HDF5Dir + file
@@ -680,7 +788,7 @@ class RMKContext:
         )
 
     def addTermDiagnostics(self, *args: Variable):
-
+        """Add diagnostic variables for all terms evolving given variables. **NOTE**: Does not detect terms generated by TermGenerators - to include these use GroupEvaluators."""
         for var in args:
             terms = self.models.getTermsThatEvolveVar(var)
             if not len(terms):
