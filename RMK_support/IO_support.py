@@ -10,6 +10,7 @@ from os.path import isfile, join
 from typing import Union, List
 from copy import copy
 
+
 def writeDictToJSON(
     data: dict, filepath="./config.json", prefixKey: Union[str, None] = None
 ):
@@ -59,7 +60,7 @@ def loadVariableFromHDF5(
         filepaths (List[str], optional): List of filepaths of HDF5 files. Defaults to ["./ReMKiT1DVarInput.h5"].
 
     Returns:
-        vc.Variable: Loaded variable 
+        vc.Variable: Loaded variable
     """
 
     if var.isScalar:
