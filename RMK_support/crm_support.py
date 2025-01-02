@@ -1211,8 +1211,8 @@ class CRMElEnergyTermGenerator(TermGenerator):
         )
         doc.append(
             tex.NoEscape(
-                "\\newline Evolved energy variable: "
-                + self.__electronEnergyDens__.latex(latexRemap)
+                "\\newline Evolved energy variable: $"
+                + self.__electronEnergyDens__.latex(latexRemap) +"$"
             )
         )
         doc.append(
