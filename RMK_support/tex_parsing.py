@@ -3,7 +3,12 @@ import numpy as np
 
 
 def numToScientificTex(num: float, removeUnity=False):
+    """Convert a float to scientific LaTeX notation.
 
+    Args:
+        num (float): Float to convert
+        removeUnity (bool, optional): If true and the number is sufficiently close to 1 or -1 the 1 will be dropped. Defaults to False.
+    """
     a, b = f"{num:.2e}".split("e")
     while a[-1] == "0":
         a = a[:-1]
