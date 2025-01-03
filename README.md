@@ -1,4 +1,4 @@
-# ReMKiT1D Python support - v2.0.0 rewrite in progress!!!
+# ReMKiT1D Python support - v2.0.0 
 [![tests](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml)
 [![black/mypy](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml)
 [![codecov](https://codecov.io/gh/ukaea/ReMKiT1D-Python/branch/master/graph/badge.svg?token=HL5WMWDJIL)](https://codecov.io/gh/ukaea/ReMKiT1D-Python)
@@ -14,11 +14,11 @@ RMK_support is a collection of tools designed to configure and analyze ReMKiT1D 
 
 ReMKiT1D runs use JSON files to configure the models and methods used by the code, and RMK_support provides convenient Python routines for the generation of these config files, while also providing features that enable analysis of data using obtained from ReMKiT1D runs.
 
-For a high level overview of the framework and the Python interface see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188).
+For a high level overview of the framework and the (pre-v2.0.0) Python interface see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188). For detailed documentation of the Python package see [here](https://readthedocs.org/projects/remkit1d-python/).
 
 ## Prerequisites 
 
-All routines are written for Python3, with the following libraries required for the .py support modules:
+All routines are written for Python3 (version 3.8 and greater), with the following libraries required for the .py support modules:
 
 1. numpy
 2. xarray
@@ -27,6 +27,10 @@ All routines are written for Python3, with the following libraries required for 
 5. matplotlib
 6. h5py
 7. scipy
+8. pylatex
+
+**NOTE**: The earliest version of the Fortran core ReMKiT1D code compatible with v2.0.0 of the Python package is v1.2.1. From v2.0.0 version correspondence between the Fortran and Python packages is no longer direct. 
+
 
 ## Installation
 
@@ -36,7 +40,7 @@ RMK_support is installable using pip through PyPI by simply calling
 pip install RMK_support
 ```
 
-Alternatively, it can be installed from this repository by running
+Alternatively, and especially if working with non-release builds, it can be installed from this repository by running
 
 ```
 pip install .
@@ -45,33 +49,123 @@ from the repository root.
 
 ## Repository structure
 
-The package files are in the RMK_support folder, together with the tests, which can be run using pytest.
+The package files are in the RMK_support directory, together with the tests, which can be run using pytest.
 
-The examples folder contains both general examples and tutorials for problems relevant in SOL physics, as well as a number of verification tests, some of which have been reported on in the code paper. 
+The examples directory contains both general examples and tutorials for problems relevant in SOL physics, as well as a number of verification tests, some of which have been reported on in the code paper. These have been rewritten in v2.0.0 using the new syntax.
 
-The data folder contains some atomic data used by some of the examples, in particular the spontaneous emission rates for hydrogen obtained from NIST (see the [CRM example](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_crm_example.ipynb) notebook). This folder should contain the amjuel.tex file from the EIRENE AMJUEL database in order to run some of the examples! This file is not distributed with the repository.
+The data directory contains some atomic data used by some of the examples, in particular the spontaneous emission rates for hydrogen obtained from NIST (see the [CRM example](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/crm_0D.ipynb) notebook). **This directory should contain the amjuel.tex file from the EIRENE AMJUEL database in order to run some of the examples! This file is NOT distributed with the repository.**
 
 ## High-level workflow
 
-### 1. Initialization
+This package has been rewritten for v2.0.0, rendering the majority of old workflows obsolete, and moving the package closer to a Domain Specific Language. 
 
-The main group of support modules handle the translation of initialization data into the JSON format in a way that ReMKiT1D's initialization routines can decode. 
+Many aspects of the old high-level workflow have been streamlined, so we include the Gaussian advection example from the examples directory here almost verbatim to showcase how v2.0.0 deals with the main aspects of the workflow on a simple example.
 
-While it is possible to write most of the required config.json file by hand if the user knows the exact key names in the corresponding ReMKiT1D initialization routine, a wrapper ecosystem allows users to initialize config files with little to no knowledge of the underlying json structure. 
+For explanations of the terminology used (nodes, implicit/derived variables, staggered grids, matrix terms, etc.) see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188).
 
-The general workflow of initializing a functional config.json file using the RKWrapper class can be roughly divided into 5 steps:
+### Advection example
 
-1. Setting up global external library options (MPI, PETSc, HDF5)
-2. Initializing the basic objects used by the code. These include normalization, the grid, a standard textbook object and optional custom derivations, as well as species data. Most of these have default options that can be used to simplify the initialization procedure.
-3. Setting up the variable container by adding variables and optionally initializing them, as well as associating derived variables in the variable container with derivations by supplying a derivation name and a number of required variables used in the calculation. At this stage the interaction between the MPI and HDF5 libraries and the variables can be specified through options to communicate or output specific variables.
-4. Defining the models used to evolve/calculate variables by specifying term options and modelbound data. This is the main part of the configuration file and the most complex. See different notebooks for examples of how to initialize models. Optional data manipulator objects can be specified here as well.
-5. The last step is specifying time integration options. Here the integrator structure and timestep control can be specified, as well as the structure of the main timeloop (timestep number, output frequency etc.)
+Imports for the advection example:
+```python
+import RMK_support as rmk
+from RMK_support import node
+from RMK_support.stencils import StaggeredDivStencil as Div, StaggeredGradStencil as Grad
 
-The above steps are shown in the figure below, with some of the interdependencies shown in UML style. 
+import numpy as np
 
-![](docs/ReMKiT1D_setup_steps.png "ReMKiT1D setup workflow")
+```
 
-### 2. Data analysis and visualization 
+The main Python object is the `RMKContext`, which centralises the definition of ReMKiT1D simulations. Below we construct it and set the IO and MPI options for the example:
+
+```python
+rk = rmk.RMKContext()
+rk.IOContext = rmk.IOContext(HDF5Dir="./RMKOutput/RMK_advection_test/")
+rk.mpiContext = rmk.MPIContext(numProcsX=4)
+```
+
+We set the grid component of the context to a simple uniform spatial grid:
+```python
+xGridWidths = 0.025*np.ones(512)
+rk.grid = rmk.Grid(xGridWidths, interpretXGridAsWidths=True)
+```
+
+By default, ReMKiT1D supports staggered spatial grids, with some quantities living on cell centres (the regular grid) and others on cell edges (the dual grid). The Python module provides methods for handling the construction of variable pairs, automatically setting one of the variables to be linearly interpolated. 
+
+Here we set the initial conditions and add variables to the context:
+
+```python
+nInit = 1 + np.exp(-(rk.grid.xGrid-np.mean(rk.grid.xGrid))**2) # A Gaussian perturbation
+TInit = np.ones(len(rk.grid.xGrid)) # Constant temperature
+
+n,n_dual = rmk.varAndDual("n",rk.grid,data=nInit) #both variable and its dual
+T = rmk.Variable("T",rk.grid,data=TInit,isDerived=True,isCommunicated=False)
+G_dual,G = rmk.varAndDual("G",rk.grid,primaryOnDualGrid=True) #the first return value is the primary, so here it is the dual
+
+rk.variables.add(n,n_dual,T,G_dual,G)
+```
+
+In ReMKiT1D terminology, the above has added the implicit variables n and G_dual, while n_dual is a derived variable interpolated from cell centres to edges, while G is interpolated from edges to centres. 
+
+
+#### Expression tree node arithmetic
+
+ReMKiT1D allows for the translation of elementary Python expressions to derived variables using calculation trees. From v2.0.0 ReMKiT1D variables can be directly transformed into nodes and vice-versa, allowing for almost seamless variable arithmetic by using `node` and `varFromNode` functions. Variables can also be copied and/or renamed after this process.
+
+```python
+#v2.0.0 generating nodes from variables and vice versa
+massRatio = 1/1836
+
+W = rmk.varFromNode("dummyVar",rk.grid,node = 1.5*node(n)*node(T) + node(G)**2/(node(n)*massRatio)) 
+rk.variables["W"] = W # this will copy and rename the variable to "W" when added 
+rk.variables.add(W.rename("otherW")) # This is another way of doing it  
+```
+In v2.0.0, model construction is vastly simplified. Before normalisation, the advection equations we are solving in this example are:
+
+$\frac{\partial n}{\partial t} = - \frac{\partial u}{\partial x}$
+
+$m_i \frac{\partial u}{\partial t} = - \frac{\partial (nkT)}{\partial x}$
+
+```python
+model = rmk.Model(name="adv")
+
+# Models have ddt components, representing individual contributions to equations
+# Matrix terms can be automatically constructed by invoking various stencils 
+
+model.ddt[n] += - Div()(G_dual).rename("div_G") 
+model.ddt[G_dual] += -massRatio/2 * Grad()(T * n).rename("grad_p") # Here n will be the implicit variable - in Matrix terms constructed by invoking stencils it is always the rightmost variable
+
+rk.models.add(model)
+```
+In the above we see the use of stencils to construct `MatrixTerms`, as well as the use of `rename` to give names to the individual terms inline. Note that stencils can also act on multiplicative combinations of variables. More complicated examples of term construction, including spatial profiles, modelbound variables, time signals, etc. are available in the examples directory.
+
+v2.0.0 streamlines the setup of time integration methods by using `IntegrationStep` and `IntegrationScheme` objects:
+
+```python
+# the implicit BDE integrator that checks convergence based on the variables n and G_dual
+integrator = rmk.BDEIntegrator("BDE",nonlinTol=1e-12,absTol=10.0,convergenceVars=[n,G_dual])
+
+integrationStep = rmk.IntegrationStep("BE",integrator)
+integrationStep.add(rk.models) # Add all models in context
+
+rk.integrationScheme = rmk.IntegrationScheme(dt=0.1,steps=integrationStep) #Create a scheme with our single step and a constant integration timestep 0.1
+rk.integrationScheme.setFixedNumTimesteps(10000,200) # Run for 10000 steps outputting every 200
+```
+
+With the above, the context is ready to produce ReMKiT1D config files. It can also be further modified by adding new models, variables, or changing any of the existing context components. To produce the config file, simply call 
+
+```python 
+rk.writeConfigFile()
+```
+
+#### LaTeX simulation summaries
+
+From v2.0.0, the ReMKiT1D Python interface offers automatic generation of pdf summaries using pylatex. The simplest way to achieve this is to call the following context method:
+
+```python
+rk.generatePDF("Gaussian Advection Example")
+```
+
+### Data analysis and visualization 
 
 The secondary feature of RMK_support modules is data analysis and visualization, powered by variable data being stored in an xarray dataset and visualization tools built on holoviews and panel. Examples of loading simulation data and using holoviews/panel for visualization are in multiple notebooks. 
 
@@ -81,11 +175,11 @@ Further development is planned to streamline data analysis, including improvemen
 
 For a high level explanation of both the framework and the interface the user is referred to the ReMKiT1D code paper, where the code design is explained and an example workflow with this Python package is explained. 
 
-The examples/tutorials in the examples folder supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) and [custom fluid](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_custom_fluid.ipynb) notebooks, which are documented in detail. Note that these are now using many outdated features.
+The examples/tutorials in the examples directory supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) example partly reproduced in this readme. 
 
 For the list of the newest example notebooks, where new features are covered, see the CHANGELOG.
 
-Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/), where links to newer resources can be found.
+Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/), where more detailed resources can be found.
 
 ## Licence
 
