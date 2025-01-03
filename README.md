@@ -49,7 +49,9 @@ from the repository root.
 
 The package files are in the RMK_support directory, together with the tests, which can be run using pytest.
 
-The examples directory contains both general examples and tutorials for problems relevant in SOL physics, as well as a number of verification tests, some of which have been reported on in the code paper. These have been rewritten in v2.0.0 using the new syntax.
+The tutorials directory contains basic tutorial notebooks, which are also included in the Sphinx documentation [here](https://readthedocs.org/projects/remkit1d-python/).
+
+The examples directory contains both general examples for problems relevant in SOL physics, as well as a number of verification tests, some of which have been reported on in the code paper. These have been rewritten in v2.0.0 using the new syntax.
 
 The data directory contains some atomic data used by some of the examples, in particular the spontaneous emission rates for hydrogen obtained from NIST (see the [CRM example](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/crm_0D.ipynb) notebook). **This directory should contain the amjuel.tex file from the EIRENE AMJUEL database in order to run some of the examples! This file is NOT distributed with the repository.**
 
