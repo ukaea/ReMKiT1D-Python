@@ -31,7 +31,7 @@ jobs:
         pip install sphinx
         pip install nbsphinx
         pip install nbsphinx-link
-        pip install sphinx_rtd_theme
+        pip install pydata_sphinx_theme
         pip install .
 
         sudo apt-get install --no-install-recommends pandoc

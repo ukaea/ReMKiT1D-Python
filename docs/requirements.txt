@@ -1,6 +1,6 @@
 nbsphinx
 nbsphinx-link
-sphinx_rtd_theme
+pydata_sphinx_theme
 numpy
 h5py
 xarray

@@ -1,5 +1,5 @@
-Welcome to ReMKiT1D Python Support's documentation!
-===================================================
+ReMKiT1D Python Support
+=======================
 
 RMK_support is a collection of tools designed to configure and analyze ReMKiT1D runs. ReMKiT1D is a Fortran framework for building multi-fluid models in 1D with reaction and kinetic electron support, aimed primarily at simulating the tokamak Scrape-Off Layer. 
 
@@ -11,6 +11,7 @@ This documentation is written to serve as a general user manual both for the sup
 
    overview.rst
    prereqs_install.rst
+   tutorials.rst
    RMK_support.rst
 
 
