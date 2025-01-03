@@ -9,7 +9,7 @@
 project = 'ReMKiT1D Python Support'
 copyright = '2023, Stefan Mijin'
 author = 'Stefan Mijin'
-release = '1.2.0'
+release = '2.0.0'
 
 import os
 import sys
