@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon','sphinx.ext.mathjax',"nbsphinx","nbsphinx_link",'sphinx_rtd_theme']
+extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon','sphinx.ext.mathjax',"nbsphinx","nbsphinx_link"]
 napoleon_google_docstring = True
 nbsphinx_execute = 'never'
 
