@@ -715,7 +715,7 @@ class VariableContainer:
         self.__coords__ = {
             "x": gridObj.xGrid,
             "x_dual": gridObj.xGridDual,
-            "h": range(gridObj.numH),
+            "h": np.array(range(gridObj.numH)),
             "v": gridObj.vGrid,
         }
         if len(timestamps) > 0:
@@ -759,9 +759,9 @@ class VariableContainer:
                     + var.name
                     + " already in VariableContainer. Overwriting."
                 )
-                self.__variables__[self.varNames.index(var.name)] = copy(var)
+                self.__variables__[self.varNames.index(var.name)] = var
             else:
-                self.__variables__.append(copy(var))
+                self.__variables__.append(var)
 
     def setVar(
         self,

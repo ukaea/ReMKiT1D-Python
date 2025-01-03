@@ -59,7 +59,7 @@ class Grid:
             interpretXGridAsWidths (bool, optional): If True interprets xGrid as cell widths. Defaults to False.
             interpretVGridAsWidths (bool, optional): If True interprets vGrid as cell widths. Defaults to False.
             isPeriodic (bool, optional): If True the x grid is set to be periodic. This means that the right boundary of the rightmost cell is the left boundary of the leftmost cell. Defaults to False.
-            isLenghtInMeters (bool, optional): If True will instruct ReMKiT1D to use the built-in normalization to deduce the normalized coordinates of the spatial grid. CAUTION: This can lead to issues if the default normalization is not used in the rest of the simulation. Defaults to False.
+            isLengthInMeters (bool, optional): If True will instruct ReMKiT1D to use the built-in normalization to deduce the normalized coordinates of the spatial grid. CAUTION: This can lead to issues if the default normalization is not used in the rest of the simulation. Defaults to False.
         """
 
         # Assertions
