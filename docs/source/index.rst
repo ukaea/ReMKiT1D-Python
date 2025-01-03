@@ -11,8 +11,6 @@ This documentation is written to serve as a general user manual both for the sup
 
    overview.rst
    prereqs_install.rst
-   workflow.rst
-   notebooks
    RMK_support.rst
 
 

@@ -22,34 +22,42 @@ RMK\_support.variable\_container submodule
    :undoc-members:
    :show-inheritance:
 
+RMK\_support.derivations submodule
+------------------------------------------
+
+.. automodule:: RMK_support.derivations
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+RMK\_support.model\_construction submodule
+------------------------------------------
+
+.. automodule:: RMK_support.model_construction
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+RMK\_support.stencils submodule
+------------------------------------------
+
+.. automodule:: RMK_support.stencils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+RMK\_support.integrators submodule
+------------------------------------------
+
+.. automodule:: RMK_support.integrators
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 RMK\_support.IO\_support submodule
 ----------------------------------
 
 .. automodule:: RMK_support.IO_support
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-RMK\_support.init\_templates submodule
---------------------------------------
-
-.. automodule:: RMK_support.init_templates
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-RMK\_support.rk\_wrapper submodule
-----------------------------------
-
-.. automodule:: RMK_support.rk_wrapper
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-RMK\_support.simple\_containers submodule
------------------------------------------
-
-.. automodule:: RMK_support.simple_containers
    :members:
    :undoc-members:
    :show-inheritance:
@@ -86,14 +94,6 @@ RMK\_support.amjuel\_support submodule
    :undoc-members:
    :show-inheritance:
 
-RMK\_support.analysis\_support submodule
-----------------------------------------
-
-.. automodule:: RMK_support.analysis_support
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 RMK\_support.crm\_support submodule
 ------------------------------------
 
@@ -114,6 +114,14 @@ RMK\_support.dashboard\_support submodule
 -----------------------------------------
 
 .. automodule:: RMK_support.dashboard_support
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+RMK\_support.tex\_parsing submodule
+-----------------------------------------
+
+.. automodule:: RMK_support.tex_parsing
    :members:
    :undoc-members:
    :show-inheritance:
