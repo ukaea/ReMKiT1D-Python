@@ -1174,8 +1174,10 @@ class AdditiveDerivation(Derivation):
         derivIndices: List[List[int]] = []
         offset = 1
         for deriv in self.__derivs__:
-            derivIndices.append([offset + k for k in range(deriv.numArgs+deriv.enclosedArgs)])
-            offset += deriv.numArgs+deriv.enclosedArgs
+            derivIndices.append(
+                [offset + k for k in range(deriv.numArgs + deriv.enclosedArgs)]
+            )
+            offset += deriv.numArgs + deriv.enclosedArgs
 
         derivTags = [deriv.name for deriv in self.__derivs__]
         derivDict: Dict[str, object] = {
