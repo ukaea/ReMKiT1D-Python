@@ -2,9 +2,8 @@ from typing import Union, List, Dict, cast, Optional
 from typing_extensions import Self
 import numpy as np
 import csv
-import warnings
 from typing import Tuple
-from .derivations import Derivation, Species, Textbook, DerivationClosure
+from .derivations import Species, Textbook, DerivationClosure
 from .grid import Grid, Profile
 from .model_construction import ModelboundData, TermGenerator
 from .variable_container import Variable
@@ -12,10 +11,9 @@ from abc import ABC, abstractmethod
 from .tex_parsing import numToScientificTex
 import pylatex as tex  # type: ignore
 
-# TODO: docs
-
 
 class Transition(ABC):
+    """Abstract transition class for use in CRM modelbound data"""
 
     def __init__(
         self,
@@ -24,6 +22,14 @@ class Transition(ABC):
         outStates: List[Species],
         hasMomentumRate=False,
     ):
+        """Abstract transition class
+
+        Args:
+            name (str): Name of the transition
+            inStates (List[Species]): Species corresponding to ingoing states
+            outStates (List[Species]): Species corresponding to outgoing states
+            hasMomentumRate (bool, optional): True if the transition has a momentum transfer rate associated to it. Defaults to False.
+        """
         self.__name__ = name
         self.__inStates__ = inStates
         self.__outStates__ = outStates
@@ -86,8 +92,9 @@ class CRMModelboundData(ModelboundData):
         """ModelboundCRMData constructor
 
         Args:
-            fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to [].
-            energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-12.
+            grid (Grid): Grid object used in constructing modelbound variables
+            fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to []. This gets automatically filled when adding transitions.
+            energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-16.
             elState (int, optional): State ID to treat as the electrons. Defaults to 0.
         """
 
@@ -109,8 +116,7 @@ class CRMModelboundData(ModelboundData):
         self.__elStateID__ = elState
 
     def addTransitionEnergy(self, transitionEnergy: float):
-        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within
-        energyResolution of another value, it is not added"
+        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within energyResolution of another value, it is not added"
 
         Args:
             transitionEnergy (float): Value of the energy to be added.
@@ -131,7 +137,11 @@ class CRMModelboundData(ModelboundData):
             )
 
     def addTransition(self, transition: Transition):
+        """Add a transition to the CRM data, including its fixed transition energy if it has one
 
+        Args:
+            transition (Transition): Transition to be added
+        """
         assert (
             transition.name not in self.transitionTags
         ), "Duplicate transition tag in CRMModelboundData"
@@ -214,7 +224,14 @@ class CRMModelboundData(ModelboundData):
             raise KeyError()
         return Variable(key, self.__grid__, isDerived=True)
 
-    def getRate(self, transition: Union[str, Transition], moment: int = 0):
+    def getRate(self, transition: Union[str, Transition], moment: int = 0) -> Variable:
+        """Return rate associated with a given transition as a Variable
+
+        Args:
+            transition (Union[str, Transition]): Name of transition or transition object to get the associated rate of
+            moment (int, optional): Moment associated with the rate - 0 for particle/reaction rate, 1 for momentum, 2 for energy. Defaults to 0.
+
+        """
         transitionName = ""
         if isinstance(transition, Transition):
             transitionName = transition.name
@@ -249,15 +266,25 @@ class CRMModelboundData(ModelboundData):
 
 
 class SimpleTransition(Transition):
+    """A transition with a fixed rate and transition energy and a single ingoing and outgoing state"""
 
     def __init__(
         self,
-        name,
+        name: str,
         inState: Species,
         outState: Species,
         transitionEnergy: float,
         transitionRate: float,
     ):
+        """A transition with a fixed rate and transition energy and a single ingoing and outgoing state. The energy rate is obtainer using the fixed energy and transition rates.
+
+        Args:
+            name (str): Name of the transition
+            inState (Species): Species representing the ingoing state
+            outState (Species): Species representing the outgoing state
+            transitionEnergy (float): Fixed transition energy
+            transitionRate (float): Fixed transition rate
+        """
         self.__transitionEnergy__ = transitionEnergy
         assert (
             transitionRate > 0
@@ -290,15 +317,32 @@ class SimpleTransition(Transition):
 
 
 class DerivedTransition(Transition):
+    """Transition where rates are calculated using derivation objects"""
 
     def __init__(
         self,
-        name,
+        name: str,
         inStates: List[Species],
         outStates: List[Species],
         rateDeriv: DerivationClosure,
         **kwargs
     ):
+        """Transition where rates are calculated using transition objects
+
+        Args:
+            name (str): Name of the transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            rateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction rate derivation rule
+
+        kwargs:
+
+            energyRateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction energy rate derivation rule. Must be present if transitionEnergy isn't
+
+            transitionEnergy (float): Fixed transition energy. Must be present if energyRateDeriv isn't (if both are present the derivation takes precedence in ReMMKiT1D)
+
+            momentumRateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction momentum rate derivation rule.
+        """
 
         self.__rateDeriv__ = rateDeriv
         assert (
@@ -415,6 +459,7 @@ class DerivedTransition(Transition):
 
 
 class FixedECSTransition(Transition):
+    """Electron-impact transition with fixed energy and cross-section"""
 
     def __init__(
         self,
@@ -426,6 +471,17 @@ class FixedECSTransition(Transition):
         electronDistribution: Variable,
         takeMomentumMoment=False,
     ):
+        """Electron-impact transition with fixed energy and cross-section
+
+        Args:
+            name (str): Name of transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            transitionEnergy (float): Fixed transition energy
+            csData (Dict[int, Profile]): Cross section data - a dictionary with (l-harmonic number, velocity space profile) key value pairs corresponding to the Legendre harmonic decomposition of the reaction cross-section
+            electronDistribution (Variable): Variable corresponding to the electron distribution
+            takeMomentumMoment (bool, optional): If true will take the momentum transfer harmonic and the transition will have a momentum transfer rate. Defaults to False.
+        """
         self.__transitionEnergy__ = transitionEnergy
         self.__csData__ = csData
         assert all(
@@ -479,18 +535,29 @@ class FixedECSTransition(Transition):
 
 
 class VariableECSTransition(Transition):
+    """Electron-impact transition with variable energy and cross-section"""
 
     def __init__(
         self,
-        name,
-        inStates,
-        outStates,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
         csDerivs: Dict[int, DerivationClosure],
         energyDeriv: DerivationClosure,
         electronDistribution: Variable,
         takeMomentumMoment=False,
     ):
+        """Electron-impact transition with variable energy and cross-section
 
+        Args:
+            name (str): Name of transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            csDerivs (Dict[int, DerivationClosure]): Cross section data derivations - a dictionary with (l-harmonic number, single harmonic derivation closure) key value pairs corresponding to the Legendre harmonic decomposition of the reaction cross-section
+            energyDeriv (DerivationClosure): Full derivation closure corresponding to the reaction energy
+            electronDistribution (Variable): Variable corresponding to the electron distribution
+            takeMomentumMoment (bool, optional): If true will take the momentum transfer harmonic and the transition will have a momentum transfer rate. Defaults to False.
+        """
         assert (
             electronDistribution.isDistribution
         ), "electronDistribution variable in FixedECSTranstion must be a distribution variable"
@@ -558,6 +625,7 @@ class VariableECSTransition(Transition):
 
 
 class DetailedBalanceTransition(Transition):
+    """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition"""
 
     def __init__(
         self,
@@ -570,6 +638,25 @@ class DetailedBalanceTransition(Transition):
         maxResolvedCSHarmonic: int,
         **kwargs
     ):
+        """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition
+
+        Args:
+            name (str): Name of the transition
+            directTransitionName (str): Name of the direct transition which this one balances
+            crmData (CRMModelboundData): CRM modelbound data housing the direct transition
+            temperature (Variable): Variable corresponding to electron temperature
+            electronDistribution (Variable): Variable corresponding to the electron distribution function
+            degeneracyRatio (float): Degeneracy ratio of final and initial states in this transition
+            maxResolvedCSHarmonic (int): Highest harmonic to be calculated (should not exceed highest present harmonic in direct transition)
+
+        kwargs:
+
+            takeMomentumMoment (bool): If true, will calculate momentum rate based on l=1 harmonics of cross section and distribution function. Defaults to False.
+
+            csUpdatePriority (int): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
+
+            degeneracyDeriv (DerivationClosure): Full derivation rule corresponding to the part of the degeneracy ratio that depends on variables. Defaults to None
+        """
 
         self.__takeMomentumMoment__ = kwargs.get("takeMomentumMoment", False)
         self.__directTransition__ = crmData.transitions[
@@ -645,8 +732,16 @@ class DetailedBalanceTransition(Transition):
 
 
 class RadRecombJanevTransition(Transition):
+    """Radiative recombination transition for hydrogen based on Janev rate fit"""
 
-    def __init__(self, name, endState: int, temperature: Variable):
+    def __init__(self, name: str, endState: int, temperature: Variable):
+        """Radiative recombination transition for hydrogen based on Janev rate fit
+
+        Args:
+            name (str): Name of this transition
+            endState (int): Principal quantum number of final state
+            temperature (Variable): Electron temperature variable
+        """
         self.__endState__ = endState
         self.__temperature__ = temperature
         super().__init__(name, [], [])
@@ -669,16 +764,27 @@ class RadRecombJanevTransition(Transition):
 
 
 class CollExIonJanevTransition(Transition):
+    """Electron-impact excitation/ionisation transition for hydrogen based on Janev cross-section fits"""
 
     def __init__(
         self,
-        name,
+        name: str,
         startState: int,
         endState: int,
         energyNorm: float,
         electronDistribution: Variable,
         lowestCellEnergy: float = 0,
     ):
+        """Electron-impact excitation/ionisation transition based on Janev cross-section fits
+
+        Args:
+            name (str): Name of this transition
+            startState (int): Initial state principle quantum number
+            endState (int): Final state principle quantum number (if 0 assumes ionisation)
+            energyNorm (float): Normalisation of energy in eV
+            electronDistribution (Variable): Electron distribution variable
+            lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0.
+        """
         self.__startState__ = startState
         self.__endState__ = endState
         self.__energyNorm__ = energyNorm
@@ -738,10 +844,11 @@ class CollExIonJanevTransition(Transition):
 
 
 class CollDeexRecombJanevTransition(Transition):
+    """Electron-impact de-excitation/recombination transition for hydrogen based on Janev cross-section fits"""
 
     def __init__(
         self,
-        name,
+        name: str,
         startState: int,
         endState: int,
         energyNorm: float,
@@ -752,6 +859,20 @@ class CollDeexRecombJanevTransition(Transition):
         lowestCellEnergy: float = 0,
         csUpdatePriority: int = 0,
     ):
+        """Electron-impact de-excitation/recombination transition for hydrogen based on Janev cross-section fits and detailed balance
+
+        Args:
+            name (str): Name of this transition
+            startState (int): Initial state principle quantum number (if 0 assumes this is a recombination reaction)
+            endState (int): Final state principle quantum number
+            energyNorm (float): Energy normalisation in eV
+            electronDistribution (Variable): Electron distribution function variable
+            temperature (Variable): Electron temperature variable
+            directTransitionName (str): Name of the direct transition to which this transition is the inverse
+            crmData (CRMModelboundData): CRM modelbound data containing the direct transition
+            lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0.
+            csUpdatePriority (int, optional): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
+        """
         self.__startState__ = startState
         self.__endState__ = endState
         self.__energyNorm__ = energyNorm
@@ -833,9 +954,21 @@ def addJanevTransitionsToCRMData(
     electronDistribution: Optional[Variable] = None,
     temperature: Optional[Variable] = None,
     detailedBalanceCSPriority=0,
-    processes=["ex", "deex", "ion", "recomb3b", "recombRad"],
+    processes: List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"],
     lowestCellEnergy: float = 0,
 ) -> None:
+    """Add Janev transitions to CRM modelbound data
+
+    Args:
+        mbData (CRMModelboundData): CRM modelbound data to add transitions to
+        maxState (int): Highest principle quantum number to add transitions for
+        energyNorm (float): Energy normalisation in eV
+        electronDistribution (Optional[Variable], optional): Electron distribution function variable used for adding some of the transitions. Defaults to None.
+        temperature (Optional[Variable], optional): Electron temperature variable used when adding some of the transitions. Defaults to None.
+        detailedBalanceCSPriority (int, optional): Update priority of the detailed balance cross-section for detailed balance transitions if those are added. Defaults to 0.
+        processes (List[str], optional): List of processes to add. Defaults to ["ex", "deex", "ion", "recomb3b", "recombRad"] - which are all of the allowed processes.
+        lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0. Defaults to 0.
+    """
     allowedProcesses: List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"]
 
     for process in processes:
@@ -976,8 +1109,8 @@ def addHSpontaneousEmissionToCRMData(
         transitionData (dict): Dictionary with keys of form (startState,endState), and with values in (s^-1)
         maxStartState (int): Highest starting state to add
         maxEndState (int): Highest final state to add
-        timeNorm (float): Time normalization in s
-        energyNorm (float): Energy normalization in eV
+        timeNorm (float): Time normalisation in s
+        energyNorm (float): Energy normalisation in eV
     """
 
     for endState in range(1, maxEndState + 1):
@@ -1008,6 +1141,11 @@ def addHSpontaneousEmissionToCRMData(
 
 
 def readNISTAkiCSV(filename: str) -> Dict[Tuple[int, int], float]:
+    """Read NIST hydrogen Einstein coefficients from csv file
+
+    Args:
+        filename (str): Name of the file containing the coefficients
+    """
     res = {}
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
@@ -1071,6 +1209,7 @@ def hydrogenSahaBoltzmann(
 
 
 class CRMTermGenerator(TermGenerator):
+    """Term generator for CRM contributions to density equations"""
 
     def __init__(
         self,
@@ -1079,6 +1218,14 @@ class CRMTermGenerator(TermGenerator):
         implicitGroups: Optional[List[int]] = None,
         includedTransitionIndices: Optional[List[int]] = None,
     ) -> None:
+        """Term generator for CRM contributions to density equations - matrix terms
+
+        Args:
+            name (str): Name of the generator
+            evolvedSpecies (List[Species]): Evolved species - the first associated variable should be the density
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put the generated terms into. Defaults to None, using [1].
+            includedTransitionIndices (Optional[List[int]], optional): Included transition indices in the CRM modelbound data. Defaults to None - including all transitions.
+        """
         self.__evolvedSpecies__ = evolvedSpecies
 
         for species in evolvedSpecies:
@@ -1165,6 +1312,7 @@ class CRMTermGenerator(TermGenerator):
 
 
 class CRMElEnergyTermGenerator(TermGenerator):
+    """Term generator of electron energy sinks from CRM contributions"""
 
     def __init__(
         self,
@@ -1173,6 +1321,14 @@ class CRMElEnergyTermGenerator(TermGenerator):
         implicitGroups: Optional[List[int]] = None,
         includedTransitionIndices: Optional[List[int]] = None,
     ) -> None:
+        """Term generator of electron energy sinks from CRM contributions
+
+        Args:
+            name (str): Name of the generator
+            electronEnergyDens (Variable): Electron energy density variable evolved by terms generated by this generator
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put generated terms into. Defaults to None using [1].
+            includedTransitionIndices (Optional[List[int]], optional): Included transition indices in the CRM modelbound data. Defaults to None - including all transitions.
+        """
         self.__electronEnergyDens__ = electronEnergyDens
         self.__includedTransitionIndices__ = includedTransitionIndices
         super().__init__(name, implicitGroups if implicitGroups is not None else [1])
@@ -1211,8 +1367,9 @@ class CRMElEnergyTermGenerator(TermGenerator):
         )
         doc.append(
             tex.NoEscape(
-                "\\newline Evolved energy variable: "
+                "\\newline Evolved energy variable: $"
                 + self.__electronEnergyDens__.latex(latexRemap)
+                + "$"
             )
         )
         doc.append(
@@ -1229,6 +1386,8 @@ class CRMElEnergyTermGenerator(TermGenerator):
 
 
 class CRMBoltzTermGenerator(TermGenerator):
+    """Generator of Boltzmann collision terms with fixed cross-sections/energies using CRM modelbound data"""
+
     def __init__(
         self,
         name: str,
@@ -1240,7 +1399,18 @@ class CRMBoltzTermGenerator(TermGenerator):
         absorptionTerms=False,
         implicitGroups: Optional[List[int]] = None,
     ) -> None:
+        """Generator of Boltzmann collision terms with fixed cross-sections/energies using CRM modelbound data
 
+        Args:
+            name (str): Name of the generator
+            distribution (Variable): Electron distribution function variable
+            evolvedHarmonic (int): Evolved harmonic index (Fortran 1-indexing)
+            includedTransitionIndices (List[int]): Included transition indices (should be fixed energy/cross-section transitions)
+            mbData (CRMModelboundData): Modelbound data containing the transitions
+            associatedVarIndex (int, optional): Index of density in species associated variable list. Defaults to 1 (Fortran 1-indexing).
+            absorptionTerms (bool, optional): If true will generate the Boltzmann absorption terms, otherwise generates the emission terms. Defaults to False.
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put the generated terms into. Defaults to None - using [1].
+        """
         assert all(
             isinstance(
                 mbData.transitions[ind - 1],
@@ -1328,6 +1498,7 @@ class CRMBoltzTermGenerator(TermGenerator):
 
 
 class CRMSecElTermGenerator(TermGenerator):
+    """Generator for secondary electrons for the electron kinetic equation due to CRM contributions"""
 
     def __init__(
         self,
@@ -1336,6 +1507,14 @@ class CRMSecElTermGenerator(TermGenerator):
         includedTransitionIndices: Optional[List[int]] = None,
         implicitGroups: Optional[List[int]] = None,
     ) -> None:
+        """Generator for secondary electrons for the electron kinetic equation due to CRM contributions. The electrons are all put into the lowest energy cell.
+
+        Args:
+            name (str): Name of the generator
+            distribution (Variable): Electron distribution function variable
+            includedTransitionIndices (Optional[List[int]], optional): List of included transition indices. Defaults to None - including all transitions.
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put generated terms into. Defaults to None - using [1].
+        """
 
         self.__distribution__ = distribution
         self.__includedTransitionIndices__ = includedTransitionIndices

@@ -10,8 +10,6 @@ from os.path import isfile, join
 from typing import Union, List
 from copy import copy
 
-# TODO: docs
-
 
 def writeDictToJSON(
     data: dict, filepath="./config.json", prefixKey: Union[str, None] = None
@@ -55,6 +53,15 @@ def writeRMKHDF5(varCont: vc.VariableContainer, filepath="./ReMKiT1DVarInput.h5"
 def loadVariableFromHDF5(
     var: vc.Variable, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
 ) -> vc.Variable:
+    """Load a single variable from a list of HDF5 files, assuming they are at different timesteps.
+
+    Args:
+        var (vc.Variable): Variable to be loaded (assumed present in the HDF5 files)
+        filepaths (List[str], optional): List of filepaths of HDF5 files. Defaults to ["./ReMKiT1DVarInput.h5"].
+
+    Returns:
+        vc.Variable: Loaded variable
+    """
 
     if var.isScalar:
         buffer = np.zeros(len(filepaths))
@@ -80,7 +87,16 @@ def loadVariableFromHDF5(
 def loadDummyVarFromHDF5(
     grid: Grid, varName: str, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
 ) -> vc.Variable:
+    """Load a variable without knowing all of its properties. Will attempt to identify the variable dimensionality.
 
+    Args:
+        grid (Grid): Grid used to determine dimensionality
+        varName (str): Variable name to search for in the HDF5 files
+        filepaths (List[str], optional): List of filepaths of HDF5 files. Defaults to ["./ReMKiT1DVarInput.h5"].
+
+    Returns:
+        vc.Variable: Loaded dummy variable
+    """
     buffers: List[np.ndarray] = []
     for filepath in filepaths:
         with h5py.File(filepath, "r") as f:
@@ -116,7 +132,14 @@ def loadDummyVarFromHDF5(
 def loadVarContFromHDF5(
     *args: vc.Variable, filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
 ) -> vc.VariableContainer:
+    """Load any number of variables from a list of HDF5 files and put them in a VariableContainer object. Assumes all variables are present.
 
+    Args:
+        filepaths (List[str], optional): List of filepaths of HDF5 files. Defaults to ["./ReMKiT1DVarInput.h5"].
+
+    Returns:
+        vc.VariableContainer: Variable container object with requested variables.
+    """
     assert len(args), "loadVarContFromHDF5 called with no variable arguments"
 
     time: List[float] = []
@@ -140,6 +163,16 @@ def loadVarContFromHDF5(
 def loadFromHDF5(
     grid: Grid, varNames: List[str], filepaths: List[str] = ["./ReMKiT1DVarInput.h5"]
 ) -> vc.VariableContainer:
+    """Load a list of variables by name from a list of HDF5 files. Assumes no knowledge of variable dimensionality. Assumes all variable names are present in the loaded files.
+
+    Args:
+        grid (Grid): Grid used to determine dimensionality
+        varNames (List[str]): List of variable names to search for in the HDF5 files
+        filepaths (List[str], optional): List of filepaths of HDF5 files. Defaults to ["./ReMKiT1DVarInput.h5"].
+
+    Returns:
+        vc.VariableContainer: Variable container object with requested variables.
+    """
     vars = (loadDummyVarFromHDF5(grid, name, filepaths) for name in varNames)
 
     time: List[float] = []
@@ -159,7 +192,14 @@ def loadFromHDF5(
 
 
 def getOutputFilenames(hdf5Dir: str) -> List[str]:
+    """Search a given directory for all valid ReMKiT1D VarOutput files and return them as a sorted list
 
+    Args:
+        hdf5Dir (str): Directory to search for HDF5 files
+
+    Returns:
+        List[str]: Sorted list of output file names in given directory
+    """
     onlyfiles = [
         f for f in listdir(hdf5Dir) if isfile(join(hdf5Dir, f)) if "VarOutput" in f
     ]
