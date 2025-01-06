@@ -6,7 +6,7 @@ import RMK_support.variable_container as vc
 from RMK_support.derivations import Derivation, Species
 import numpy as np
 import pytest
-from typing import cast
+from typing import cast, Dict
 
 
 @pytest.fixture
@@ -326,7 +326,7 @@ def test_janev_transitions(grid: Grid):
         if "JanevEx" in tag:
             startState, endState = map(int, tag.replace("JanevEx", "").split("-"))
 
-            trans:crm.Transition = crm.CollExIonJanevTransition(
+            trans: crm.Transition = crm.CollExIonJanevTransition(
                 tag,
                 startState,
                 endState,
@@ -423,7 +423,7 @@ def test_janev_transitions(grid: Grid):
                 ),
             ):
 
-                termGen:mc.TermGenerator = crm.CRMBoltzTermGenerator(
+                termGen: mc.TermGenerator = crm.CRMBoltzTermGenerator(
                     "exBoltz",
                     electronDistribution,
                     evolvedHarmonic,
@@ -457,7 +457,9 @@ def test_janev_transitions(grid: Grid):
                     "associatedVarIndex": 1,
                 }
 
-                assert termGen.evolvedVars == [cast(crm.CRMBoltzTermGenerator, termGen).__distribution__.name]
+                assert termGen.evolvedVars == [
+                    cast(crm.CRMBoltzTermGenerator, termGen).__distribution__.name
+                ]
 
                 assert (
                     termGen.onlyEvolving(electronDistribution).dict() == termGen.dict()
@@ -589,11 +591,11 @@ def test_kin_transitions(grid: Grid):
 
     # In the VariableECSTransition class, cross section data is formatted as "l=l : [list of derivation dicts]"
 
-    crossSectionDerivs = {
+    crossSectionDerivs: Dict[str, object] = {
         f"l={l}": {"ruleName": deriv.name, "requiredVarNames": derivs[0].fillArgs()}
         for l, deriv in zip(lVals, derivs)
     }
-    crossSectionDerivs["crossSectionDerivationHarmonics"] = lVals
+    crossSectionDerivs.update({"crossSectionDerivationHarmonics": lVals})
 
     assert varECS.dict() == {
         "type": "variableECSTransition",
