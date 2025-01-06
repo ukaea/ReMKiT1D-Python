@@ -1,4 +1,4 @@
-from RMK_support.grid import Grid
+from RMK_support.grid import Grid, Profile
 import RMK_support.crm_support as crm
 import RMK_support.derivations as dv
 import RMK_support.model_construction as mc
@@ -502,3 +502,102 @@ def test_janev_transitions(grid: Grid):
         }
 
         assert termGen.evolvedVars == [electronDistribution.name]
+
+
+def test_kin_transitions(grid: Grid):
+
+    na = vc.Variable("na", grid)
+    a = Species("a", 1, associatedVars=[na])
+
+    nb = vc.Variable("nb", grid)
+    b = Species("b", 2, associatedVars=[nb])
+
+    rateDeriv = dv.SimpleDerivation("rateDeriv", 1.0, [1.0, 1.0])
+    rateDerivClosure = dv.DerivationClosure(rateDeriv, na, nb)
+
+    energyDeriv = dv.SimpleDerivation("energyDeriv", 1.0, [2.0, 2.0])
+    energyDerivClosure = dv.DerivationClosure(energyDeriv, na, nb)
+
+    electronDistribution = vc.Variable("f", grid, isDistribution=True)
+
+    # Transition properties
+
+    inStates = [a]
+
+    outStates = [b]
+
+    transitionEnergy = 10.0
+
+    # Create a dict of fixed cross section derivation profiles in velocity space for each harmonic l
+
+    lVals = [l for l in range(grid.lMax)]
+
+    profiles = [Profile(np.ones(grid.numV), "V")] * grid.lMax
+
+    csData = {key: val for key, val in zip(lVals, profiles)}
+
+    fixedECS = crm.FixedECSTransition(
+        "fixedECS",
+        inStates,
+        outStates,
+        transitionEnergy,
+        csData,
+        electronDistribution=electronDistribution,
+    )
+
+    # FixedECSTransition requires the energy Index to be set before converting to a dict()
+
+    energyIndex = 1
+
+    fixedECS.setFixedEnergyIndex(energyIndex)
+
+    # In the FixedECSTransition class, cross section data is formatted as "l=l : [list of profile values]"
+
+    crossSectionData = {
+        f"l={l}": profile.data.tolist() for l, profile in zip(lVals, profiles)
+    }
+    crossSectionData["presentHarmonics"] = lVals
+
+    assert fixedECS.dict() == {
+        "type": "fixedECSTransition",
+        "ingoingStates": [state.speciesID for state in inStates],
+        "outgoingStates": [state.speciesID for state in outStates],
+        "fixedEnergyIndex": energyIndex + 1,
+        "distributionVarName": electronDistribution.name,
+        "takeMomentumMoment": False,
+        "crossSectionData": crossSectionData,
+    }
+
+    # Create a dict of variable cross sections (as derivation closures) for each harmonic l
+
+    derivs = [rateDerivClosure] * grid.lMax
+
+    csDerivs = {key: val for key, val in zip(lVals, derivs)}
+
+    varECS = crm.VariableECSTransition(
+        "varECS",
+        inStates,
+        outStates,
+        csDerivs,
+        energyDeriv=energyDerivClosure,
+        electronDistribution=electronDistribution,
+    )
+
+    # In the VariableECSTransition class, cross section data is formatted as "l=l : [list of derivation dicts]"
+
+    crossSectionDerivs = {
+        f"l={l}": {"ruleName": deriv.name, "requiredVarNames": derivs[0].fillArgs()}
+        for l, deriv in zip(lVals, derivs)
+    }
+    crossSectionDerivs["crossSectionDerivationHarmonics"] = lVals
+
+    assert varECS.dict() == {
+        "type": "variableECSTransition",
+        "ingoingStates": [state.speciesID for state in inStates],
+        "outgoingStates": [state.speciesID for state in outStates],
+        "distributionVarName": electronDistribution.name,
+        "takeMomentumMoment": False,
+        "crossSectionDerivations": crossSectionDerivs,
+        "energyDerivationName": energyDerivClosure.name,
+        "energyDerivationReqVars": energyDerivClosure.fillArgs(),
+    }
