@@ -6,6 +6,7 @@ import RMK_support.variable_container as vc
 from RMK_support.derivations import Derivation, Species
 import numpy as np
 import pytest
+from typing import cast
 
 
 @pytest.fixture
@@ -325,7 +326,7 @@ def test_janev_transitions(grid: Grid):
         if "JanevEx" in tag:
             startState, endState = map(int, tag.replace("JanevEx", "").split("-"))
 
-            trans = crm.CollExIonJanevTransition(
+            trans:crm.Transition = crm.CollExIonJanevTransition(
                 tag,
                 startState,
                 endState,
@@ -422,7 +423,7 @@ def test_janev_transitions(grid: Grid):
                 ),
             ):
 
-                termGen = crm.CRMBoltzTermGenerator(
+                termGen:mc.TermGenerator = crm.CRMBoltzTermGenerator(
                     "exBoltz",
                     electronDistribution,
                     evolvedHarmonic,
@@ -430,12 +431,6 @@ def test_janev_transitions(grid: Grid):
                     mbData,
                     absorptionTerms=absorptionTerms,
                 )
-
-                generatorDict = crm.CRMTermGenerator(
-                    "exBoltz",
-                    evolvedSpecies=[],
-                    includedTransitionIndices=includedTransitionIndices,
-                ).dict()
 
                 assert termGen.dict() == {
                     "implicitGroups": [1],
@@ -462,7 +457,7 @@ def test_janev_transitions(grid: Grid):
                     "associatedVarIndex": 1,
                 }
 
-                assert termGen.evolvedVars == [termGen.__distribution__.name]
+                assert termGen.evolvedVars == [cast(crm.CRMBoltzTermGenerator, termGen).__distribution__.name]
 
                 assert (
                     termGen.onlyEvolving(electronDistribution).dict() == termGen.dict()
