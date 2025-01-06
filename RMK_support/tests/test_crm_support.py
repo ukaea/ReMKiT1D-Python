@@ -320,8 +320,6 @@ def test_janev_transitions(grid: Grid):
         lowestCellEnergy,
     )
 
-    mbData.dict()
-
     for fixedEnergyIndex, tag in enumerate(mbData.transitionTags):
         startState, endState = -1, -1
         if "JanevEx" in tag:
@@ -401,3 +399,106 @@ def test_janev_transitions(grid: Grid):
         trans.setFixedEnergyIndex(fixedEnergyIndex)
 
         assert mbData.dict()["transitions"][tag] == trans.dict()
+
+        # Kinetic electron term generators
+
+        includedTransitionIndices = mbData.getTransitionIndices(tag)
+
+        # Boltzmann term generator
+
+        evolvedHarmonic = 1
+
+        for absorptionTerms in [False, True]:
+
+            # The Boltzmann term generator supports the following transition types:
+
+            if isinstance(
+                trans,
+                (
+                    crm.FixedECSTransition,
+                    crm.DetailedBalanceTransition,
+                    crm.CollExIonJanevTransition,
+                    crm.CollDeexRecombJanevTransition,
+                ),
+            ):
+
+                termGen = crm.CRMBoltzTermGenerator(
+                    "exBoltz",
+                    electronDistribution,
+                    evolvedHarmonic,
+                    includedTransitionIndices,
+                    mbData,
+                    absorptionTerms=absorptionTerms,
+                )
+
+                generatorDict = crm.CRMTermGenerator(
+                    "exBoltz",
+                    evolvedSpecies=[],
+                    includedTransitionIndices=includedTransitionIndices,
+                ).dict()
+
+                assert termGen.dict() == {
+                    "implicitGroups": [1],
+                    "generalGroups": [],
+                    "type": "CRMFixedBoltzmannCollInt",
+                    "evolvedHarmonic": evolvedHarmonic,
+                    "distributionVarName": electronDistribution.name,
+                    "includedTransitionIndices": includedTransitionIndices,
+                    "fixedEnergyIndices": [
+                        mbData.transitions[ind - 1].fixedEnergyIndex + 1
+                        for ind in includedTransitionIndices
+                    ],
+                    "absorptionTerm": absorptionTerms,
+                    "detailedBalanceTerm": all(
+                        isinstance(
+                            mbData.transitions[ind - 1],
+                            (
+                                crm.DetailedBalanceTransition,
+                                crm.CollDeexRecombJanevTransition,
+                            ),
+                        )
+                        for ind in includedTransitionIndices
+                    ),
+                    "associatedVarIndex": 1,
+                }
+
+                assert termGen.evolvedVars == [termGen.__distribution__.name]
+
+                assert (
+                    termGen.onlyEvolving(electronDistribution).dict() == termGen.dict()
+                )
+
+            # Bad case - invalid transition class used for the Boltzmann term generator
+
+            else:
+                with pytest.raises(AssertionError) as e_info:
+                    termGen = crm.CRMBoltzTermGenerator(
+                        "exBoltz",
+                        electronDistribution,
+                        evolvedHarmonic,
+                        includedTransitionIndices,
+                        mbData,
+                        absorptionTerms=absorptionTerms,
+                    )
+                assert (
+                    e_info.value.args[0]
+                    == "CRMBoltzTermGenerator can only be called with transition indices all corresponding to FixedECSTransitions or DetailedBalanceTransitions"
+                )
+
+        # Secondary electron term generator
+
+        termGen = crm.CRMSecElTermGenerator(
+            "secEl",
+            electronDistribution,
+            includedTransitionIndices,
+        )
+
+        assert termGen.dict() == {
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "type": "CRMSecondaryElectronTerms",
+            "distributionVarName": electronDistribution.name,
+            "includedTransitionIndices": includedTransitionIndices,
+        }
+
+        assert termGen.evolvedVars == [electronDistribution.name]
