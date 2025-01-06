@@ -518,6 +518,7 @@ def test_kin_transitions(grid: Grid):
     energyDeriv = dv.SimpleDerivation("energyDeriv", 1.0, [2.0, 2.0])
     energyDerivClosure = dv.DerivationClosure(energyDeriv, na, nb)
 
+    temperature = vc.Variable("T", grid)
     electronDistribution = vc.Variable("f", grid, isDistribution=True)
 
     # Transition properties
@@ -527,6 +528,8 @@ def test_kin_transitions(grid: Grid):
     outStates = [b]
 
     transitionEnergy = 10.0
+
+    # Fixed ECS Transition
 
     # Create a dict of fixed cross section derivation profiles in velocity space for each harmonic l
 
@@ -551,6 +554,10 @@ def test_kin_transitions(grid: Grid):
 
     fixedECS.setFixedEnergyIndex(energyIndex)
 
+    assert fixedECS.fixedEnergy == transitionEnergy
+
+    assert fixedECS.fixedEnergyIndex == energyIndex
+
     # In the FixedECSTransition class, cross section data is formatted as "l=l : [list of profile values]"
 
     crossSectionData = {
@@ -567,6 +574,8 @@ def test_kin_transitions(grid: Grid):
         "takeMomentumMoment": False,
         "crossSectionData": crossSectionData,
     }
+
+    # Variable ECS Transition
 
     # Create a dict of variable cross sections (as derivation closures) for each harmonic l
 
@@ -593,11 +602,70 @@ def test_kin_transitions(grid: Grid):
 
     assert varECS.dict() == {
         "type": "variableECSTransition",
-        "ingoingStates": [state.speciesID for state in inStates],
-        "outgoingStates": [state.speciesID for state in outStates],
+        "ingoingStates": [s.speciesID for s in inStates],
+        "outgoingStates": [s.speciesID for s in outStates],
         "distributionVarName": electronDistribution.name,
         "takeMomentumMoment": False,
         "crossSectionDerivations": crossSectionDerivs,
         "energyDerivationName": energyDerivClosure.name,
         "energyDerivationReqVars": energyDerivClosure.fillArgs(),
+    }
+
+    # Detailed Balance Transition
+
+    transitionRate = 10.0
+
+    simpleTransition = crm.SimpleTransition(
+        "trans", a, b, transitionEnergy, transitionRate
+    )
+
+    mbData = crm.CRMModelboundData(grid)
+
+    mbData.addTransition(simpleTransition)
+
+    degeneracyRatio = 1.0
+
+    maxResolvedCSHarmonic = 2
+
+    kwargs = {
+        "degeneracyDeriv": rateDerivClosure,
+        "csUpdatePriority": 99,
+    }
+
+    detailedBalance = crm.DetailedBalanceTransition(
+        "detailedBalance",
+        "trans",
+        mbData,
+        temperature,
+        electronDistribution,
+        degeneracyRatio,
+        maxResolvedCSHarmonic,
+        **kwargs,
+    )
+
+    # DetailedBalanceTransition inherits some of its properties from the transition used to create it
+
+    assert detailedBalance.fixedEnergy == -1.0 * simpleTransition.fixedEnergy
+
+    detailedBalance.setFixedEnergyIndex(1)
+
+    assert detailedBalance.fixedEnergyIndex == 1
+
+    # NOTE: The ingoing and outgoing states for detailedBalance are reversed, when compared to simpleTransition
+
+    assert detailedBalance.dict() == {
+        "type": "detailedBalanceTransition",
+        "ingoingStates": [s.speciesID for s in simpleTransition.outStates],
+        "outgoingStates": [s.speciesID for s in simpleTransition.inStates],
+        "directTransitionFixedEnergyIndex": simpleTransition.fixedEnergyIndex,
+        "fixedEnergyIndex": detailedBalance.fixedEnergyIndex + 1,
+        "directTransitionIndex": mbData.transitionTags.index(simpleTransition.name) + 1,
+        "distributionVarName": electronDistribution.name,
+        "electronTemperatureVar": temperature.name,
+        "fixedDegeneracyRatio": degeneracyRatio,
+        "degeneracyRuleName": (rateDerivClosure.name),
+        "degeneracyRuleReqVars": (rateDerivClosure.fillArgs()),
+        "takeMomentumMoment": False,
+        "maxCrossSectionL": maxResolvedCSHarmonic,
+        "crossSectionUpdatePriority": kwargs["csUpdatePriority"],
     }
