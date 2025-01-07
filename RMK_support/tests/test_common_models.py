@@ -1,10 +1,10 @@
 from RMK_support.grid import Grid, Profile
 import RMK_support.common_models as cm
-import RMK_support.crm_support as crm
 import RMK_support.derivations as dv
 import RMK_support.model_construction as mc
-import RMK_support.variable_container as vc
+import RMK_support.sk_normalization as sk
 import RMK_support.stencils as stencils
+import RMK_support.variable_container as vc
 import numpy as np
 import pytest
 
@@ -195,3 +195,61 @@ def test_pressure_grad(grid: Grid):
         e_info.value.args[0]
         == "If pressure in pressureGrad is a MultiplicativeArgument all components must live on the regular grid"
     )
+
+
+def test_ampere_Maxwell(grid: Grid):
+
+    E = vc.Variable("E", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, charge=-1, associatedVars=[Ge])
+    ion = dv.Species("i", 1, charge=+1, associatedVars=[Gi])
+
+    norms = sk.calculateNorms(10.0, 1e19, 1)
+
+    ampereMaxwell = cm.ampereMaxwell(E, [Ge, Gi], [e, ion], norms)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    elCharge = 1.60218e-19
+    epsilon0 = 8.854188e-12
+    normConst = (
+        elCharge
+        / epsilon0
+        * norms["density"]
+        * norms["time"]
+        * norms["speed"]
+        / norms["EField"]
+    )
+
+    termTags = []
+
+    for i, flux in enumerate([Ge, Gi]):
+        current = f"current_{flux.name}"
+
+        termTags.append(current)
+
+        species = [e, ion][i]
+
+        amTerm = (
+            -species.charge
+            * normConst
+            * mc.MatrixTerm(
+                current,
+                mc.DiagonalStencil(),
+                evolvedVar=E,
+                implicitVar=flux,
+            )
+        )
+
+        result[current] = amTerm.dict()
+
+    result["termTags"] = termTags
+
+    assert ampereMaxwell.dict() == result
