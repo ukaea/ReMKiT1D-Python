@@ -9,6 +9,14 @@ import numpy as np
 import pytest
 
 
+elCharge = 1.60218e-19
+elMass = 9.10938e-31
+amu = 1.6605390666e-27  # atomic mass unit
+ionMass = 2.014 * amu  # deuterium mass
+epsilon0 = 8.854188e-12  # vacuum permittivity
+heavySpeciesMass = 2.014  # in amus
+
+
 @pytest.fixture
 def grid():
     return Grid(
@@ -197,7 +205,7 @@ def test_pressure_grad(grid: Grid):
     )
 
 
-def test_ampere_Maxwell(grid: Grid):
+def test_ampere_maxwell(grid: Grid):
 
     E = vc.Variable("E", grid)
 
@@ -209,7 +217,7 @@ def test_ampere_Maxwell(grid: Grid):
 
     norms = sk.calculateNorms(10.0, 1e19, 1)
 
-    ampereMaxwell = cm.ampereMaxwell(E, [Ge, Gi], [e, ion], norms)
+    amModel = cm.ampereMaxwell(E, [Ge, Gi], [e, ion], norms)
 
     result = {
         "type": "customModel",
@@ -217,8 +225,6 @@ def test_ampere_Maxwell(grid: Grid):
         "termGenerators": {"tags": []},
     }
 
-    elCharge = 1.60218e-19
-    epsilon0 = 8.854188e-12
     normConst = (
         elCharge
         / epsilon0
@@ -252,4 +258,113 @@ def test_ampere_Maxwell(grid: Grid):
 
     result["termTags"] = termTags
 
-    assert ampereMaxwell.dict() == result
+    assert amModel.dict() == result
+
+
+def test_lorentz_force(grid: Grid):
+
+    E = vc.Variable("E", grid)
+
+    ne = vc.Variable("ne", grid)
+    ni = vc.Variable("ni", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[ne, Ge])
+    ion = dv.Species(
+        "i", 1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
+    )
+
+    norms = sk.calculateNorms(10.0, 1e19, 1)
+
+    lForceModel = cm.lorentzForces(E, [Ge, Gi], [ne, ni], [e, ion], norms)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    termTags = []
+
+    for i, species in enumerate([e, ion]):
+
+        density = [ne, ni][i]
+        flux = [Ge, Gi][i]
+
+        tag = f"lorentz_{flux.name}"
+        termTags.append(tag)
+
+        lForceNormConst = (
+            elCharge
+            * species.charge
+            / (amu * species.atomicA)
+            * norms["EField"]
+            * norms["time"]
+            / norms["speed"]
+        )
+
+        lForceTerm = (
+            lForceNormConst
+            * density
+            * mc.MatrixTerm(
+                tag,
+                mc.DiagonalStencil(),
+                evolvedVar=flux,
+                implicitVar=E,
+            )
+        )
+
+        result[tag] = lForceTerm.dict()
+
+    result["termTags"] = termTags
+
+    assert lForceModel.dict() == result
+
+
+def test_lorentz_force_work(grid: Grid):
+
+    E = vc.Variable("E", grid)
+
+    We = vc.Variable("We", grid)
+    Wi = vc.Variable("Wi", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[We, Ge])
+    ion = dv.Species(
+        "i", 1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[Wi, Gi]
+    )
+
+    norms = sk.calculateNorms(10.0, 1e19, 1)
+
+    termTags = []
+
+    lWorkModel = mc.Model("lorentz_force_work")
+
+    for i, species in enumerate([e, ion]):
+
+        energy = [We, Wi][i]
+        flux = [Ge, Gi][i]
+
+        tag = f"lorentz_work_{energy.name}"
+        termTags.append(tag)
+
+        lWorkNormConst = (
+            species.charge
+            * norms["EField"]
+            * norms["time"]
+            * norms["speed"]
+            / norms["eVTemperature"]
+        )
+
+        lWorkModel.ddt[energy] += lWorkNormConst * mc.DiagonalStencil()(
+            flux * E
+        ).rename(tag)
+
+    assert (
+        cm.lorentzForceWork(E, [Ge, Gi], [We, Wi], [e, ion], norms).dict()
+        == lWorkModel.dict()
+    )
