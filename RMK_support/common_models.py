@@ -229,7 +229,7 @@ def lorentzForces(
             / norms["speed"]
         )
 
-        lForceModel.ddt[flux] = (
+        lForceModel.ddt[flux] += (
             normConst
             * speciesDensities[i]
             * mc.DiagonalStencil()(eField).rename("lorentz_" + flux.name)
