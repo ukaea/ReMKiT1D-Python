@@ -685,6 +685,26 @@ class MatrixTerm(Term):
         return newTerm
 
     @property
+    def copyTermName(self):
+        """Name of term whose matrix is to be copied and multiplied element-wise with this term's stencil. They must have the shame sparsity pattern, i.e. the same stencil shape.
+        """
+        return self.__copyTermName__
+    
+    @copyTermName.setter
+    def copyTermName(self,name:str):
+        self.__copyTermName__ = name 
+
+    @property 
+    def evaluatedTermGroup(self):
+        """evaluatedTermGroup (int): Term group in parent model to be optionally evaluated as additional row variable (multiplying R in the above formula). Defaults to 0, not evaluating any group.
+        """
+        return self.__evaluatedTermGroup__
+
+    @evaluatedTermGroup.setter
+    def evaluatedTermGroup(self, group:int):
+        self.__evaluatedTermGroup__ = group
+
+    @property
     def multConst(self):
         """Term multiplicative scalar constant"""
         return self.__R__.scalar * self.__modelboundR__.scalar
