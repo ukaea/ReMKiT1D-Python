@@ -247,7 +247,7 @@ def test_ampere_maxwell(grid: Grid):
     Gi = vc.Variable("Gi", grid)
 
     e = dv.Species("e", 0, charge=-1, associatedVars=[Ge])
-    ion = dv.Species("i", 1, charge=+1, associatedVars=[Gi])
+    ion = dv.Species("i", -1, charge=+1, associatedVars=[Gi])
 
     norms = sk.calculateNorms(10.0, 1e19, 1)
 
@@ -307,7 +307,7 @@ def test_lorentz_force(grid: Grid):
 
     e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[ne, Ge])
     ion = dv.Species(
-        "i", 1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
     )
 
     norms = sk.calculateNorms(10.0, 1e19, 1)
@@ -369,7 +369,7 @@ def test_lorentz_force_work(grid: Grid):
 
     e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[We, Ge])
     ion = dv.Species(
-        "i", 1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[Wi, Gi]
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[Wi, Gi]
     )
 
     norms = sk.calculateNorms(10.0, 1e19, 1)
@@ -401,4 +401,152 @@ def test_lorentz_force_work(grid: Grid):
     assert (
         cm.lorentzForceWork(E, [Ge, Gi], [We, Wi], [e, ion], norms).dict()
         == lWorkModel.dict()
+    )
+
+
+def test_implicit_temperature(grid: Grid):
+
+    ne = vc.Variable("ne", grid)
+    ni = vc.Variable("ni", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    We = vc.Variable("We", grid)
+    Wi = vc.Variable("Wi", grid)
+
+    Te = vc.Variable("Te", grid, isStationary=True)
+    Ti = vc.Variable("Ti", grid, isStationary=True)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[ne, Ge])
+    ion = dv.Species(
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
+    )
+
+    norms = sk.calculateNorms(10.0, 1e19, 1)
+
+    # Use 1 degree of freedom to avoid irrational numbers in constants
+    dof = 1
+
+    diag = mc.DiagonalStencil()
+
+    # If specified, the kinetic energy term(s) can be set to evolve T only at certain X grid cells
+    evolvedXCells = [1]
+    diagU2 = mc.DiagonalStencil(evolvedXCells=evolvedXCells)
+
+    kwargs = {
+        "degreesOfFreedom": dof,
+        "evolvedXU2Cells": evolvedXCells,
+    }
+
+    newModel = cm.implicitTemperatures(
+        [We, Wi], [ne, ni], [Te, Ti], [e, ion], norms, [Ge, Gi], **kwargs
+    )
+
+    # Electron terms
+
+    identity_Te = -mc.MatrixTerm(
+        "identity_Te",
+        diag,
+        evolvedVar=Te,
+        implicitVar=Te,
+    )
+
+    W_term_Te = (
+        (2 / dof)
+        * (ne**-1)
+        * mc.MatrixTerm(
+            "W_term_Te",
+            diag,
+            evolvedVar=Te,
+            implicitVar=We,
+        )
+    )
+
+    normU2e = (
+        -amu * e.atomicA / (3 * elCharge) * norms["speed"] ** 2 / norms["eVTemperature"]
+    )
+
+    U2_term_Te = (
+        normU2e
+        * (ne**-2)
+        * Ge
+        * mc.MatrixTerm(
+            "U2_term_Te",
+            diagU2,
+            evolvedVar=Te,
+            implicitVar=Ge,
+        )
+    )
+
+    # Ion terms
+
+    identity_Ti = -mc.MatrixTerm(
+        "identity_Ti",
+        diag,
+        evolvedVar=Ti,
+        implicitVar=Ti,
+    )
+
+    W_term_Ti = (
+        (2 / dof)
+        * (ni**-1)
+        * mc.MatrixTerm(
+            "W_term_Ti",
+            diag,
+            evolvedVar=Ti,
+            implicitVar=Wi,
+        )
+    )
+
+    normU2i = (
+        -amu
+        * ion.atomicA
+        / (3 * elCharge)
+        * norms["speed"] ** 2
+        / norms["eVTemperature"]
+    )
+
+    U2_term_Ti = (
+        normU2i
+        * (ni**-2)
+        * Gi
+        * mc.MatrixTerm(
+            "U2_term_Ti",
+            diagU2,
+            evolvedVar=Ti,
+            implicitVar=Gi,
+        )
+    )
+
+    assert newModel.dict() == {
+        "type": "customModel",
+        "termGenerators": {"tags": []},
+        "termTags": [
+            identity_Te.name,
+            W_term_Te.name,
+            U2_term_Te.name,
+            identity_Ti.name,
+            W_term_Ti.name,
+            U2_term_Ti.name,
+        ],
+        identity_Te.name: identity_Te.dict(),
+        W_term_Te.name: W_term_Te.dict(),
+        U2_term_Te.name: U2_term_Te.dict(),
+        identity_Ti.name: identity_Ti.dict(),
+        W_term_Ti.name: W_term_Ti.dict(),
+        U2_term_Ti.name: U2_term_Ti.dict(),
+    }
+
+    # Bad cases
+
+    # Temperature variable(s) not stationary
+
+    TeTest = vc.Variable("Te", grid, isStationary=False)
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.implicitTemperatures([We], [ne], [TeTest], [e], norms, [Ge], **kwargs)
+    assert (
+        e_info.value.args[0]
+        == "Temperatures in implicitTemperatures are expected to be stationary"
     )
