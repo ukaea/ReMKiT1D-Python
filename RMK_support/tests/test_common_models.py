@@ -151,13 +151,13 @@ def test_advection(grid: Grid):
 
 def test_pressure_grad(grid: Grid):
 
-    G_dual = vc.Variable("G", grid, isOnDualGrid=True)
+    G, G_dual = vc.varAndDual("G", grid)
     P, P_dual = vc.varAndDual("P", grid)
     normConst = 2.0
 
     newModel = cm.pressureGrad(G_dual, P, normConst)
 
-    bulk_grad = -normConst * mc.MatrixTerm(
+    bulkGrad = -normConst * mc.MatrixTerm(
         "bulk_grad",
         stencils.StaggeredGradStencil(),
         evolvedVar=G_dual,
@@ -166,9 +166,43 @@ def test_pressure_grad(grid: Grid):
 
     assert newModel.dict() == {
         "type": "customModel",
-        "termTags": [bulk_grad.name],
+        "termTags": [bulkGrad.name],
         "termGenerators": {"tags": []},
-        bulk_grad.name: bulk_grad.dict(),
+        bulkGrad.name: bulkGrad.dict(),
+    }
+
+    # Using flux on regular (non-periodic) grid
+
+    newModel = cm.pressureGrad(G, P, normConst)
+
+    bulkGradReg = -normConst * mc.MatrixTerm(
+        "bulk_grad",
+        stencils.CentralDiffGradStencil(),
+        evolvedVar=G,
+        implicitVar=P,
+    )
+
+    gradBCLeft = -normConst * mc.MatrixTerm(
+        "grad_BC_left",
+        stencils.BCGradStencil(isLeft=True),
+        evolvedVar=G,
+        implicitVar=P,
+    )
+
+    gradBCRight = -normConst * mc.MatrixTerm(
+        "grad_BC_right",
+        stencils.BCGradStencil(),
+        evolvedVar=G,
+        implicitVar=P,
+    )
+
+    assert newModel.dict() == {
+        "type": "customModel",
+        "termTags": [bulkGradReg.name, gradBCLeft.name, gradBCRight.name],
+        "termGenerators": {"tags": []},
+        bulkGradReg.name: bulkGradReg.dict(),
+        gradBCLeft.name: gradBCLeft.dict(),
+        gradBCRight.name: gradBCRight.dict(),
     }
 
     # Bad cases
