@@ -29,6 +29,8 @@ def test_matrix_term_arithmetic(grid):
         * (grid.profile(np.ones(grid.numX)) * (a * b * (c @ diag(d * e, c))))
     ).withEvolvedVar(a).withFixedMatrix().withSkippingPattern().regroup([1, 2], [1])
 
+    term.evaluatedTermGroup = 1
+    term.copyTermName = "dummy"
     assert term.fixedMatrix
     assert term.skipPattern
     assert term.multConst == 5
@@ -41,7 +43,7 @@ def test_matrix_term_arithmetic(grid):
         "spatialProfile": np.ones(grid.numX).tolist(),
         "harmonicProfile": [],
         "velocityProfile": [],
-        "evaluatedTermGroup": 0,
+        "evaluatedTermGroup": 1,
         "implicitGroups": [1, 2],
         "generalGroups": [1],
         "customNormConst": {"multConst": 5},
@@ -64,6 +66,7 @@ def test_matrix_term_arithmetic(grid):
         },
         "skipPattern": True,
         "fixedMatrix": True,
+        "multCopyTermName": "dummy"
     }
 
 
