@@ -66,7 +66,7 @@ def test_matrix_term_arithmetic(grid):
         },
         "skipPattern": True,
         "fixedMatrix": True,
-        "multCopyTermName": "dummy"
+        "multCopyTermName": "dummy",
     }
 
 
