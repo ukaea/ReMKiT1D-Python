@@ -321,12 +321,14 @@ class TermCollection:
             term.name += suffix
         return newCollection
 
-    def filterByGroup(self, group: int, general: bool = False):
+    def filterByGroup(
+        self, groups: Optional[List[int]] = None, general: bool = False
+    ) -> Self:
         """Produce a new term collection containing only terms in a given group
 
         Args:
-            group (int): Group index (Fortran 1-indexing)
-            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit gorups. Defaults to False.
+            group (Optional[List[int]]): Group indices (Fortran 1-indexing). Defaults to [1]
+            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit groups. Defaults to False.
         """
         newCollection = TermCollection(
             self.evolvedVar,
@@ -335,15 +337,16 @@ class TermCollection:
             derivativeTex=self.__derivativeTex__,
         )
 
+        usedGroups = groups if groups is not None else [1]
         for term in self.__terms__:
             if general:
-                if group in term.generalGroups:
+                if any(group in term.generalGroups for group in usedGroups):
                     newCollection += term
             else:
-                if group in term.implicitGroups:
+                if any(group in term.implicitGroups for group in usedGroups):
                     newCollection += term
 
-        return newCollection
+        return cast(Self, newCollection)
 
     def checkTerms(
         self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
@@ -1161,6 +1164,24 @@ class DDT:
         for tc in self.__termCollections__:
             tc.registerDerivs(container)
 
+    def filterByGroup(
+        self, groups: Optional[List[int]] = None, general: bool = False
+    ) -> Self:
+        """Filter all terms by group and return new DDT object
+
+        Args:
+            group (Optional[List[int]]): Group indices (Fortran 1-indexing). Defaults to [1]
+            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit groups. Defaults to False.
+        """
+
+        newDDT = DDT(self.__modelName__, self.__modelLatexName__)
+
+        for tc in self.__termCollections__:
+            if len(tc.filterByGroup(groups, general).terms):
+                newDDT.__termCollections__.append(tc.filterByGroup(groups, general))
+
+        return cast(Self, newDDT)
+
 
 class Model:
     """A container for terms, term generators, and modelbound data"""
@@ -1260,6 +1281,31 @@ class Model:
                 newModel.addTermGenerator(tg.onlyEvolving(*args))
 
         newModel.setModelboundData(self.mbData)
+
+        return cast(Self, newModel)
+
+    def filterByGroup(
+        self, groups: Optional[List[int]] = None, general: bool = False
+    ) -> Self:
+        """Filter all terms and term generators by group and return new Model
+
+        Args:
+            group (Optional[List[int]]): Group indices (Fortran 1-indexing). Defaults to [1]
+            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit groups. Defaults to False.
+        """
+
+        newModel = Model(self.name, self.__latexName__, self.isIntegrable)
+
+        newModel.ddt = self.ddt.filterByGroup(groups, general)
+        usedGroups = groups if groups is not None else [1]
+
+        for tg in self.__termGenerators__:
+            if general:
+                if any(group in tg.generalGroups for group in usedGroups):
+                    newModel.addTermGenerator(tg)
+            else:
+                if any(group in tg.implicitGroups for group in usedGroups):
+                    newModel.addTermGenerator(tg)
 
         return cast(Self, newModel)
 
@@ -1395,6 +1441,24 @@ class ModelCollection:
         for model in self.__models__:
             if any(arg.name in model.evolvedVars for arg in args):
                 newCollection.add(model.onlyEvolving(*args))
+
+        return cast(Self, newCollection)
+
+    def filterByGroup(
+        self, groups: Optional[List[int]] = None, general: bool = False
+    ) -> Self:
+        """Filter all models by term group and return new collection
+
+        Args:
+            group (Optional[List[int]]): Group indices (Fortran 1-indexing). Defaults to [1]
+            general (bool, optional): If true, will filter with respect to general groups, otherwise filters with respect to implicit groups. Defaults to False.
+        """
+
+        newCollection = ModelCollection()
+
+        for model in self.__models__:
+            if len(model.filterByGroup(groups, general).evolvedVars):
+                newCollection.add(model.filterByGroup(groups, general))
 
         return cast(Self, newCollection)
 
