@@ -29,6 +29,8 @@ def test_matrix_term_arithmetic(grid):
         * (grid.profile(np.ones(grid.numX)) * (a * b * (c @ diag(d * e, c))))
     ).withEvolvedVar(a).withFixedMatrix().withSkippingPattern().regroup([1, 2], [1])
 
+    term.evaluatedTermGroup = 1
+    term.copyTermName = "dummy"
     assert term.fixedMatrix
     assert term.skipPattern
     assert term.multConst == 5
@@ -41,7 +43,7 @@ def test_matrix_term_arithmetic(grid):
         "spatialProfile": np.ones(grid.numX).tolist(),
         "harmonicProfile": [],
         "velocityProfile": [],
-        "evaluatedTermGroup": 0,
+        "evaluatedTermGroup": 1,
         "implicitGroups": [1, 2],
         "generalGroups": [1],
         "customNormConst": {"multConst": 5},
@@ -64,6 +66,7 @@ def test_matrix_term_arithmetic(grid):
         },
         "skipPattern": True,
         "fixedMatrix": True,
+        "multCopyTermName": "dummy",
     }
 
 
@@ -86,10 +89,10 @@ def test_term_collection(grid):
     del termC["b"]
     assert "b" not in termC.termNames
 
-    assert len(termC.filterByGroup(2).termNames) == 1
-    assert termC.filterByGroup(2).termNames[0] == "a"
-    assert len(termC.filterByGroup(2, general=True).termNames) == 1
-    assert termC.filterByGroup(2, general=True).termNames[0] == "c"
+    assert len(termC.filterByGroup([2]).termNames) == 1
+    assert termC.filterByGroup([2]).termNames[0] == "a"
+    assert len(termC.filterByGroup([2], general=True).termNames) == 1
+    assert termC.filterByGroup([2], general=True).termNames[0] == "c"
 
 
 def test_model(grid):
@@ -101,7 +104,7 @@ def test_model(grid):
     model.ddt[a] += mc.DiagonalStencil()(a).rename("a")
     model.addTerm("c", -mc.DiagonalStencil()(c).withEvolvedVar(a))
     model.ddt[b] += -model.ddt[a].withSuffix("_b")
-    model.ddt[c] += mc.DiagonalStencil()(d).rename("d")
+    model.ddt[c] += mc.DiagonalStencil()(d).rename("d").regroup([2])
 
     assert all(var in model.evolvedVars for var in ["b", "a", "c"])
     assert model.ddt[a].termNames == ["a", "c"]
@@ -110,6 +113,11 @@ def test_model(grid):
 
     model.isIntegrable = False
     assert not model.isIntegrable
+
+    newModel = model.filterByGroup([2])
+    assert newModel.evolvedVars == ["c"]
+    assert newModel.ddt[c].termNames == ["d"]
+
     newModel = model.onlyEvolving(a)
     assert newModel.evolvedVars == ["a"]
     assert newModel.ddt[a].termNames == ["a", "c"]
@@ -128,7 +136,7 @@ def test_model(grid):
 
     assert mCollection["new"].name == "new"
     assert mCollection.getTermsThatEvolveVar(c) == [("m", "d")]
-    assert mCollection.numGroups() == (1, 1)
+    assert mCollection.numGroups() == (2, 1)
 
     assert mCollection.dict() == {
         "tags": ["m", "new"],
@@ -140,6 +148,17 @@ def test_model(grid):
         "tags": ["m"],
         "m": model.onlyEvolving(c).dict(),
     }
+
+    newCollection = mCollection.filterByGroup([2])
+
+    assert mCollection.dict() == {
+        "tags": ["m", "new"],
+        "m": model.dict(),
+        "new": newModel.dict(),
+    }
+
+    newCollection = mCollection.filterByGroup([3])
+    assert len(newCollection.models) == 0
 
 
 def test_derivation_term(grid):

@@ -317,6 +317,10 @@ class Derivation(DerivBase):
     def enclosedArgs(self) -> int:
         return 0
 
+    @property
+    def totNumArgs(self) -> int:
+        return self.numArgs + self.enclosedArgs
+
 
 class GenericDerivation(Derivation):
     """Generic derivation for wrapping ReMKiT1D dictionary representations of derivations"""
@@ -391,14 +395,14 @@ class NodeDerivation(Derivation):
 
     def evaluate(self, *args) -> np.ndarray:
         assert (
-            len(args) == self.enclosedArgs
+            len(args) == self.totNumArgs
         ), "evaluate() called with args not conforming to the number of expected arguments"
 
         return self.__node__.evaluate(dict(zip(ct.getLeafVars(self.__node__), args)))
 
     def latex(self, *args: str) -> str:
         assert (
-            len(args) == self.enclosedArgs
+            len(args) == self.totNumArgs
         ), "latex() called with args not conforming to the number of expected arguments"
         if self.latexTemplate is None:
             remap = dict(zip(ct.getLeafVars(self.__node__), args))
@@ -1020,10 +1024,7 @@ class MultiplicativeDerivation(Derivation):
         deriv = {
             "type": "multiplicativeDerivation",
             "innerDerivation": self.innerDeriv.name,
-            "innerDerivIndices": [
-                i + 1
-                for i in range(self.innerDeriv.numArgs + self.innerDeriv.enclosedArgs)
-            ],
+            "innerDerivIndices": [i + 1 for i in range(self.innerDeriv.totNumArgs)],
             "innerDerivPower": 1.0,
             "outerDerivation": (
                 "none" if self.outerDeriv is None else self.outerDeriv.name
@@ -1032,7 +1033,7 @@ class MultiplicativeDerivation(Derivation):
                 []
                 if self.outerDeriv is None
                 else [
-                    i + 1 + self.innerDeriv.numArgs + self.innerDeriv.enclosedArgs
+                    i + 1 + self.innerDeriv.totNumArgs
                     for i in range(
                         self.outerDeriv.numArgs + self.outerDeriv.enclosedArgs
                     )
@@ -1052,9 +1053,7 @@ class MultiplicativeDerivation(Derivation):
         ), "latex() on MultiplicativeDerivation called with wrong number of arguments"
         result = (
             "\\left("
-            + self.innerDeriv.latex(
-                *args[: self.innerDeriv.numArgs + self.innerDeriv.enclosedArgs]
-            )
+            + self.innerDeriv.latex(*args[: self.innerDeriv.totNumArgs])
             + "\\right)"
         )
 
@@ -1064,9 +1063,7 @@ class MultiplicativeDerivation(Derivation):
         if self.outerDeriv is not None:
             result += (
                 "\\left("
-                + self.outerDeriv.latex(
-                    *args[self.innerDeriv.numArgs + self.innerDeriv.enclosedArgs :]
-                )
+                + self.outerDeriv.latex(*args[self.innerDeriv.totNumArgs :])
                 + "\\right)"
             )
 
@@ -1074,23 +1071,23 @@ class MultiplicativeDerivation(Derivation):
 
     def evaluate(self, *args):
         assert (
-            len(args) == self.numArgs
+            len(args) == self.totNumArgs
         ), "evaluate() on MultiplicativeDerivation called with wrong number of arguments"
-        result = self.innerDeriv.evaluate(*args[: self.innerDeriv.numArgs])
+        result = self.innerDeriv.evaluate(*args[: self.innerDeriv.totNumArgs])
 
         if self.innerFunc is not None:
             result = self.__fun__(result)
 
         if self.outerDeriv is not None:
-            result *= self.outerDeriv.evaluate(*args[self.innerDeriv.numArgs :])
+            result *= self.outerDeriv.evaluate(*args[self.innerDeriv.totNumArgs :])
 
         return result
 
     def fillArgs(self, *args):
-        inner = self.innerDeriv.fillArgs(*args[: self.innerDeriv.numArgs])
+        inner = self.innerDeriv.fillArgs(*args[: self.innerDeriv.totNumArgs])
         outer = []
         if self.outerDeriv is not None:
-            outer = self.outerDeriv.fillArgs(*args[self.innerDeriv.numArgs :])
+            outer = self.outerDeriv.fillArgs(*args[self.innerDeriv.totNumArgs :])
         return inner + outer
 
     def registerComponents(self, container):
@@ -1174,10 +1171,8 @@ class AdditiveDerivation(Derivation):
         derivIndices: List[List[int]] = []
         offset = 1
         for deriv in self.__derivs__:
-            derivIndices.append(
-                [offset + k for k in range(deriv.numArgs + deriv.enclosedArgs)]
-            )
-            offset += deriv.numArgs + deriv.enclosedArgs
+            derivIndices.append([offset + k for k in range(deriv.totNumArgs)])
+            offset += deriv.totNumArgs
 
         derivTags = [deriv.name for deriv in self.__derivs__]
         derivDict: Dict[str, object] = {
@@ -1194,7 +1189,7 @@ class AdditiveDerivation(Derivation):
 
     def latex(self, *args: str) -> str:
         assert (
-            len(args) == self.numArgs + self.enclosedArgs
+            len(args) == self.totNumArgs
         ), "latex() on AdditiveDerivation called with wrong number of arguments"
         result = ""
         offset = 0
@@ -1207,14 +1202,10 @@ class AdditiveDerivation(Derivation):
             result += (
                 coeffRepr
                 + "\\left("
-                + deriv.latex(
-                    *args[offset : offset + deriv.numArgs + deriv.enclosedArgs]
-                )
+                + deriv.latex(*args[offset : offset + deriv.totNumArgs])
                 + "\\right)"
                 if coeffRepr != ""
-                else deriv.latex(
-                    *args[offset : offset + deriv.numArgs + deriv.enclosedArgs]
-                )
+                else deriv.latex(*args[offset : offset + deriv.totNumArgs])
             )
             offset += deriv.numArgs
         powerRepr = numToScientificTex(self.__resultPower__)
@@ -1228,17 +1219,17 @@ class AdditiveDerivation(Derivation):
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
         assert (
-            len(args) == self.numArgs
+            len(args) == self.totNumArgs
         ), "evaluate() on AdditiveDerivation called with wrong number of arguments"
         result = self.__linCoeffs__[0] * self.derivs[0].evaluate(
-            *args[: self.derivs[0].numArgs]
+            *args[: self.derivs[0].totNumArgs]
         )
-        offset = self.derivs[0].numArgs
+        offset = self.derivs[0].totNumArgs
         for i, deriv in enumerate(self.__derivs__[1:]):
             result += self.__linCoeffs__[i + 1] * deriv.evaluate(
-                *args[offset : offset + deriv.numArgs]
+                *args[offset : offset + deriv.totNumArgs]
             )
-            offset += deriv.numArgs
+            offset += deriv.totNumArgs
 
         result = result**self.__resultPower__
 
@@ -1323,7 +1314,7 @@ class DerivationClosure(Derivation):
         argValList: List[np.ndarray] = []
 
         argCounter = 0
-        for i in range(self.__deriv__.numArgs):
+        for i in range(self.__deriv__.totNumArgs):
             if i in self.__argPositions__:
                 argValList.append(self.__args__[self.__argPositions__.index(i)].data)
             else:
@@ -1614,7 +1605,7 @@ class PolynomialDerivation(GenericDerivation):
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
         assert (
-            len(args) == self.numArgs
+            len(args) == self.totNumArgs
         ), "Unexpected number of arguments in PolynomialDerivation evaluate() call"
         result = self.__constCoeff__ * np.ones(args[0].shape)
         for i, arg in enumerate(args):
@@ -1711,7 +1702,7 @@ class RangeFilterDerivation(Derivation):
                 )
             )
 
-        result = self.__deriv__.evaluate(*args)
+        result = self.__deriv__.evaluate(*args[len(self.__filtering__) :])
         for filter in filterVals:
             result *= filter
 
