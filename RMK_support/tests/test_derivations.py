@@ -363,7 +363,9 @@ def test_range_filter_deriv(grid):
         "derivationIndices": [2],
     }
 
-    assert all(filtered(np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0))
+    assert all(
+        filtered(vals, np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0)
+    )
 
     assert filtered.fillArgs("a") == ["p", "a"]
 
@@ -385,7 +387,9 @@ def test_filtered_node_deriv(grid):
 
     assert filtered.fillArgs("a") == ["p", "a"]
 
-    assert all(filtered(np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0))
+    assert all(
+        filtered(vals, np.ones(grid.numX)) == np.where((vals < 6) & (vals > 3), 1, 0)
+    )
 
 
 def test_bounded_ext_deriv(grid):
