@@ -42,8 +42,11 @@ def test_simple_source_term(grid: Grid):
 
     var = vc.Variable("evolvedVar", grid)
 
+    sourceTerm = cm.simpleSourceTerm(var, sourceProfile, timeSignal)
+    sourceTerm.evolvedVar = var
+
     assert (
-        cm.simpleSourceTerm(var, sourceProfile, timeSignal).withEvolvedVar(var).dict()
+        sourceTerm.dict()
         == (
             var**-1
             * mc.MatrixTerm(
@@ -719,7 +722,7 @@ def test_kinetic_advection(grid: Grid):
 def test_kinetic_advectionEx(norms: dict):
 
     # Use grid with lMax = 1, mMax = 2
-    
+
     grid = Grid(
         np.geomspace(5.0, 0.2, 128),
         np.geomspace(0.01, 0.8, 120),
@@ -806,3 +809,532 @@ def test_kinetic_advectionEx(norms: dict):
     }
 
     assert cm.advectionEx(f, E, grid, norms).dict() == result
+
+
+def test_eeCollIsotropic(grid: Grid, norms: dict):
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    textbook = dv.Textbook(grid)
+
+    model = cm.eeCollIsotropic(
+        distribution,
+        elTemperature,
+        elDensity,
+        norms,
+        grid,
+        textbook,
+    )
+
+    velocityProfile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    normConst = (
+        elCharge**4
+        / (4 * np.pi * elMass**2 * epsilon0**2)
+        * norms["density"]
+        * norms["time"]
+        / norms["velGrid"] ** 3
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["drag_term", "diff_term"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["f0", "dragCCL", "diffCCL", "weightCCL", "logLee"],
+            "f0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["f"],
+            },
+            "dragCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDragCoeff",
+                "requiredVarNames": ["f0"],
+            },
+            "diffCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDiffusionCoeff",
+                "requiredVarNames": ["f0", "weightCCL"],
+            },
+            "weightCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclWeight",
+                "requiredVarNames": ["dragCCL", "diffCCL"],
+            },
+            "logLee": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLee",
+                "requiredVarNames": ["Te", "ne"],
+            },
+        },
+        "drag_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "dragCCL",
+                "modelboundInterp": "weightCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diff_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "diffCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+    {
+        "type": "customModel",
+        "termTags": ["drag_term", "diff_term"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["f0", "dragCCL", "diffCCL", "weightCCL", "logLee"],
+            "f0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["f"],
+            },
+            "dragCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDragCoeff",
+                "requiredVarNames": ["f0"],
+            },
+            "diffCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDiffusionCoeff",
+                "requiredVarNames": ["f0", "weightCCL"],
+            },
+            "weightCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclWeight",
+                "requiredVarNames": ["dragCCL", "diffCCL"],
+            },
+            "logLee": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLee",
+                "requiredVarNames": ["Te", "ne"],
+            },
+        },
+        "drag_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile,
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "dragCCL",
+                "modelboundInterp": "weightCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diff_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile,
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "diffCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert model.dict() == result
+
+
+def test_eiCollIsotropic(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    textbook = dv.Textbook(grid)
+
+    ionTemperature = vc.Variable("Ti", grid)
+
+    ionDensity = vc.Variable("ni", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    velocityProfile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    gamma0norm = (
+        elCharge**4
+        / (4 * np.pi * elMass**2 * epsilon0**2)
+        * ionSpecies.charge**2
+        * elMass
+        / (ionSpecies.atomicA * amu)
+    )
+
+    normConst = gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    vBoundary = [grid.vGrid[i] + grid.vWidths[i] / 2 for i in range(len(grid.vWidths))]
+
+    innerV = grid.profile(
+        np.array([1.0 / (2 * v) for v in vBoundary]), "V", latexName="\\frac{1}{2v}"
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["drag_term", "diff_term"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["logLei"],
+            "logLei": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLeini",
+                "requiredVarNames": ["Te", "ne"],
+            },
+        },
+        "drag_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diff_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["Ti", "ni"],
+                "requiredRowVarPowers": [1.0, 1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+                "fixedA": innerV.data.tolist(),
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert (
+        cm.eiCollIsotropic(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            elTemperature,
+            elDensity,
+            ionTemperature,
+            ionDensity,
+            ionSpecies,
+        ).dict()
+        == result
+    )
+
+    # Using ion energy variable adds additional ion energy evolution terms
+
+    ionEnVar = vc.Variable("Wi", grid)
+
+    resultWithIonEnergy = dict(result)
+
+    resultWithIonEnergy.update(
+        {
+            "termTags": ["drag_term", "diff_term", "diff_term_en", "drag_term_en"],
+            "diff_term_en": {
+                "termType": "matrixTerm",
+                "evolvedVar": "Wi",
+                "implicitVar": "f",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "termMomentStencil",
+                    "momentOrder": 2,
+                    "colHarmonic": 1,
+                    "termName": "diff_term",
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "drag_term_en": {
+                "termType": "matrixTerm",
+                "evolvedVar": "Wi",
+                "implicitVar": "f",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "termMomentStencil",
+                    "momentOrder": 2,
+                    "colHarmonic": 1,
+                    "termName": "drag_term",
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+        }
+    )
+
+    assert (
+        cm.eiCollIsotropic(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            elTemperature,
+            elDensity,
+            ionTemperature,
+            ionDensity,
+            ionSpecies,
+            ionEnVar,
+        ).dict()
+        == resultWithIonEnergy
+    )
