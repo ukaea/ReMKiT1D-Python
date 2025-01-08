@@ -1338,3 +1338,101 @@ def test_eiCollIsotropic(grid: Grid, norms: dict):
         ).dict()
         == resultWithIonEnergy
     )
+
+
+def test_stationaryIonEIColl(grid: Grid, norms: dict):
+
+    textbook = dv.Textbook(grid)
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionDensity = vc.Variable("ni", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    evolvedHarmonics = list(range(1, grid.numH + 1))
+
+    model = cm.stationaryIonEIColl(
+        grid,
+        textbook,
+        norms,
+        distribution,
+        ionDensity,
+        elDensity,
+        elTemperature,
+        ionSpecies,
+        evolvedHarmonics,
+    )
+
+    hProfile = []
+    for l in grid.lGrid:
+        hProfile.append(l * (l + 1.0) / 2.0)
+    harmonicProfile = grid.profile(np.array(hProfile), "H")
+    velocityProfile = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]), dim="V")
+
+    gamma0norm = (
+        elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2) * ionSpecies.charge**2
+    )
+
+    normConst = -gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    result = {
+        "type": "customModel",
+        "termTags": ["ei_colls_stationary"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["logLei"],
+            "logLei": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLeini",
+                "requiredVarNames": [elTemperature.name, elDensity.name],
+            },
+        },
+        "ei_colls_stationary": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": harmonicProfile.data.tolist(),
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [ionDensity.name],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": evolvedHarmonics,
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert model.dict() == result
