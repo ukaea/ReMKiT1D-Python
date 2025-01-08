@@ -714,3 +714,95 @@ def test_kinetic_advection(grid: Grid):
     assert (
         e_info.value.args[0] == "kinAdvX distribution must be a distribution variable"
     )
+
+
+def test_kinetic_advectionEx(norms: dict):
+
+    # Use grid with lMax = 1, mMax = 2
+    
+    grid = Grid(
+        np.geomspace(5.0, 0.2, 128),
+        np.geomspace(0.01, 0.8, 120),
+        1,
+        0,
+        interpretXGridAsWidths=True,
+        interpretVGridAsWidths=True,
+    )
+
+    f = vc.Variable("f", grid, isDistribution=True)
+
+    E = vc.Variable("E", grid)
+
+    cm.advectionEx(f, E, grid, norms)
+
+    H1 = vc.Variable("H1", grid)
+    H2 = vc.Variable("H2", grid)
+    G1 = vc.Variable("G1", grid)
+
+    result = {
+        "type": "customModel",
+        "termTags": ["eAdv_H_1", "eAdv_G_2"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["G1", "H1", "G2", "H2"],
+            "G1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "G1",
+                "requiredVarNames": ["f"],
+            },
+            "H1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "H1",
+                "requiredVarNames": ["f"],
+            },
+            "G2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "G2",
+                "requiredVarNames": ["f"],
+            },
+            "H2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "H2",
+                "requiredVarNames": ["f"],
+            },
+        },
+        "eAdv_G_2": (
+            (1.0)
+            * G1
+            @ mc.MatrixTerm(
+                "eAdv_G_2",
+                stencil=mc.DiagonalStencil(evolvedHarmonics=[2]),
+                evolvedVar=f,
+                implicitVar=E,
+            )
+        ).dict(),
+        "eAdv_H_1": (
+            (1 / 3)
+            * H2
+            @ mc.MatrixTerm(
+                "eAdv_H_1",
+                stencil=mc.DiagonalStencil(evolvedHarmonics=[1]),
+                evolvedVar=f,
+                implicitVar=E,
+            )
+        ).dict(),
+    }
+
+    assert cm.advectionEx(f, E, grid, norms).dict() == result
