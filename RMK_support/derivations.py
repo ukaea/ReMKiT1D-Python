@@ -1711,7 +1711,7 @@ class RangeFilterDerivation(Derivation):
                 )
             )
 
-        result = self.__deriv__.evaluate(*args)
+        result = self.__deriv__.evaluate(*args[len(self.__filtering__) :])
         for filter in filterVals:
             result *= filter
 
