@@ -29,6 +29,11 @@ def grid():
     )
 
 
+@pytest.fixture
+def norms() -> dict:
+    return sk.calculateNorms(10.0, 1e19, 1)
+
+
 def test_advection(grid: Grid):
 
     n, n_dual = vc.varAndDual("n", grid)
@@ -239,7 +244,7 @@ def test_pressure_grad(grid: Grid):
     )
 
 
-def test_ampere_maxwell(grid: Grid):
+def test_ampere_maxwell(grid: Grid, norms: dict):
 
     E = vc.Variable("E", grid)
 
@@ -248,8 +253,6 @@ def test_ampere_maxwell(grid: Grid):
 
     e = dv.Species("e", 0, charge=-1, associatedVars=[Ge])
     ion = dv.Species("i", -1, charge=+1, associatedVars=[Gi])
-
-    norms = sk.calculateNorms(10.0, 1e19, 1)
 
     amModel = cm.ampereMaxwell(E, [Ge, Gi], [e, ion], norms)
 
@@ -295,7 +298,7 @@ def test_ampere_maxwell(grid: Grid):
     assert amModel.dict() == result
 
 
-def test_lorentz_force(grid: Grid):
+def test_lorentz_force(grid: Grid, norms: dict):
 
     E = vc.Variable("E", grid)
 
@@ -309,8 +312,6 @@ def test_lorentz_force(grid: Grid):
     ion = dv.Species(
         "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
     )
-
-    norms = sk.calculateNorms(10.0, 1e19, 1)
 
     lForceModel = cm.lorentzForces(E, [Ge, Gi], [ne, ni], [e, ion], norms)
 
@@ -357,7 +358,7 @@ def test_lorentz_force(grid: Grid):
     assert lForceModel.dict() == result
 
 
-def test_lorentz_force_work(grid: Grid):
+def test_lorentz_force_work(grid: Grid, norms: dict):
 
     E = vc.Variable("E", grid)
 
@@ -371,8 +372,6 @@ def test_lorentz_force_work(grid: Grid):
     ion = dv.Species(
         "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[Wi, Gi]
     )
-
-    norms = sk.calculateNorms(10.0, 1e19, 1)
 
     termTags = []
 
@@ -404,7 +403,7 @@ def test_lorentz_force_work(grid: Grid):
     )
 
 
-def test_implicit_temperature(grid: Grid):
+def test_implicit_temperature(grid: Grid, norms: dict):
 
     ne = vc.Variable("ne", grid)
     ni = vc.Variable("ni", grid)
@@ -422,8 +421,6 @@ def test_implicit_temperature(grid: Grid):
     ion = dv.Species(
         "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
     )
-
-    norms = sk.calculateNorms(10.0, 1e19, 1)
 
     # Use 1 degree of freedom to avoid irrational numbers in constants
     dof = 1
@@ -549,4 +546,125 @@ def test_implicit_temperature(grid: Grid):
     assert (
         e_info.value.args[0]
         == "Temperatures in implicitTemperatures are expected to be stationary"
+    )
+
+
+def test_kinetic_advection(grid: Grid):
+    f = vc.Variable("f", grid, isDistribution=True)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    termTags = []
+
+    lNums = [grid.lGrid[i - 1] for i in range(1, grid.numH + 1)]
+    mNums = [grid.mGrid[i - 1] for i in range(1, grid.numH + 1)]
+
+    vProfile = grid.profile(grid.vGrid, dim="V")
+
+    # By default, the kinAdvX model evolves distribution f at all harmonics
+
+    evolvedHarmonics = list(range(1, grid.numH + 1))
+
+    for h in evolvedHarmonics:
+
+        if lNums[h - 1] > 0:
+            normConst = -(lNums[h - 1] - mNums[h - 1]) / (2.0 * lNums[h - 1] - 1.0)
+
+            tag = f"adv_minus_{h}"
+
+            result[tag] = (
+                normConst
+                * mc.MatrixTerm(
+                    tag,
+                    stencil=stencils.DistGradStencil(
+                        h,
+                        grid.getH(
+                            lNum=lNums[h - 1] - 1,
+                            mNum=mNums[h - 1],
+                            im=grid.imaginaryHarmonic[h - 1],
+                        ),
+                    ),
+                    evolvedVar=f,
+                    implicitVar=f,
+                    profiles={"V": vProfile},
+                )
+            ).withFixedMatrix()
+
+            termTags.append(tag)
+
+        if lNums[h - 1] < grid.lMax:
+            normConst = -(lNums[h - 1] + mNums[h - 1] + 1.0) / (
+                2.0 * lNums[h - 1] + 3.0
+            )
+
+            tag = f"adv_plus_{h}"
+
+            result[tag] = (
+                normConst
+                * mc.MatrixTerm(
+                    tag,
+                    stencil=stencils.DistGradStencil(
+                        h,
+                        grid.getH(
+                            lNum=lNums[h - 1] + 1,
+                            mNum=mNums[h - 1],
+                            im=grid.imaginaryHarmonic[h - 1],
+                        ),
+                    ),
+                    evolvedVar=f,
+                    implicitVar=f,
+                    profiles={"V": vProfile},
+                )
+            ).withFixedMatrix()
+
+            termTags.append(tag)
+
+    result["termTags"] = termTags
+
+    assert cm.kinAdvX(f, grid).dict() == result
+
+    # Repeat for the 1st harmonic only (contains only one term)
+
+    h = 1
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    tag = f"adv_plus_{h}"
+
+    result[tag] = (
+        (-1.0 / 3.0)
+        * mc.MatrixTerm(
+            tag,
+            stencil=stencils.DistGradStencil(
+                h,
+                grid.getH(
+                    lNum=lNums[0] + 1,
+                    mNum=mNums[0],
+                    im=grid.imaginaryHarmonic[0],
+                ),
+            ),
+            evolvedVar=f,
+            implicitVar=f,
+            profiles={"V": vProfile},
+        )
+    ).withFixedMatrix()
+
+    result["termTags"] = [tag]
+
+    assert cm.kinAdvX(f, grid, evolvedHarmonics=[h]).dict() == result
+
+    # Bad case - using non-distribution variable
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.kinAdvX(vc.Variable("notDist", grid, isDistribution=False), grid)
+    assert (
+        e_info.value.args[0] == "kinAdvX distribution must be a distribution variable"
     )
