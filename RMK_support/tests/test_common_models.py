@@ -569,57 +569,67 @@ def test_kinetic_advection(grid: Grid):
 
     evolvedHarmonics = list(range(1, grid.numH + 1))
 
-    for h in evolvedHarmonics:
+    for harmonic in evolvedHarmonics:
 
-        if lNums[h - 1] > 0:
-            normConst = -(lNums[h - 1] - mNums[h - 1]) / (2.0 * lNums[h - 1] - 1.0)
+        if lNums[harmonic - 1] > 0:
+            normConst = -(lNums[harmonic - 1] - mNums[harmonic - 1]) / (
+                2.0 * lNums[harmonic - 1] - 1.0
+            )
 
-            tag = f"adv_minus_{h}"
+            tag = f"adv_minus_{harmonic}"
 
             result[tag] = (
-                normConst
-                * mc.MatrixTerm(
-                    tag,
-                    stencil=stencils.DistGradStencil(
-                        h,
-                        grid.getH(
-                            lNum=lNums[h - 1] - 1,
-                            mNum=mNums[h - 1],
-                            im=grid.imaginaryHarmonic[h - 1],
+                (
+                    normConst
+                    * mc.MatrixTerm(
+                        tag,
+                        stencil=stencils.DistGradStencil(
+                            harmonic,
+                            grid.getH(
+                                lNum=lNums[harmonic - 1] - 1,
+                                mNum=mNums[harmonic - 1],
+                                im=grid.imaginaryHarmonic[harmonic - 1],
+                            ),
                         ),
-                    ),
-                    evolvedVar=f,
-                    implicitVar=f,
-                    profiles={"V": vProfile},
+                        evolvedVar=f,
+                        implicitVar=f,
+                        profiles={"V": vProfile},
+                    )
                 )
-            ).withFixedMatrix()
+                .withFixedMatrix()
+                .dict()
+            )
 
             termTags.append(tag)
 
-        if lNums[h - 1] < grid.lMax:
-            normConst = -(lNums[h - 1] + mNums[h - 1] + 1.0) / (
-                2.0 * lNums[h - 1] + 3.0
+        if lNums[harmonic - 1] < grid.lMax:
+            normConst = -(lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0) / (
+                2.0 * lNums[harmonic - 1] + 3.0
             )
 
-            tag = f"adv_plus_{h}"
+            tag = f"adv_plus_{harmonic}"
 
             result[tag] = (
-                normConst
-                * mc.MatrixTerm(
-                    tag,
-                    stencil=stencils.DistGradStencil(
-                        h,
-                        grid.getH(
-                            lNum=lNums[h - 1] + 1,
-                            mNum=mNums[h - 1],
-                            im=grid.imaginaryHarmonic[h - 1],
+                (
+                    normConst
+                    * mc.MatrixTerm(
+                        tag,
+                        stencil=stencils.DistGradStencil(
+                            harmonic,
+                            grid.getH(
+                                lNum=lNums[harmonic - 1] + 1,
+                                mNum=mNums[harmonic - 1],
+                                im=grid.imaginaryHarmonic[harmonic - 1],
+                            ),
                         ),
-                    ),
-                    evolvedVar=f,
-                    implicitVar=f,
-                    profiles={"V": vProfile},
+                        evolvedVar=f,
+                        implicitVar=f,
+                        profiles={"V": vProfile},
+                    )
                 )
-            ).withFixedMatrix()
+                .withFixedMatrix()
+                .dict()
+            )
 
             termTags.append(tag)
 
@@ -627,39 +637,45 @@ def test_kinetic_advection(grid: Grid):
 
     assert cm.kinAdvX(f, grid).dict() == result
 
-    # Repeat for the 1st harmonic only (contains only one term)
+    # 1st harmonic only
 
-    h = 1
+    harmonic = 1
 
-    result = {
-        "type": "customModel",
-        "termTags": [],
-        "termGenerators": {"tags": []},
-    }
+    result = dict(
+        {
+            "type": "customModel",
+            "termTags": [],
+            "termGenerators": {"tags": []},
+        }
+    )
 
-    tag = f"adv_plus_{h}"
+    tag = f"adv_plus_{harmonic}"
 
     result[tag] = (
-        (-1.0 / 3.0)
-        * mc.MatrixTerm(
-            tag,
-            stencil=stencils.DistGradStencil(
-                h,
-                grid.getH(
-                    lNum=lNums[0] + 1,
-                    mNum=mNums[0],
-                    im=grid.imaginaryHarmonic[0],
+        (
+            (-1.0 / 3.0)
+            * mc.MatrixTerm(
+                tag,
+                stencil=stencils.DistGradStencil(
+                    harmonic,
+                    grid.getH(
+                        lNum=lNums[0] + 1,
+                        mNum=mNums[0],
+                        im=grid.imaginaryHarmonic[0],
+                    ),
                 ),
-            ),
-            evolvedVar=f,
-            implicitVar=f,
-            profiles={"V": vProfile},
+                evolvedVar=f,
+                implicitVar=f,
+                profiles={"V": vProfile},
+            )
         )
-    ).withFixedMatrix()
+        .withFixedMatrix()
+        .dict()
+    )
 
     result["termTags"] = [tag]
 
-    assert cm.kinAdvX(f, grid, evolvedHarmonics=[h]).dict() == result
+    assert cm.kinAdvX(f, grid, evolvedHarmonics=[harmonic]).dict() == result
 
     # Bad case - using non-distribution variable
 
