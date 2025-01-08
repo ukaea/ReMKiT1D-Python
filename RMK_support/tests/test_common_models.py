@@ -34,6 +34,36 @@ def norms() -> dict:
     return sk.calculateNorms(10.0, 1e19, 1)
 
 
+def test_simple_source_term(grid: Grid):
+
+    sourceProfile = Profile(np.ones(grid.numX), dim="X")
+
+    timeSignal = mc.TimeSignalData()
+
+    var = vc.Variable("evolvedVar", grid)
+
+    assert (
+        cm.simpleSourceTerm(var, sourceProfile, timeSignal).withEvolvedVar(var).dict()
+        == (
+            var**-1
+            * mc.MatrixTerm(
+                "custom",
+                mc.DiagonalStencil(),
+                evolvedVar=var,
+                implicitVar=var,
+                profiles={"X": sourceProfile},
+                T=timeSignal,
+            )
+        ).dict()
+    )
+
+    # Bad case - profile must be in X
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.simpleSourceTerm(var, Profile(np.ones(grid.numV), dim="V"), timeSignal)
+    assert e_info.value.args[0] == "simpleSourceTerm requires a spatial source profile"
+
+
 def test_advection(grid: Grid):
 
     n, n_dual = vc.varAndDual("n", grid)
