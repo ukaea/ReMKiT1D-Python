@@ -1084,10 +1084,10 @@ class MultiplicativeDerivation(Derivation):
         return result
 
     def fillArgs(self, *args):
-        inner = self.innerDeriv.fillArgs(*args[: self.innerDeriv.totNumArgs])
+        inner = self.innerDeriv.fillArgs(*args[: self.innerDeriv.numArgs])
         outer = []
         if self.outerDeriv is not None:
-            outer = self.outerDeriv.fillArgs(*args[self.innerDeriv.totNumArgs :])
+            outer = self.outerDeriv.fillArgs(*args[self.innerDeriv.numArgs :])
         return inner + outer
 
     def registerComponents(self, container):
