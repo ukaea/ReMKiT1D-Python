@@ -2118,7 +2118,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
 
     assert model.dict() == result
 
-    # Bad case - evolvedHarmonics cannot include 1
+    # Bad case - evolvedHarmonics cannot include l=1
 
     with pytest.raises(AssertionError) as e_info:
         cm.flowingIonEIColl(
@@ -2137,3 +2137,644 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
         e_info.value.args[0]
         == "flowingIonEIColl cannot be used to evolve harmonic with index 1"
     )
+
+
+def test_eeCollHigherL(grid: Grid, norms: dict):
+    textbook = dv.Textbook(grid)
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    evolvedHarmonics = list(range(2, grid.numH + 1, 2))
+
+    model = cm.eeCollHigherL(
+        grid, textbook, norms, distribution, elTemperature, elDensity, evolvedHarmonics
+    )
+
+    v1Profile = grid.profile(np.array([1.0 / v**1 for v in grid.vGrid]), dim="V")
+    v2Profile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+    v3Profile = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]), dim="V")
+
+    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
+    gamma0norm = gamma0norm * ionSpecies.charge**2
+
+    adfAtZero = [1 / grid.vGrid[1], 0]
+
+    normf0fl = (
+        8
+        * np.pi
+        * gamma0norm
+        * norms["density"]
+        * norms["time"]
+        / norms["velGrid"] ** 3
+    )
+
+    normfl = gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    normLL = -gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    l = 1
+
+    C1 = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))
+    normC1 = (
+        C1 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C2 = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))
+    normC2 = (
+        C2 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C3 = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))
+    normC3 = C3 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C4 = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3))
+    normC4 = C4 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C5 = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1))
+    normC5 = C5 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C6 = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
+    normC6 = C6 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    result = {
+        "type": "customModel",
+        "termTags": [
+            "8pif0fl",
+            "diffTermI2",
+            "diffTermJ2",
+            "dfdv2",
+            "termLL",
+            "C1Il+2_h=2",
+            "C1J-l-1_h=2",
+            "C2Il_h=2",
+            "C2J1-l_h=2",
+            "C3Il+2_h=2",
+            "C4J-l-1_h=2",
+            "C5Il_h=2",
+            "C6J1-l_h=2",
+        ],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["f0", "I0", "I2", "J-1", "IJSum", "logLee", "df0", "ddf0"],
+            "f0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["f"],
+            },
+            "I0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "I0",
+                "requiredVarNames": ["f0"],
+            },
+            "I2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "I2",
+                "requiredVarNames": ["f0"],
+            },
+            "J-1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "J-1",
+                "requiredVarNames": ["f0"],
+            },
+            "IJSum": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "sumTerm",
+                "requiredVarNames": ["I2", "J-1", "I0"],
+            },
+            "logLee": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLee",
+                "requiredVarNames": ["Te", "ne"],
+            },
+            "df0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "df0/dv",
+                "requiredVarNames": ["f"],
+            },
+            "ddf0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "d2f0/dv2",
+                "requiredVarNames": ["f"],
+            },
+        },
+        "8pif0fl": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normf0fl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee", "f0"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diffTermI2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["I2", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diffTermJ2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["J-1", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "dfdv2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "termLL": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [0.0, 1.0],
+            "velocityProfile": v3Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normLL},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 3,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": -2,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C2Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C2J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 0,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C3Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC3},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 3,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C4J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC4},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": -2,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C5Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC5},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 1,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C6J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC6},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 0,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert model.dict() == result
