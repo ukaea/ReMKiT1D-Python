@@ -2077,4 +2077,3 @@ def bohmBoundaryModel(
                 newModel.ddt[energyDensity] += -bcDiv(viscosity).rename("energy_BCVisc")
 
     return newModel
-
