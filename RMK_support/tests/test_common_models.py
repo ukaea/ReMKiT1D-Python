@@ -3703,8 +3703,6 @@ def test_standard_base_fluid(grid: Grid):
 
     # Minimum example with non-charged species
 
-    # Must use flux_dual
-
     newModel = cm.standardBaseFluid(
         species,
         density,
@@ -3821,7 +3819,7 @@ def test_standard_base_fluid(grid: Grid):
 
     assert newModel.dict() == result
 
-    # Maximum example using a charged species with heat flux, energy density and viscosity
+    # Using a charged species with heat flux, energy density and viscosity (no viscosity limit multiplier)
 
     chargedSpecies = dv.Species("s+", speciesID=-1, charge=-1.0)
 
@@ -3830,8 +3828,6 @@ def test_standard_base_fluid(grid: Grid):
     heatflux_dual, heatflux = vc.varAndDual("q", grid, primaryOnDualGrid=True)
 
     viscosity, viscosityDual = vc.varAndDual("Pi", grid)
-
-    viscosityLimitMult, viscosityLimitMult_dual = vc.varAndDual("PiLimit", grid)
 
     modelCharged = cm.standardBaseFluid(
         chargedSpecies,
@@ -3843,7 +3839,6 @@ def test_standard_base_fluid(grid: Grid):
         energyDensity,
         heatflux,
         viscosity,
-        viscosityLimitMult,
     )
 
     resultCharged = {
@@ -4021,8 +4016,8 @@ def test_standard_base_fluid(grid: Grid):
             "varData": {
                 "requiredRowVarNames": [],
                 "requiredRowVarPowers": [],
-                "requiredColVarNames": ["PiLimit"],
-                "requiredColVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
                 "requiredMBRowVarNames": [],
                 "requiredMBRowVarPowers": [],
                 "requiredMBColVarNames": [],
@@ -4289,8 +4284,8 @@ def test_standard_base_fluid(grid: Grid):
             "varData": {
                 "requiredRowVarNames": [],
                 "requiredRowVarPowers": [],
-                "requiredColVarNames": ["Pi_dual", "PiLimit_dual", "n_dual"],
-                "requiredColVarPowers": [1.0, 1.0, -1.0],
+                "requiredColVarNames": ["Pi_dual", "n_dual"],
+                "requiredColVarPowers": [1.0, -1.0],
                 "requiredMBRowVarNames": [],
                 "requiredMBRowVarPowers": [],
                 "requiredMBColVarNames": [],
@@ -4375,3 +4370,485 @@ def test_standard_base_fluid(grid: Grid):
     }
 
     assert modelCharged.dict() == resultCharged
+
+    # Using charged species with viscosity limit
+    # Changes form of terms momentum_divpi and energy_divpiu
+
+    viscosityLimitMult, viscosityDual = vc.varAndDual("PiLimit", grid)
+
+    modelWithViscosityLimit = cm.standardBaseFluid(
+        chargedSpecies,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        eField,
+        energyDensity,
+        heatflux,
+        viscosity,
+        viscosityLimitMult,
+    )
+
+    resultWithViscosityLimit = dict(resultCharged)
+
+    resultWithViscosityLimit.update(
+        {
+            "momentum_divpi": {
+                "termType": "matrixTerm",
+                "evolvedVar": "G_dual",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -0.0002742898430764327},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["PiLimit"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_divpiu": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["Pi_dual", "PiLimit_dual", "n_dual"],
+                    "requiredColVarPowers": [1.0, 1.0, -1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+        }
+    )
+
+    assert modelWithViscosityLimit.dict() == resultWithViscosityLimit
+
+
+def test_bohm_boundary_fluid(grid: Grid):
+
+    species = dv.Species("s", +1)
+
+    density, density_dual = vc.varAndDual("n", grid)
+
+    flux_dual, flux = vc.varAndDual("G", grid, primaryOnDualGrid=True)
+
+    flowSpeed = vc.Variable("u", grid)
+
+    temperature, temperature_dual = vc.varAndDual("T", grid)
+
+    eField, eField_dual = vc.varAndDual("E", grid)
+
+    sonicSpeed = vc.Variable("cs", grid)
+
+    massRatio = elMass / (species.atomicA * amu)
+
+    newModel = cm.bohmBoundaryModel(
+        species, density, flux, flowSpeed, temperature, sonicSpeed
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["continuity_Bohm", "momentum_Bohm"],
+        "termGenerators": {"tags": []},
+        "continuity_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "n",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert newModel.dict() == result
+
+    # Using energyDensity
+
+    energyDensity, energyDensity_dual = vc.varAndDual("U", grid)
+
+    sheathGamma = vc.Variable("gammaRight", grid)
+
+    boundaryFlowSpeed = vc.Variable("cs_b", grid)
+
+    viscosity, viscosityDual = vc.varAndDual("Pi", grid)
+
+    modelWithEnergy = cm.bohmBoundaryModel(
+        species,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        sonicSpeed,
+        energyDensity,
+        sheathGamma,
+        boundaryFlowSpeed,
+        viscosity,
+    )
+
+    resultWithEnergy = {
+        "type": "customModel",
+        "termTags": [
+            "continuity_Bohm",
+            "momentum_Bohm",
+            "energy_BCGamma",
+            "energy_BCKin",
+            "energy_BCVisc",
+        ],
+        "termGenerators": {"tags": []},
+        "continuity_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "n",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCGamma": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1.0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["gammaRight"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": ["T"],
+                "requiredColVarPowers": [1.0],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCKin": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -(massRatio ** (-1))},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["cs_b"],
+                "requiredRowVarPowers": [2.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCVisc": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "Pi",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert modelWithEnergy.dict() == resultWithEnergy
+
+    # Using energy density, viscosity and viscosity limiter
+
+    viscosityLimitMult, viscosityDual = vc.varAndDual("PiLimit", grid)
+
+    modelWithViscosityLimit = cm.bohmBoundaryModel(
+        species,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        sonicSpeed,
+        energyDensity,
+        sheathGamma,
+        boundaryFlowSpeed,
+        viscosity,
+        viscosityLimitMult,
+    )
+
+    resultWithViscosityLimit = dict(resultWithEnergy)
+    resultWithViscosityLimit.update(
+        {
+            "energy_BCVisc": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["PiLimit"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "boundaryStencil",
+                    "fluxJacVar": "u",
+                    "leftBoundary": False,
+                    "lowerBoundVar": "cs",
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            }
+        }
+    )
+
+    assert modelWithViscosityLimit.dict() == resultWithViscosityLimit
+
+    # Bad case using energyDensity without providing sheathGamma
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.bohmBoundaryModel(
+            species, density, flux, flowSpeed, temperature, sonicSpeed, energyDensity
+        )
+    assert (
+        e_info.value.args[0]
+        == "sheathGamma must be present in bohmBoundaryModel if energyDensity is evolved"
+    )
