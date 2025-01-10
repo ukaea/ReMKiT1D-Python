@@ -2500,6 +2500,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
         e_info.value.args[0]
         == "flowingIonEIColl cannot be used to evolve harmonic with index 1"
     )
+
     # Bad case - evolvedHarmonics cannot include l=1
 
     with pytest.raises(AssertionError) as e_info:
@@ -3160,3 +3161,136 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
     }
 
     assert model.dict() == result
+
+
+def test_ampere_maxwell_kinetic_term(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    amTerm = cm.ampereMaxwellKineticElTerm(distribution, norms)
+
+    # Must assign an evolved var to the term to convert to dict()
+    amTerm.evolvedVar = distribution
+
+    normConst = (
+        elCharge / (3 * epsilon0) * norms["density"] * norms["time"] / norms["EField"]
+    )
+
+    assert amTerm.dict() == {
+        "termType": "matrixTerm",
+        "evolvedVar": distribution.name,
+        "implicitVar": distribution.name,
+        "spatialProfile": [],
+        "harmonicProfile": [],
+        "velocityProfile": [],
+        "evaluatedTermGroup": 0,
+        "implicitGroups": [1],
+        "generalGroups": [],
+        "customNormConst": {"multConst": normConst},
+        "timeSignalData": {
+            "timeSignalType": "none",
+            "timeSignalPeriod": 0.0,
+            "timeSignalParams": [],
+            "realTimePeriod": False,
+        },
+        "varData": {
+            "requiredRowVarNames": [],
+            "requiredRowVarPowers": [],
+            "requiredColVarNames": [],
+            "requiredColVarPowers": [],
+            "requiredMBRowVarNames": [],
+            "requiredMBRowVarPowers": [],
+            "requiredMBColVarNames": [],
+            "requiredMBColVarPowers": [],
+        },
+        "stencilData": {
+            "stencilType": "momentStencil",
+            "momentOrder": 1,
+            "momentHarmonic": 2,
+        },
+        "skipPattern": False,
+        "fixedMatrix": False,
+    }
+
+
+def test_diffusive_heating_term(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    density = vc.Variable("ne", grid)
+
+    heatingProfile = Profile(np.ones(grid.numX), dim="X")
+
+    heatingTerm = cm.diffusiveHeatingTerm(
+        grid,
+        norms,
+        distribution,
+        density,
+        heatingProfile,
+    )
+
+    # Must assign an evolved var to the term to convert to dict()
+    heatingTerm.evolvedVar = distribution
+
+    dv = grid.vWidths
+
+    vBoundary = [grid.vGrid[i] + dv[i] / 2 for i in range(len(dv))]
+
+    v2Profile = Profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    v2bProfile = Profile(np.array([v**2 for v in vBoundary]), dim="V")
+
+    normConst = elCharge / (3 * elMass) * norms["eVTemperature"] / norms["velGrid"] ** 2
+
+    assert heatingTerm.dict() == {
+        "termType": "matrixTerm",
+        "evolvedVar": distribution.name,
+        "implicitVar": distribution.name,
+        "spatialProfile": heatingProfile.data.tolist(),
+        "harmonicProfile": [],
+        "velocityProfile": v2Profile.data.tolist(),
+        "evaluatedTermGroup": 0,
+        "implicitGroups": [1],
+        "generalGroups": [],
+        "customNormConst": {"multConst": normConst},
+        "timeSignalData": {
+            "timeSignalType": "none",
+            "timeSignalPeriod": 0.0,
+            "timeSignalParams": [],
+            "realTimePeriod": False,
+        },
+        "varData": {
+            "requiredRowVarNames": [density.name],
+            "requiredRowVarPowers": [-1.0],
+            "requiredColVarNames": [],
+            "requiredColVarPowers": [],
+            "requiredMBRowVarNames": [],
+            "requiredMBRowVarPowers": [],
+            "requiredMBColVarNames": [],
+            "requiredMBColVarPowers": [],
+        },
+        "stencilData": {
+            "stencilType": "vDiffusionStencil",
+            "modelboundA": "none",
+            "rowHarmonic": 1,
+            "colHarmonic": 1,
+            "fixedA": v2bProfile.data.tolist(),
+        },
+        "skipPattern": False,
+        "fixedMatrix": False,
+    }
+
+    # Bad case - heating profile is not in spatial coordinate X
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.diffusiveHeatingTerm(
+            grid,
+            norms,
+            distribution,
+            density,
+            heatingProfile=v2Profile,
+        )
+    assert (
+        e_info.value.args[0]
+        == "heatingProfile in diffusiveHeatingTerm must be a spatial profile"
+    )
