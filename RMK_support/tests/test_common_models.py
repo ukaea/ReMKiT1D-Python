@@ -3294,3 +3294,324 @@ def test_diffusive_heating_term(grid: Grid, norms: dict):
         e_info.value.args[0]
         == "heatingProfile in diffusiveHeatingTerm must be a spatial profile"
     )
+
+
+def test_logicalBCmodel(grid: Grid):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionCurrent = vc.Variable("J", grid, isDerived=True, isScalar=True)
+
+    # By default
+    # - No dual grid or boundary value density is used
+    # - Total current at boundary is zero
+    # - Bisection tolerance for velocity cutoff is 1e-12
+    # - BC is applied to the right boundary only
+    # - All harmonics are evolved
+
+    model = cm.logicalBCModel(
+        grid,
+        distribution,
+        ionCurrent,
+        elDensity,
+    )
+
+    # l+1 harmonic term constants at right boundary for 1st harmonic (l=0)
+    l = 0
+    normPlus0 = -(l + 1) / ((2 * l + 3))
+
+    # l-1 harmonic term constants at right boundary for 2nd harmonic (l=1)
+    l = 1
+    normMinus1 = -l / ((2 * l - 1))
+
+    result = {
+        "type": "customModel",
+        "termTags": [
+            "lbcPlus_odd1",
+            "lbcPlus_even1",
+            "lbcMinus_odd2",
+            "lbcMinus_even2",
+        ],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "modelboundLBCData",
+            "ionCurrentVarName": ionCurrent.name,
+            "totalCurrentVarName": "none",
+            "bisectionTolerance": 1e-12,
+            "leftBoundary": False,
+            "ruleName": "rightDistExt",
+            "requiredVarNames": [distribution.name, elDensity.name],
+        },
+        "lbcPlus_odd1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
+                "leftBoundary": True,
+                "includedDecompHarmonics": [2],
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcPlus_even1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
+                "leftBoundary": True,
+                "includedDecompHarmonics": [1],
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcMinus_odd2": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 2,
+                "colHarmonic": 1,
+                "leftBoundary": True,
+                "includedDecompHarmonics": [2],
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcMinus_even2": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 2,
+                "colHarmonic": 1,
+                "leftBoundary": True,
+                "includedDecompHarmonics": [1],
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert model.dict() == result
+
+    # Using evolvedHarmonics l=0 and l=1 at left boundary
+
+    modelLeft = cm.logicalBCModel(
+        grid,
+        distribution,
+        ionCurrent,
+        elDensity,
+        leftBoundary=True,
+        evolvedHarmonics=[0, 1],
+    )
+
+    # l-1 harmonic term constants at right boundary for 2nd harmonic (l=1)
+    l = 1
+    normMinus0 = +l / ((2 * l - 1))
+
+    # l+1 harmonic term constants at right boundary for 1st harmonic (l=0)
+    l = 0
+    normPlus1 = +(l + 1) / ((2 * l + 3))
+
+    resultLeft = {
+        "type": "customModel",
+        "termTags": ["lbcMinus0", "lbcPlus1"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "modelboundLBCData",
+            "ionCurrentVarName": ionCurrent.name,
+            "totalCurrentVarName": "none",
+            "bisectionTolerance": 1e-12,
+            "leftBoundary": True,
+            "ruleName": "leftDistExt",
+            "requiredVarNames": [distribution.name, elDensity.name],
+        },
+        "lbcMinus0": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 0,
+                "colHarmonic": 1,
+                "leftBoundary": True,
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcPlus1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
+                "leftBoundary": True,
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert modelLeft.dict() == resultLeft
