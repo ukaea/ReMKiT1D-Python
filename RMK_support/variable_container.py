@@ -187,7 +187,7 @@ class Variable(DerivationArgument):
             isDistribution (bool): True for distribution-like variables. Defaults to False.
             units (str): Variable units. Defaults to 'normalized units'.
             isStationary (bool): True if the variable is stationary (d/dt = 0). Defaults to False.
-            isScalar (bool): True if the variable is a scalar. Defaults to False.
+            isScalar (bool): True if the variable is a scalar - automatically sets the variable to derived. Defaults to False.
             isSingleHarmonics (bool): True if the variable is a single harmonics (used currently only for modelbound data). Defaults to False.
             isOnDualGrid (bool): True if the variable is defined on dual grid. Defaults to False.
             priority (int): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
@@ -253,9 +253,14 @@ class Variable(DerivationArgument):
             )
         self.__isScalar__: bool = kwargs.get("isScalar", False)
         if self.__isScalar__:
-            assert self.__isDerived__, (
-                "INVALID: Implicit variable " + name + " set as scalar"
-            )
+            self.__isDerived__ = True
+            if not kwargs.get("isDerived", True):
+                warnings.warn(
+                    "Variable "
+                    + name
+                    + " has is scalar, but is explicitly set to not be derived. Overriding to isDerived=True!"
+                )
+
         self.__isOnDualGrid__: bool = kwargs.get("isOnDualGrid", False)
         if "priority" in kwargs:
             assert self.__isDerived__, (
