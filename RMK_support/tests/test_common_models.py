@@ -3615,3 +3615,71 @@ def test_logicalBCmodel(grid: Grid):
     }
 
     assert modelLeft.dict() == resultLeft
+
+
+def test_dv_energy_term(grid: Grid):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    vGrid = grid.vGrid
+
+    dv = grid.vWidths
+
+    vProfile = grid.profile(np.array([1 / (v**2) for v in vGrid]), dim="V")
+
+    interpCoeffs = Profile(np.zeros(len(dv)), dim="V")
+
+    # Repeat for different powers of v**k
+
+    for k in range(3):
+
+        energyTerm = cm.dvEnergyTerm(grid, distribution, k)
+
+        vSum = vGrid**k * np.zeros(len(vGrid))
+
+        vSum[:-1] = vGrid[:-1] ** (2 + k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
+
+        dragProfile = Profile(dv * np.ones(len(vGrid)) * vSum, dim="V")
+
+        # Must assign an evolved var to the term to convert to dict()
+        energyTerm.evolvedVar = distribution
+
+        assert energyTerm.dict() == {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": vProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": 1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+                "fixedC": dragProfile.data.tolist(),
+                "fixedInterp": interpCoeffs.data.tolist(),
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        }
