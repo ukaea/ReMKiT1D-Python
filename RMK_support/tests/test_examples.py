@@ -1,8 +1,8 @@
 import sys
 
 sys.path.append("./example_sources")
-import epperlein_short_test # type: ignore 
-import solkit_mijin_thesis # type: ignore
+import epperlein_short_test  # type: ignore
+import solkit_mijin_thesis  # type: ignore
 import os
 import numpy as np
 import pytest
