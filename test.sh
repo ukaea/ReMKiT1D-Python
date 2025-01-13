@@ -1,4 +1,5 @@
 #!bin/bash
+set -e
 cd $PWD/RMK_support/tests
 rm -rf example_sources
 mkdir example_sources 
