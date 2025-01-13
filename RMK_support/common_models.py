@@ -352,12 +352,9 @@ def implicitTemperatures(
             if evolvedXU2Cells is not None:
                 diag = mc.DiagonalStencil(evolvedXU2Cells)
 
-            tempModel.ddt[temp] += (
-                normU2
-                * speciesFluxes[i]
-                / colDensity**2
-                * diag(speciesFluxes[i]).rename("U2_term_" + temp.name)
-            )
+            tempModel.ddt[temp] += normU2 * diag(
+                speciesFluxes[i] ** 2 / colDensity**2
+            ).rename("U2_term_" + temp.name)
 
     return tempModel
 
