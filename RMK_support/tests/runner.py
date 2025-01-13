@@ -1,6 +1,7 @@
 import pathlib, sys
 import pytest
 
+
 def main():
     cwd = pathlib.Path.cwd()
 
@@ -13,5 +14,6 @@ def main():
 
     return pytest.main()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     raise SystemExit(main())
