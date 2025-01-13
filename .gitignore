@@ -14,6 +14,8 @@ __pycache__
 *.xml
 *.tar*
 /docs/build
+RMK_support/tests/example_sources/epperlein_short_test.py
+RMK_support/tests/example_sources/solkit_mijin_thesis.py
 .venv
 build
 *.egg-info*
