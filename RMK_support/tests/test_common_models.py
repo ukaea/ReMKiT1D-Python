@@ -497,16 +497,8 @@ def test_implicit_temperature(grid: Grid, norms: dict):
         -amu * e.atomicA / (3 * elCharge) * norms["speed"] ** 2 / norms["eVTemperature"]
     )
 
-    U2_term_Te = (
-        normU2e
-        * (ne**-2)
-        * Ge
-        * mc.MatrixTerm(
-            "U2_term_Te",
-            diagU2,
-            evolvedVar=Te,
-            implicitVar=Ge,
-        )
+    U2_term_Te = normU2e * mc.MatrixTerm(
+        "U2_term_Te", diagU2, evolvedVar=Te, implicitVar=Ge, C=Ge / ne**2
     )
 
     # Ion terms
@@ -537,16 +529,8 @@ def test_implicit_temperature(grid: Grid, norms: dict):
         / norms["eVTemperature"]
     )
 
-    U2_term_Ti = (
-        normU2i
-        * (ni**-2)
-        * Gi
-        * mc.MatrixTerm(
-            "U2_term_Ti",
-            diagU2,
-            evolvedVar=Ti,
-            implicitVar=Gi,
-        )
+    U2_term_Ti = normU2i * mc.MatrixTerm(
+        "U2_term_Ti", diagU2, evolvedVar=Ti, implicitVar=Gi, C=Gi / ni**2
     )
 
     assert newModel.dict() == {
