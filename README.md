@@ -45,6 +45,10 @@ pip install .
 ```
 from the repository root. 
 
+## Testing
+
+Tests automatically run several example scripts, and these need to be pulled from the examples directory. To run tests using pytest run `bash ./test.sh` from the root directory. Any command line arguments will be passed on to pytest.
+
 ## Repository structure
 
 The package files are in the RMK_support directory, together with the tests, which can be run using pytest.
