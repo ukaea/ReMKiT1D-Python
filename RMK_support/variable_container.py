@@ -362,29 +362,47 @@ class Variable(DerivationArgument):
     def dual(self, var: Self):
         self.__dual__ = var
 
-    def makeDual(self,name:Optional[str]=None):
+    def makeDual(self, name: Optional[str] = None):
         """Create a dual variable from this variable, assigning the dual to self. If dual is already assigned will return existing dual instead of constructing new.
 
         Args:
             name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
         """
         if self.dual is not None:
-            return self.dual 
+            return self.dual
 
-        assert not self.isScalar, "Scalar variable "+self.name+" cannot have a dual assigned"
-        assert not self.isSingleHarmonic, "Single harmonic variable "+self.name+" cannot have a dual assigned"
-
-        dualDeriv = InterpolationDerivation(
-        self.grid, True if self.isDistribution else not self.isOnDualGrid, self.isDistribution
+        assert not self.isScalar, (
+            "Scalar variable " + self.name + " cannot have a dual assigned"
+        )
+        assert not self.isSingleHarmonic, (
+            "Single harmonic variable " + self.name + " cannot have a dual assigned"
         )
 
-        dualVar = Variable(name if name is not None else self.name+"_dual",self.grid,isDistribution=self.isDistribution,isOnDualGrid=True if self.isDistribution else not self.isOnDualGrid,derivation=dualDeriv,derivationArgs=[self.name],normSI=self.__normSI__,units=self.__normUnits__,unitSI=self.__unitSI__,isCommunicated=self.isCommunicated,inOutput=self.inOutput)
+        dualDeriv = InterpolationDerivation(
+            self.grid,
+            True if self.isDistribution else not self.isOnDualGrid,
+            self.isDistribution,
+        )
 
-        self.dual = dualVar 
+        dualVar = Variable(
+            name if name is not None else self.name + "_dual",
+            self.grid,
+            isDistribution=self.isDistribution,
+            isOnDualGrid=True if self.isDistribution else not self.isOnDualGrid,
+            derivation=dualDeriv,
+            derivationArgs=[self.name],
+            normSI=self.__normSI__,
+            units=self.__normUnits__,
+            unitSI=self.__unitSI__,
+            isCommunicated=self.isCommunicated,
+            inOutput=self.inOutput,
+        )
+
+        self.dual = dualVar
         dualVar.dual = self
 
         return dualVar
-        
+
     @property
     def data(self):
         return self.__data__
