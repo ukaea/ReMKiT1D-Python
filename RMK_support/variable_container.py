@@ -188,7 +188,7 @@ class Variable(DerivationArgument):
             units (str): Variable units. Defaults to 'normalized units'.
             isStationary (bool): True if the variable is stationary (d/dt = 0). Defaults to False.
             isScalar (bool): True if the variable is a scalar - automatically sets the variable to derived. Defaults to False.
-            isSingleHarmonics (bool): True if the variable is a single harmonics (used currently only for modelbound data). Defaults to False.
+            isSingleHarmonic (bool): True if the variable is a single harmonic (used currently only for modelbound data). Defaults to False.
             isOnDualGrid (bool): True if the variable is defined on dual grid. Defaults to False.
             priority (int): Variable priority used in things like derivation call in integrators. Defaults to 0 (highest priority).
             derivation (Derivation): The derivation object associated with this variable. If present will make the variable automatically derived.
@@ -362,6 +362,29 @@ class Variable(DerivationArgument):
     def dual(self, var: Self):
         self.__dual__ = var
 
+    def makeDual(self,name:Optional[str]=None):
+        """Create a dual variable from this variable, assigning the dual to self. If dual is already assigned will return existing dual instead of constructing new.
+
+        Args:
+            name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
+        """
+        if self.dual is not None:
+            return self.dual 
+
+        assert not self.isScalar, "Scalar variable "+self.name+" cannot have a dual assigned"
+        assert not self.isSingleHarmonic, "Single harmonic variable "+self.name+" cannot have a dual assigned"
+
+        dualDeriv = InterpolationDerivation(
+        self.grid, True if self.isDistribution else not self.isOnDualGrid, self.isDistribution
+        )
+
+        dualVar = Variable(name if name is not None else self.name+"_dual",self.grid,isDistribution=self.isDistribution,isOnDualGrid=True if self.isDistribution else not self.isOnDualGrid,derivation=dualDeriv,derivationArgs=[self.name],normSI=self.__normSI__,units=self.__normUnits__,unitSI=self.__unitSI__,isCommunicated=self.isCommunicated,inOutput=self.inOutput)
+
+        self.dual = dualVar 
+        dualVar.dual = self
+
+        return dualVar
+        
     @property
     def data(self):
         return self.__data__
@@ -683,27 +706,13 @@ def varAndDual(
     secondaryName = name if primaryOnDualGrid else name + dualSuffix
 
     isDistribution = kwargs.get("isDistribution", False)
-    secondaryDeriv = InterpolationDerivation(
-        gridObj, True if isDistribution else not primaryOnDualGrid, isDistribution
-    )
 
     primary = Variable(
         primaryName, gridObj, isOnDualGrid=primaryOnDualGrid or isDistribution, **kwargs
     )
 
-    kwargs["derivation"] = secondaryDeriv
-    kwargs["derivationArgs"] = [primaryName]
-    kwargs["isStationary"] = False
+    secondary = primary.makeDual(secondaryName)
 
-    secondary = Variable(
-        secondaryName,
-        gridObj,
-        isOnDualGrid=not primaryOnDualGrid or isDistribution,
-        **kwargs,
-    )
-
-    primary.dual = secondary
-    secondary.dual = primary
     return primary, secondary
 
 
