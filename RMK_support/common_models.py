@@ -1840,27 +1840,46 @@ def standardBaseFluid(
         Model: Base fluid model ready to be extended or added to ReMKiT1D context
     """
 
-    assert (isinstance(density.dual, Variable) and not density.isOnDualGrid), "standardBaseFluid model argument 'density' must live on the regular grid and have a .dual Variable on the dual grid"
+    assert (
+        isinstance(density.dual, Variable) and not density.isOnDualGrid
+    ), "standardBaseFluid model argument 'density' must live on the regular grid and have a .dual Variable on the dual grid"
 
-    assert (isinstance(flux.dual, Variable) and not flux.isOnDualGrid), "standardBaseFluid model argument 'flux' must live on the regular grid and have a .dual Variable on the dual grid"
+    assert (
+        isinstance(flux.dual, Variable) and not flux.isOnDualGrid
+    ), "standardBaseFluid model argument 'flux' must live on the regular grid and have a .dual Variable on the dual grid"
 
-    assert (isinstance(flowSpeed.dual, Variable) and not flowSpeed.isOnDualGrid), "standardBaseFluid model argument 'flowSpeed' must live on the regular grid and have a .dual Variable on the dual grid"
+    assert (
+        isinstance(flowSpeed.dual, Variable) and not flowSpeed.isOnDualGrid
+    ), "standardBaseFluid model argument 'flowSpeed' must live on the regular grid and have a .dual Variable on the dual grid"
 
-    assert (isinstance(temperature.dual, Variable) and not temperature.isOnDualGrid), "standardBaseFluid model argument 'temperature' must live on the regular grid and have a .dual Variable on the dual grid"
+    assert (
+        isinstance(temperature.dual, Variable) and not temperature.isOnDualGrid
+    ), "standardBaseFluid model argument 'temperature' must live on the regular grid and have a .dual Variable on the dual grid"
 
-    assert (isinstance(eField.dual, Variable) and not eField.isOnDualGrid), "standardBaseFluid model argument 'eField' must live on the regular grid and have a .dual Variable on the dual grid"
+    assert (
+        isinstance(eField.dual, Variable) and not eField.isOnDualGrid
+    ), "standardBaseFluid model argument 'eField' must live on the regular grid and have a .dual Variable on the dual grid"
 
     if energyDensity is not None:
-        assert (isinstance(energyDensity.dual, Variable) and not energyDensity.isOnDualGrid), "standardBaseFluid model argument 'energyDensity' must live on the regular grid and have a .dual Variable on the dual grid"
+        assert (
+            isinstance(energyDensity.dual, Variable) and not energyDensity.isOnDualGrid
+        ), "standardBaseFluid model argument 'energyDensity' must live on the regular grid and have a .dual Variable on the dual grid"
 
     if heatflux is not None:
-        assert (isinstance(heatflux.dual, Variable) and not heatflux.isOnDualGrid), "standardBaseFluid model argument 'heatflux' must live on the regular grid and have a .dual Variable on the dual grid"
+        assert (
+            isinstance(heatflux.dual, Variable) and not heatflux.isOnDualGrid
+        ), "standardBaseFluid model argument 'heatflux' must live on the regular grid and have a .dual Variable on the dual grid"
 
     if viscosity is not None:
-        assert (isinstance(viscosity.dual, Variable) and not viscosity.isOnDualGrid), "standardBaseFluid model argument 'viscosity' must live on the regular grid and have a .dual Variable on the dual grid"
+        assert (
+            isinstance(viscosity.dual, Variable) and not viscosity.isOnDualGrid
+        ), "standardBaseFluid model argument 'viscosity' must live on the regular grid and have a .dual Variable on the dual grid"
 
     if viscosityLimitMult is not None:
-        assert (isinstance(viscosityLimitMult.dual, Variable) and not viscosityLimitMult.isOnDualGrid), "standardBaseFluid model argument 'viscosityLimitMult' must live on the regular grid and have a .dual Variable on the dual grid"
+        assert (
+            isinstance(viscosityLimitMult.dual, Variable)
+            and not viscosityLimitMult.isOnDualGrid
+        ), "standardBaseFluid model argument 'viscosityLimitMult' must live on the regular grid and have a .dual Variable on the dual grid"
 
     newModel = mc.Model("fluidBase_" + species.name)
     elMass = 9.10938e-31
