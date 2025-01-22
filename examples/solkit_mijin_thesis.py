@@ -330,9 +330,9 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
 
     amjuelPath = kwargs.get("amjuelPath", "../data/amjuel.tex")
     if kwargs.get("amjuelCXRate", False):
-        logTi = rmk.varFromNode("logTi",rk.grid,isOnDualGrid=True,node=log(rk.norms["eVTemperature"]*node(Te_dual)/2))
+        logTi = rmk.varFromNode("logTi",rk.grid,isOnDualGrid=True,node=log(rk.norms["eVTemperature"]*node(Te_dual)/2)).onDualGrid()
         
-        cxRate = rmk.Variable("cxRate",rk.grid,derivation=ams.AMJUELDeriv1D("cxRateDeriv","3.1.8","H.2",timeNorm=timeNorm,densNorm=densNorm,amjuelFilename=amjuelPath),derivationArgs = [logTi.name])
+        cxRate = rmk.Variable("cxRate",rk.grid,derivation=ams.AMJUELDeriv1D("cxRateDeriv","3.1.8","H.2",timeNorm=timeNorm,densNorm=densNorm,amjuelFilename=amjuelPath),derivationArgs = [logTi.name],isOnDualGrid=True)
 
         rk.variables.add(logTi,cxRate)
 
@@ -359,7 +359,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     neutDynModel = rmk.Model("neutDyn")
 
     if kwargs.get("amjuelCXRate", False):
-        diffCoeff = DerivationClosure(NodeDerivation("amjDiff",np.sqrt(Tn)/2 * node(Te_dual)**(0.5) /(node(ni_dual)*node(cxRate))),ni_dual,Te_dual,cxRate)
+        diffCoeff = DerivationClosure(NodeDerivation("amjDiff",np.sqrt(Tn)/2 * node(Te_dual)**(0.5) /(node(ni_dual)*node(cxRate))))
         
         neutDynModel.ddt[nn[0]] += elMass/ionMass * stencils.DiffusionStencil(diffCoeff,diffCoeffOnDualGrid=True)(nn[0]).rename("neutralDiff")
 
