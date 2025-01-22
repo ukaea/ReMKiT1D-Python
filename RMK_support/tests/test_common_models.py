@@ -3157,7 +3157,12 @@ def test_ampere_maxwell_kinetic_term(grid: Grid, norms: dict):
     amTerm.evolvedVar = distribution
 
     normConst = (
-        elCharge / (3 * epsilon0) * norms["density"] * norms["time"] / norms["EField"]
+        elCharge
+        / (3 * epsilon0)
+        * norms["density"]
+        * norms["time"]
+        * norms["velGrid"]
+        / norms["EField"]
     )
 
     assert amTerm.dict() == {
@@ -3359,9 +3364,9 @@ def test_logicalBCmodel(grid: Grid):
                 "stencilType": "scalingLogicalBoundaryStencil",
                 "rowHarmonic": 1,
                 "colHarmonic": 2,
-                "leftBoundary": True,
+                "leftBoundary": False,
                 "includedDecompHarmonics": [2],
-                "ruleName": "leftDistExt",
+                "ruleName": "rightDistExt",
                 "requiredVarNames": [distribution.name, elDensity.name],
             },
             "skipPattern": False,
@@ -3398,9 +3403,9 @@ def test_logicalBCmodel(grid: Grid):
                 "stencilType": "scalingLogicalBoundaryStencil",
                 "rowHarmonic": 1,
                 "colHarmonic": 2,
-                "leftBoundary": True,
+                "leftBoundary": False,
                 "includedDecompHarmonics": [1],
-                "ruleName": "leftDistExt",
+                "ruleName": "rightDistExt",
                 "requiredVarNames": [distribution.name, elDensity.name],
             },
             "skipPattern": False,
@@ -3437,9 +3442,9 @@ def test_logicalBCmodel(grid: Grid):
                 "stencilType": "scalingLogicalBoundaryStencil",
                 "rowHarmonic": 2,
                 "colHarmonic": 1,
-                "leftBoundary": True,
+                "leftBoundary": False,
                 "includedDecompHarmonics": [2],
-                "ruleName": "leftDistExt",
+                "ruleName": "rightDistExt",
                 "requiredVarNames": [distribution.name, elDensity.name],
             },
             "skipPattern": False,
@@ -3476,9 +3481,9 @@ def test_logicalBCmodel(grid: Grid):
                 "stencilType": "scalingLogicalBoundaryStencil",
                 "rowHarmonic": 2,
                 "colHarmonic": 1,
-                "leftBoundary": True,
+                "leftBoundary": False,
                 "includedDecompHarmonics": [1],
-                "ruleName": "leftDistExt",
+                "ruleName": "rightDistExt",
                 "requiredVarNames": [distribution.name, elDensity.name],
             },
             "skipPattern": False,
