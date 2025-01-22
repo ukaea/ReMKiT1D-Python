@@ -568,7 +568,9 @@ class Model:
 
     def __init__(self, modelTag: str) -> None:
         self.__modelTag__ = modelTag
-        self.terms: Dict[str, Term] = {} # Set to "public" naming currently, to be changed if further refactor needed
+        self.terms: Dict[str, Term] = (
+            {}
+        )  # Set to "public" naming currently, to be changed if further refactor needed
         self.__modelboundData__: Dict[str, object] = {}
         self.__termGeneratorProperties__: Dict[str, object] = {}
         self.__termGeneratorActiveImplicitGroups__: Dict[str, List[int]] = {}
@@ -580,9 +582,7 @@ class Model:
 
     @property
     def activeImplicitGroups(self):
-        activeGroups = sum(
-            [self.terms[tag].implicitGroups for tag in self.terms], []
-        )
+        activeGroups = sum([self.terms[tag].implicitGroups for tag in self.terms], [])
         activeGroups += sum(
             [
                 self.__termGeneratorActiveImplicitGroups__[tag]
@@ -595,9 +595,7 @@ class Model:
 
     @property
     def activeGeneralGroups(self):
-        activeGroups = sum(
-            [self.terms[tag].generalGroups for tag in self.terms], []
-        )
+        activeGroups = sum([self.terms[tag].generalGroups for tag in self.terms], [])
         activeGroups += sum(
             [
                 self.__termGeneratorActiveGeneralGroups__[tag]

@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.1, 2024-11-06
+## v1.2.1, 2025-01-22
 
 - New standard textbook option for logLei discontinuity fix
 - Support for changing BDE integrator consolidation interval
@@ -23,7 +23,7 @@
 
 ### Bug Fixes
 
-- N/A
+- e-i collision operator ion density dependence fixed
 
 ### New Notebooks 
 

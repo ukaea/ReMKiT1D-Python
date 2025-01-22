@@ -509,6 +509,7 @@ def generatorSKThesisKin(**kwargs) -> RKWrapper:
         wrapper=rk,
         dualDistFun="f_dual",
         ionFluxVar="Gi_dual",
+        ionDensVarDual="ni_dual"
     )
 
     # ### e-e collisions for odd l
@@ -551,7 +552,7 @@ def generatorSKThesisKin(**kwargs) -> RKWrapper:
         "lbc_right",
         "f",
         rk,
-        sc.derivationRule("lbcRightExt", ["f", "ne", "ne_dual", "ne_b"]),
+        sc.derivationRule("lbcRightExt", ["f", "ne", "ne_dual", "ni_b"]),
         "G_b",
         evolvedHarmonics=list(range(1, gridObj.numH() + 1, 2)),
     )
