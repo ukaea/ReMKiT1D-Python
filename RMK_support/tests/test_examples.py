@@ -3,6 +3,7 @@ import sys
 sys.path.append("./example_sources")
 import epperlein_short_test  # type: ignore
 import solkit_mijin_thesis  # type: ignore
+import solkit_mijin_thesis_kin  # type: ignore
 import os
 import numpy as np
 import pytest
@@ -78,4 +79,34 @@ def test_solkit_fluid_janev():
     rk.writeConfigFile()
 
     os.remove(os.path.curdir + "/SOL-KiT_Fluid_Test.pdf")
+    os.remove(os.path.curdir + "/config.json")
+
+
+def test_solkit_kinetic_janev():
+
+    dx0 = 0.13542325129584085e0 * 8.5 / 2.5 * 10.18 / 9.881556569543156
+    dxN = 0.13542325129584085e0 * 0.5 / 2.5 * 10.18 / 9.881556569543156
+    heatingPower = 3.5464790894703255
+
+    with pytest.warns(UserWarning):
+
+        rk = solkit_mijin_thesis_kin.generatorSKThesisKin(
+            dx0=dx0,
+            mpiProcsX=16,
+            dxN=dxN,
+            Nx=64,
+            Nh=9,
+            lmax=1,
+            numNeutrals=5,
+            initialTimestep=0.5,
+            heatingPower=heatingPower,
+            includedJanevTransitions=["ex", "deex", "ion", "recomb3b"],
+            nu=0.8 / 1.09345676,
+        )
+
+        rk.generatePDF("SOL-KiT Kinetic Test")
+
+        rk.writeConfigFile()
+
+    os.remove(os.path.curdir + "/SOL-KiT_Kinetic_Test.pdf")
     os.remove(os.path.curdir + "/config.json")

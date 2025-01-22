@@ -858,7 +858,7 @@ def flowingIonEIColl(
         ionFlux (Optional[Variable], optional): Ion flux variable (dual if harmonics staggered) used to pass the electron-ion friction terms to the ions (requires l=1 to be among the evolved harmonics). Defaults to None.
 
     Returns:
-        Model: _description_
+        Model: Electron-ion collision operator model assuming flowing cold ions
     """
     # NOTE: Needs a lot of work on optimization
     assert (
@@ -868,9 +868,7 @@ def flowingIonEIColl(
     vGrid = grid.vGrid
     lNums = grid.lGrid
 
-    derivReqFun = (
-        distribution.dual if ionFlowSpeed.isOnDualGrid is None else distribution
-    )
+    derivReqFun = distribution.dual if ionFlowSpeed.isOnDualGrid else distribution
 
     mbData = mc.VarlikeModelboundData()
 
@@ -1191,7 +1189,7 @@ def flowingIonEIColl(
             .withSkippingPattern()
         )
 
-        # C6*J1-l term
+        # # C6*J1-l term
         MBVars = mbData["logLei"] * mbData["df0"] * mbData["CIJ" + str(1 - l)]
 
         C = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
@@ -1546,7 +1544,12 @@ def ampereMaxwellKineticElTerm(
     elCharge = 1.60218e-19
     epsilon0 = 8.854188e-12  # vacuum permittivity
     normConst = (
-        elCharge / (3 * epsilon0) * norms["density"] * norms["time"] / norms["EField"]
+        elCharge
+        / (3 * epsilon0)
+        * norms["density"]
+        * norms["time"]
+        * norms["velGrid"]
+        / norms["EField"]
     )
 
     return normConst * stencils.MomentStencil(1, 2)(distribution).rename("kin_AM_term")
@@ -1686,7 +1689,7 @@ def logicalBCModel(
                     density,
                     densityDual,
                     densityOnBoundary,
-                    leftBoundary=True,
+                    leftBoundary=False,
                     decompHarmonics=cast(List, oddLHarmonics),
                 )
 
@@ -1701,7 +1704,7 @@ def logicalBCModel(
                     density,
                     densityDual,
                     densityOnBoundary,
-                    leftBoundary=True,
+                    leftBoundary=False,
                     decompHarmonics=cast(List, evenLHarmonics),
                 )
 
@@ -1738,7 +1741,7 @@ def logicalBCModel(
                     density,
                     densityDual,
                     densityOnBoundary,
-                    leftBoundary=True,
+                    leftBoundary=False,
                     decompHarmonics=cast(List, oddLHarmonics),
                 )
 
@@ -1753,7 +1756,7 @@ def logicalBCModel(
                     density,
                     densityDual,
                     densityOnBoundary,
-                    leftBoundary=True,
+                    leftBoundary=False,
                     decompHarmonics=cast(List, evenLHarmonics),
                 )
 

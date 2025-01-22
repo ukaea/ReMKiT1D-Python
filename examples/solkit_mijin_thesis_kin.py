@@ -60,7 +60,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     )
     rk.IOContext = rmk.IOContext(jsonFilepath=kwargs.get("jsonFilepath", "./config.json"),HDF5Dir=hdf5Filepath)
 
-    rk.mpiContext = rmk.MPIContext(kwargs.get("mpiProcs", 8),kwargs.get("mpiProcsH", 1))
+    rk.mpiContext = rmk.MPIContext(kwargs.get("mpiProcsX", 8),kwargs.get("mpiProcsH", 1))
 
     dx0 = kwargs.get("dx0", 0.27)
     dxN = kwargs.get("dxN", 0.0125)
@@ -87,7 +87,6 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     timeNorm = rk.norms["time"]
 
     lengthNorm = rk.norms["length"]
-    sigmaNorm = rk.norms["crossSection"]
     qNorm = rk.norms["heatFlux"]
 
     Tn = kwargs.get("Tn", 3.0) / tempNorm
@@ -143,7 +142,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     ue_dual,ue = rmk.varAndDual("ue",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["flowSpeedFromFlux"],derivationArgs=[Ge_dual.name,ne_dual.name])
 
-    Te,Te_dual = rmk.varAndDual("Te",rk.grid,derivation=rk.textbook["tempFromEnergye"],derivationArgs=[We.name,ne,Ge])
+    Te,Te_dual = rmk.varAndDual("Te",rk.grid,derivation=rk.textbook["tempFromEnergye"],derivationArgs=[We.name,ne.name,Ge.name],data=TInit)
     qe_tot_dual,qe_tot = rmk.varAndDual("qe_tot",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["heatFluxMoment"],derivationArgs=[f.name])
 
     qe_dual,qe = rmk.varAndDual("qe",rk.grid,primaryOnDualGrid=True,derivation = NodeDerivation("qe",node(qe_tot_dual) - 2.5 * node(ue_dual)*node(Te_dual) ))
@@ -151,7 +150,10 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     ni, ni_dual = rmk.varAndDual("ni",rk.grid,data=nInit)
     Gi_dual,Gi = rmk.varAndDual("Gi",rk.grid,primaryOnDualGrid=True)
     ui_dual,ui = rmk.varAndDual("ui",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["flowSpeedFromFlux"],derivationArgs=[Gi_dual.name,ni_dual.name])
-    
+
+    electronSpecies.associateVar(ne,ne_dual)
+    ionSpecies.associateVar(ni,ni_dual)
+
     rk.variables.add(f,f_dual,We,ne,ne_dual,Ge_dual,Ge,qe_tot_dual,qe_tot,Te,Te_dual,qe_dual,qe,ue_dual,ue,ni,ni_dual,Gi,Gi_dual,ui,ui_dual)
 
     E_dual, E = rmk.varAndDual("E",rk.grid,primaryOnDualGrid=True)
@@ -163,7 +165,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     cs_b = BoundedExtrapolationDerivation("cs_b")(cs)
     cs_b.scalarHostProcess = rk.mpiContext.fluidProcs[-1]
 
-    n_b = BoundedExtrapolationDerivation("n_b")(ne)
+    n_b = BoundedExtrapolationDerivation("n_b")(ni)
     n_b.scalarHostProcess = rk.mpiContext.fluidProcs[-1]
 
     extrap_LB_ui = DerivationClosure(BoundedExtrapolationDerivation("extrap_LB_ui",lowerBound=cs_b),ui)
@@ -193,22 +195,10 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     kappaClosure = DerivationClosure(SimpleDerivation("kappa",-elCondConst*nConstGradT*normalizationConst,[2.5,-1.0]),Te,logLee)
     gradTClosure = DerivationClosure(rk.textbook["gradDeriv"],Te)
     qt = (kappaClosure*gradTClosure)(Te).rename("qT")
+    qt_dual = qt.makeDual()
 
-    #this is where the new dual variable construction is needed
-    rk.variables.add(qt)
-    rk.addVarAndDual(
-        "qT",
-        isDerived=True,
-        derivationRule=sc.derivationRule("qT", ["Te", "logLee"]),
-        isCommunicated=True,
-    )  # Braginskii heatflux variable for comparison
-
-    rk.addVar(
-        "qRatio",
-        isDerived=True,
-        isOnDualGrid=True,
-        derivationRule=sc.derivationRule("flowSpeedFromFlux", ["qe_dual", "qT_dual"]),
-    )
+    q_ratio = varFromNode("qRatio",rk.grid,node(qe_dual)/node(qt_dual),isOnDualGrid=True)
+    rk.variables.add(qt,qt_dual,q_ratio,logLee)
 
     # Set neutral densities
 
@@ -217,7 +207,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     for i,neut in enumerate(neutralDensList):
         n,n_dual = rmk.varAndDual(neut,rk.grid,units="$10^{19} m^{-3}$")
         nn.append(n)
-        neutralSpecies[i].associateVar(n)
+        neutralSpecies[i].associateVar(n,n_dual)
         nn_dual.append(n_dual)
         rk.variables.add(n,n_dual)
     
@@ -227,85 +217,33 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     # ### Advection
 
-    advModel = cm.kinAdvX(modelTag="advf", distFunName="f", gridObj=gridObj)
-    rk.addModel(advModel.dict())
+    rk.models.add(cm.kinAdvX(f,rk.grid).rename("advf"))
 
     # ### E-field advection
 
-    cm.addExAdvectionModel(
-        modelTag="E-adv",
-        distFunName="f",
-        eFieldName="E_dual",
-        wrapper=rk,
-        dualDistFun="f_dual",
-    )
+    rk.models.add(cm.advectionEx(f,E_dual,rk.grid,rk.norms).rename("E-adv"))
 
     # ### e-e collisions for l=0
 
-    cm.addEECollIsotropic(
-        modelTag="e-e0", distFunName="f", elTempVar="Te", elDensVar="ne", wrapper=rk
-    )
+    rk.models.add(cm.eeCollIsotropic(f,Te,ne,rk.norms,rk.grid,rk.textbook).rename("e-e0"))
 
     # ### e-i collisions for odd l with flowing ions
 
-    cm.addFlowingIonEIColl(
-        modelTag="e-i_odd",
-        distFunName="f",
-        ionDensVar="ni",
-        ionFlowSpeedVar="ui_dual",
-        electronDensVar="ne_dual",
-        electronTempVar="Te_dual",
-        ionSpeciesName="D+",
-        evolvedHarmonics=list(range(2, gridObj.numH + 1, 2)),
-        wrapper=rk,
-        dualDistFun="f_dual",
-        ionFluxVar="Gi_dual",
-    )
+    rk.models.add(cm.flowingIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni,ui_dual,ne_dual,Te_dual,ionSpecies,list(range(2,rk.grid.numH+1,2)),Gi_dual).rename("e-i_odd"))
 
     # ### e-e collisions for odd l
 
-    cm.addEECollHigherL(
-        modelTag="e-e_odd",
-        distFunName="f",
-        elTempVar="Te_dual",
-        elDensVar="ne_dual",
-        wrapper=rk,
-        evolvedHarmonics=list(range(2, gridObj.numH + 1, 2)),
-        dualDistFun="f_dual",
-    )
+    rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te_dual,ne_dual,list(range(2,rk.grid.numH+1,2))).rename("e-e_odd"))
 
     if lMax > 1:
-        cm.addFlowingIonEIColl(
-            modelTag="e-i_even",
-            distFunName="f",
-            ionDensVar="ni",
-            ionFlowSpeedVar="ui",
-            electronDensVar="ne",
-            electronTempVar="Te",
-            ionSpeciesName="D+",
-            evolvedHarmonics=list(range(3, gridObj.numH + 1, 2)),
-            wrapper=rk,
-        )
+        
+        rk.models.add(cm.flowingIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni,ui,ne,Te,ionSpecies,list(range(3,rk.grid.numH+1,2)),Gi).rename("e-i_even"))
 
-        cm.addEECollHigherL(
-            modelTag="e-e_even",
-            distFunName="f",
-            elTempVar="Te",
-            elDensVar="ne",
-            wrapper=rk,
-            evolvedHarmonics=list(range(3, gridObj.numH + 1, 2)),
-        )
+        rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te,ne,list(range(3,rk.grid.numH+1,2))).rename("e-e_even"))
 
     # ### Logical boundary condition
 
-    cm.addLBCModel(
-        "lbc_right",
-        "f",
-        rk,
-        sc.derivationRule("lbcRightExt", ["f", "ne", "ne_dual", "ne_b"]),
-        "G_b",
-        evolvedHarmonics=list(range(1, gridObj.numH + 1, 2)),
-    )
+    rk.models.add(cm.logicalBCModel(rk.grid,f,G_b,ne,ne_dual,n_b,evolvedHarmonics=list(range(1, rk.grid.numH + 1, 2))).rename("lbc_right"))
 
     # ### Heating
 
@@ -315,438 +253,123 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     energyInjectionRate = (
         heatingPower * 1e6 * timeNorm / (densNorm * elCharge * tempNorm)
     )
-    energyInjectionRate = energyInjectionRate
     xProfileEnergy = np.zeros(Nx)
     xProfileEnergy[0:Nh] = energyInjectionRate
-    heatTerm = cm.diffusiveHeatingTerm(
-        "f", "ne", heatingProfile=xProfileEnergy.tolist(), wrapper=rk
-    )
-    heatModel = sc.CustomModel("heating")
-    heatModel.addTerm("diffHeating", heatTerm)
+
+    heatingModel = rmk.Model("heating")
+
+    heatingModel.ddt[f] += cm.diffusiveHeatingTerm(rk.grid,rk.norms,f,ne,rk.grid.profile(xProfileEnergy)).rename("diffHeating")
 
     # ### Heating perturbation
 
     if "perturbationTimeSignal" in kwargs:
         assert isinstance(
-            kwargs.get("perturbationTimeSignal"), sc.TimeSignalData
+            kwargs.get("perturbationTimeSignal"), rmk.TimeSignalData
         ), "perturbationTimeSignal not of correct type"
         heatingPower = kwargs.get("pertHeatingPower", 10.0) / Lh  # in MW/m^3
         energyInjectionRate = (
             heatingPower * 1e6 * timeNorm / (densNorm * elCharge * tempNorm)
         )
-        energyInjectionRate = energyInjectionRate
         xProfileEnergy[0:Nh] = energyInjectionRate
-        heatTermPert = cm.diffusiveHeatingTerm(
-            "f",
-            "ne",
-            heatingProfile=xProfileEnergy.tolist(),
-            wrapper=rk,
-            timeSignal=kwargs.get("perturbationTimeSignal"),
-        )
-        heatModel.addTerm("diffHeatingPert", heatTermPert)
+        heatingModel.ddt[f] += cm.diffusiveHeatingTerm(rk.grid,rk.norms,f,ne,rk.grid.profile(xProfileEnergy),kwargs.get("perturbationTimeSignal")).rename("diffHeatingPert")
 
-    rk.addModel(heatModel.dict())
+    rk.models.add(heatingModel)
 
-    # ### Ion continuity
+    rk.models.add(cm.standardBaseFluid(ionSpecies,ni,Gi,ui,Te,E))
+    rk.models.add(cm.bohmBoundaryModel(ionSpecies,ni,Gi,ui,Te,cs))
 
-    # Ion continuity advection
-
-    # Adding the model tag to tag list
-    modelTag = "continuity-ni"
-    # Initializing model using common models
-
-    if loglinExtrap:
-        ionContModel = cm.staggeredAdvection(
-            modelTag=modelTag, advectedVar="ni", fluxVar="Gi_dual"
-        )
-
-        normBC = sc.CustomNormConst(multConst=-1 / dxNNorm)
-        vDataBC = sc.VarData(
-            reqRowVars=["cs_lc", "ni_b", "ni"], reqRowPowers=[1.0, 1.0, -1.0]
-        )
-        evolvedVar = "ni"
-        outflowTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            customNormConst=normBC,
-            varData=vDataBC,
-            stencilData=sc.diagonalStencil(evolvedXCells=[len(xGridWidths)]),
-        )
-        ionContModel.addTerm("bcTerm", outflowTerm)
-
-    else:
-        ionContModel = cm.staggeredAdvection(
-            modelTag=modelTag,
-            advectedVar="ni",
-            fluxVar="Gi_dual",
-            advectionSpeed="ui",
-            lowerBoundVar="cs",
-            rightOutflow=True,
-        )
-
-    rk.addModel(ionContModel.dict())
-
-    # ### Pressure gradient forces
-
-    # Ion pressure grad
-
-    # Adding the model tag to tag list
-
-    modelTag = "pressureGrad-Gi"
-
-    # Initializing model
-    ionPressureGradModel = cm.staggeredPressureGrad(
-        modelTag=modelTag,
-        fluxVar="Gi_dual",
-        densityVar="ni",
-        temperatureVar="Te",
-        speciesMass=ionMass,
-    )
-
-    rk.addModel(ionPressureGradModel.dict())
-
-    # ### Momentum advection
-
-    # Ion momentum advection
-
-    # Adding the model tag to tag list
-    modelTag = "advection-Gi"
-
-    # Initializing model
-
-    if loglinExtrap:
-        ionMomAdvModel = cm.staggeredAdvection(
-            modelTag=modelTag,
-            advectedVar="Gi_dual",
-            fluxVar="",
-            advectionSpeed="ui",
-            staggeredAdvectionSpeed="ui_dual",
-            lowerBoundVar="cs",
-            rightOutflow=False,
-            staggeredAdvectedVar=True,
-        )
-
-        normBC = sc.CustomNormConst(multConst=-1 / dxNStagNorm)
-        vDataBC = sc.VarData(
-            reqRowVars=["cs_lc", "ni_b"],
-            reqRowPowers=[2.0, 1.0],
-            reqColVars=["ni"],
-            reqColPowers=[-1.0],
-        )
-        evolvedVar = "Gi_dual"
-        implicitVar = "ni"
-        outflowTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar,
-            customNormConst=normBC,
-            varData=vDataBC,
-            stencilData=sc.diagonalStencil(evolvedXCells=[len(xGridWidths) - 1]),
-        )
-
-        ionMomAdvModel.addTerm("bcTerm", outflowTerm)
-    else:
-        ionMomAdvModel = cm.staggeredAdvection(
-            modelTag=modelTag,
-            advectedVar="Gi_dual",
-            fluxVar="",
-            advectionSpeed="ui",
-            staggeredAdvectionSpeed="ui_dual",
-            lowerBoundVar="cs",
-            rightOutflow=True,
-            staggeredAdvectedVar=True,
-        )
-
-    rk.addModel(ionMomAdvModel.dict())
-
-    # ### Ampere-Maxwell term and Lorentz force
-
-    # Ampere-Maxwell E field equation
-
-    # Adding the model tag to tag list
-    modelTag = "ampereMaxwell"
-
-    # Initializing model
-    ampereMaxwellModel = cm.ampereMaxwell(
-        modelTag=modelTag,
-        eFieldName="E_dual",
-        speciesFluxes=["Gi_dual"],
-        species=[ionSpecies],
-    )
-
-    kinAMTerm = cm.ampereMaxwellKineticElTerm("f", "E_dual")
-
-    ampereMaxwellModel.addTerm("kinElTerm", kinAMTerm)
-
-    rk.addModel(ampereMaxwellModel.dict())
-
-    # Lorentz force terms
-
-    # Adding the model tag to tag list
-    modelTag = "lorentzForce"
-
-    # Initializing model
-    lorentzForceModel = cm.lorentzForces(
-        modelTag=modelTag,
-        eFieldName="E_dual",
-        speciesFluxes=["Gi_dual"],
-        speciesDensities=["ni_dual"],
-        species=[ionSpecies],
-    )
-
-    rk.addModel(lorentzForceModel.dict())
+    amModel = cm.ampereMaxwell(E_dual,[Gi_dual],[ionSpecies],rk.norms).rename("ampereMaxwell")
+    amModel.ddt[E_dual] += cm.ampereMaxwellKineticElTerm(f,rk.norms).rename("kinElTerm")
+    rk.models.add(amModel)
 
     # ### CX friction
 
     # Ion-neutral CX friction force terms
 
-    # Adding the model tag to tag list
-    modelTag = "inFriction"
-
-    mbData = sc.VarlikeModelboundData()
-
-    # Initializing model
-    inFrictionModel = sc.CustomModel(modelTag=modelTag)
-
-    # Ion friction term
-
-    evolvedVar = "Gi_dual"
-
-    implicitVar = "Gi_dual"
+    inFrictionModel = rmk.Model("inFriction")
 
     amjuelPath = kwargs.get("amjuelPath", "../data/amjuel.tex")
     if kwargs.get("amjuelCXRate", False):
-        rk.addCustomDerivation(
-            "logTiDeriv",
-            sc.generalizedIntPolyDerivation(
-                [[1]], [rk.normalization["eVTemperature"] / 2], funcName="log"
-            ),
-        )
-        rk.addVar(
-            "logTi",
-            isDerived=True,
-            derivationRule=sc.derivationRule("logTiDeriv", ["Te_dual"]),
-        )
-        rk.addCustomDerivation(
-            "cxRateDeriv",
-            ams.AMJUELDeriv1D(
-                "3.1.8",
-                "H.2",
-                timeNorm=timeNorm,
-                densNorm=densNorm,
-                amjuelFilename=amjuelPath,
-            ),
-        )
-        rk.addVar(
-            "cxRate",
-            isDerived=True,
-            derivationRule=sc.derivationRule("cxRateDeriv", ["logTi"]),
-        )
+        logTi = rmk.varFromNode("logTi",rk.grid,isOnDualGrid=True,node=log(rk.norms["eVTemperature"]*node(Te_dual)/2)).onDualGrid()
+        
+        cxRate = rmk.Variable("cxRate",rk.grid,derivation=ams.AMJUELDeriv1D("cxRateDeriv","3.1.8","H.2",timeNorm=timeNorm,densNorm=densNorm,amjuelFilename=amjuelPath),derivationArgs = [logTi.name],isOnDualGrid=True)
 
-        normConstCX = sc.CustomNormConst(multConst=-1)
-        vDataIonCX = sc.VarData(reqRowVars=["n1_dual", "cxRate"])
-        ionCXFriction = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar=implicitVar,
-            customNormConst=normConstCX,
-            varData=vDataIonCX,
-            stencilData=sc.diagonalStencil(),
-        )
+        rk.variables.add(logTi,cxRate)
 
-        inFrictionModel.addTerm("iFriction_cx", ionCXFriction)
+        inFrictionModel.ddt[Gi_dual] += - nn_dual[0] * cxRate * rmk.DiagonalStencil()(Gi_dual).rename("iFriction_cx")
 
     else:
-        mbData.addVariable(
-            "abs_ui", derivationRule=sc.derivationRule("absDeriv", ["ui_dual"])
-        )
-
+        abs_ui = rmk.varFromNode("abs_ui",rk.grid,isOnDualGrid=True,node=rmk.abs(node(ui_dual)))
+        rk.variables.add(abs_ui)
         # Use constant low-energy CX cross-sections
         sigmaCx = [3.0e-19, 2**4 * 1.0e-19, 3**4 * 7.0e-20] + [
             i**4 * 6.0e-20 for i in range(4, numNeutrals + 1)
         ]
 
-        # Setting normalization constant calculation
-        normConstCX = [
-            sc.CustomNormConst(
-                multConst=-sigmaCx[i] / sigmaNorm,
-                normNames=["time", "density", "speed", "crossSection"],
-                normPowers=[1.0, 1.0, 1.0, 1.0],
-            )
-            for i in range(numNeutrals)
-        ]
-
-        vDataIonCX = [
-            sc.VarData(reqRowVars=["n" + str(i + 1) + "_dual"], reqMBRowVars=["abs_ui"])
-            for i in range(numNeutrals)
-        ]
-
-        ionCXFriction = [
-            sc.GeneralMatrixTerm(
-                evolvedVar,
-                implicitVar=implicitVar,
-                customNormConst=normConstCX[i],
-                varData=vDataIonCX[i],
-                stencilData=sc.diagonalStencil(),
-            )
-            for i in range(numNeutrals)
-        ]
-
+        normConst = rk.norms["time"] * rk.norms["speed"] * rk.norms["density"]
         for i in range(numNeutrals):
-            inFrictionModel.addTerm("iFriction_cx" + str(i + 1), ionCXFriction[i])
 
-    inFrictionModel.setModelboundData(mbData.dict())
+            inFrictionModel.ddt[Gi_dual] += -sigmaCx[i] * normConst * nn_dual[i] * abs_ui * rmk.DiagonalStencil()(Gi_dual).rename("iFriction_cx" + str(i + 1))
 
-    rk.addModel(inFrictionModel.dict())
 
-    # ### Neutral diffusion and recycling
+    rk.models.add(inFrictionModel)
 
     # Ground state diffusion and recyling
 
-    # Adding the model tag to tag list
-    modelTag = "neutDyn"
-
-    # Initializing model
-    neutDynModel = sc.CustomModel(modelTag=modelTag)
-
-    recConst = 1.0  # Recycling coef
-    normConstRec = sc.CustomNormConst(
-        multConst=recConst,
-        normNames=["speed", "time", "length"],
-        normPowers=[1.0, 1.0, -1.0],
-    )
+    neutDynModel = rmk.Model("neutDyn")
 
     if kwargs.get("amjuelCXRate", False):
-        rk.addCustomDerivation(
-            "amjDiff", sc.simpleDerivation(np.sqrt(Tn) / 2, [-1.0, 0.5, -1])
-        )
-
-        normConstDiff = sc.CustomNormConst(multConst=elMass / ionMass)
-        evolvedVar = "n1"
-        implicitVar = "n1"
-        diffTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar,
-            customNormConst=normConstDiff,
-            stencilData=sc.diffusionStencil(
-                "amjDiff", ["ni_dual", "Te_dual", "cxRate"], doNotInterpolate=True
-            ),
-        )
-        neutDynModel.addTerm("neutralDiff", diffTerm)
+        diffCoeff = DerivationClosure(NodeDerivation("amjDiff",np.sqrt(Tn)/2 * node(Te_dual)**(0.5) /(node(ni_dual)*node(cxRate))))
+        
+        neutDynModel.ddt[nn[0]] += elMass/ionMass * stencils.DiffusionStencil(diffCoeff,diffCoeffOnDualGrid=True)(nn[0]).rename("neutralDiff")
 
     else:
         sigmaCx = [3.0e-19, 2**4 * 1.0e-19, 3**4 * 7.0e-20] + [
             i**4 * 6.0e-20 for i in range(4, numNeutrals + 1)
         ]
-        normConstDiff = [
-            sc.CustomNormConst(
-                multConst=np.sqrt(elMass / ionMass) / (sigmaCx[i] / sigmaNorm),
-                normNames=["density", "length", "crossSection"],
-                normPowers=[-1.0, -1.0, -1.0],
-            )
-            for i in range(numNeutrals)
-        ]
 
+        normConstDiff = np.sqrt(elMass / ionMass) /(rk.norms["density"]*rk.norms["length"])
+
+        # Diffusion coefficient derivation in 1D with neutral temperature Tn and with the cross section used being the low energy charge-exchange cross-seciton
+        # NOTE: SOL-KiT has a spurious sqrt(2) factor in the diffusion coefficient, so that is kept here for a consistent comparison
+        diffusionDeriv = DerivationClosure(SimpleDerivation("neutDiffD",np.sqrt(Tn) / 2, [-1.0]),ni_dual)
         # Diffusion term
-        for i in range(numNeutrals):
-            evolvedVar = "n" + str(i + 1)
-            implicitVar = "n" + str(i + 1)
-            diffTerm = sc.GeneralMatrixTerm(
-                evolvedVar,
-                implicitVar,
-                customNormConst=normConstDiff[i],
-                stencilData=sc.diffusionStencil(
-                    "neutDiffD", ["ni_dual"], doNotInterpolate=True
-                ),
-            )
-            neutDynModel.addTerm("neutralDiff" + str(i + 1), diffTerm)
+        for i,neut in enumerate(nn):
+            neutDynModel.ddt[neut] += normConstDiff/sigmaCx[i] * stencils.DiffusionStencil(diffusionDeriv,diffCoeffOnDualGrid=True)(neut).rename("neutralDiff"+str(i+1))
 
-    # Recycling term
-    evolvedVar = "n1"
-    implicitVar = "ni"
-    if loglinExtrap:
-        normBC = sc.CustomNormConst(multConst=recConst / dxNNorm)
-        vDataBC = sc.VarData(
-            reqRowVars=["cs_lc", "ni_b", "ni"], reqRowPowers=[1.0, 1.0, -1.0]
-        )
-        recTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar,
-            customNormConst=normBC,
-            varData=vDataBC,
-            stencilData=sc.diagonalStencil(evolvedXCells=[len(xGridWidths)]),
-            implicitGroups=[2],
-        )
-    else:
-        recTerm = sc.GeneralMatrixTerm(
-            evolvedVar,
-            implicitVar,
-            customNormConst=normConstRec,
-            stencilData=sc.boundaryStencilDiv("ui", "cs"),
-            implicitGroups=[2],
-        )
+    neutDynModel.ddt[nn[0]] += stencils.BCDivStencil(ui,cs)(ni).rename("recyclingTerms")
 
-    neutDynModel.addTerm("recyclingTerm", recTerm)
-
-    rk.addModel(neutDynModel.dict())
+    rk.models.add(neutDynModel)
 
     # ### CRM
 
-    mbData = crm.ModelboundCRMData()
+    mbData = crm.CRMModelboundData(rk.grid)
 
     if kwargs.get("amjuelRates", False):
-        ams.addAMJUELDerivs(
-            ams.amjuelHydrogenAtomDerivs(), rk, timeNorm, amjuelFilename=amjuelPath
-        )
-        rk.addCustomDerivation(
-            "recombPartEnergy",
-            ams.AMJUELDeriv(
-                "2.1.8",
-                "H.4",
-                timeNorm=timeNorm,
-                densNorm=densNorm,
-                tempNorm=-tempNorm / 13.6,
-                amjuelFilename=amjuelPath,
-            ),
-        )
-        rk.addCustomDerivation(
-            "recombEnergyTotal",
-            sc.additiveDerivation(
-                ["recombEnergy", "recombPartEnergy"], 1, [[1, 2], [1, 2]], [1, 1]
-            ),
-        )
-        ams.addLogVars(rk, "ne", "Te")
+        amjuelDerivs = ams.generateAMJUELDerivs(ams.amjuelHydrogenAtomDerivs(),rk.norms,amjuelFilename=amjuelPath)
 
-        mbData.addTransitionEnergy(1.0)
-        ionizationTransition = crm.derivedTransition(
-            [0, 1],
-            [0, 0, -1],
-            transitionEnergy=1.0,
-            ruleName="ionPart",
-            requiredVars=["logne", "logTe"],
-            energyRuleName="ionEnergy",
-            energyRequiredVars=["logne", "logTe"],
-        )
-        mbData.addTransition("ionAMJUEL", ionizationTransition)
+        logne,logTe = ams.AMJUELLogVars(rk.norms,ne,Te)
+        rk.variables.add(logne,logTe)
+        recombPartEnergy = DerivationClosure(ams.AMJUELDeriv("recombPartEnergy","2.1.8","H.4",timeNorm=timeNorm,densNorm=densNorm,tempNorm=-tempNorm/13.6,amjuelFilename=amjuelPath),logne,logTe)
+        recombEnergy = DerivationClosure(amjuelDerivs["recombEnergy"],logne,logTe)
+        recombEnergyTotal = recombEnergy + recombPartEnergy
+        
 
-        recombTransition = crm.derivedTransition(
-            [0, -1],
-            [1],
-            transitionEnergy=1.0,
-            ruleName="recombPart",
-            requiredVars=["logne", "logTe"],
-            energyRuleName="recombEnergyTotal",
-            energyRequiredVars=["logne", "logTe"],
-        )
-        mbData.addTransition("recombAMJUEL", recombTransition)
+        ionizationTransition = crm.DerivedTransition("ionAMJUEL",[electronSpecies,neutralSpecies[0]],[electronSpecies,electronSpecies,ionSpecies],rateDeriv=DerivationClosure(amjuelDerivs["ionPart"],logne,logTe),energyRateDeriv=DerivationClosure(amjuelDerivs["ionEnergy"],logne,logTe))
 
+        mbData.addTransition(ionizationTransition)
+        recombTransition = crm.DerivedTransition("recombAMJUEL",[electronSpecies,ionSpecies],[neutralSpecies[0]],rateDeriv = DerivationClosure(amjuelDerivs["recombPart"],logne,logTe),energyRateDeriv=recombEnergyTotal)
+        mbData.addTransition(recombTransition)
     else:
         includedJanevTransitions = kwargs.get("includedJanevTransitions", ["ion"])
         crm.addJanevTransitionsToCRMData(
             mbData,
             numNeutrals,
             tempNorm,
-            "f",
-            "Te",
+            f,
+            Te,
             detailedBalanceCSPriority=1,
-            processes=includedJanevTransitions,
+            processes=includedJanevTransitions
         )
 
         if kwargs.get("includeSpontEmission", False):
@@ -762,271 +385,84 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     # CRM model
 
-    # Adding the model tag to tag list
-    modelTag = "CRMmodel"
+    crmModel = rmk.Model("CRM")
 
-    # Initializing model
-    crmModel = sc.CustomModel(modelTag=modelTag)
-
-    crmModel.setModelboundData(mbData.dict())
-
+    crmModel.setModelboundData(mbData)
+    
     # Add term generator responsible for buildling CRM model for neutrals and ions
-    crmTermGenerator = crm.termGeneratorCRM(
-        evolvedSpeciesIDs=[-1] + [i + 1 for i in range(numNeutrals)]
-    )
 
-    crmModel.addTermGenerator("crmTermGen", crmTermGenerator)
+    crmModel.addTermGenerator(crm.CRMTermGenerator(
+        "crmTermGen",
+        evolvedSpecies=[ionSpecies] + neutralSpecies
+    ))
 
     ionInds = []
     recomb3bInds = []
     if kwargs.get("amjuelRates", False):
         # Cooling terms due to radiation
-        ionInds, ionEnergies = mbData.getTransitionIndicesAndEnergies("ionAMJUEL")
-        ionizationCoolingTerm = cm.dvEnergyTerm(
-            "f",
-            sc.VarData(
-                reqRowVars=["n1"], reqMBRowVars=["rate2index" + str(ionInds[0])]
-            ),
-            rk,
-            multConst=1.0,
-        )
+        ionInds = mbData.getTransitionIndices("ionAMJUEL")
 
-        crmModel.addTerm("ionizationCooling", ionizationCoolingTerm)
+        crmModel.ddt[f] += nn[0] * (mbData["rate2index"+str(ionInds[0])] @  cm.dvEnergyTerm(rk.grid,f).rename("ionizationCooling"))
 
-        recomb3bInds, recombEnergies = mbData.getTransitionIndicesAndEnergies(
+        recomb3bInds = mbData.getTransitionIndices(
             "recombAMJUEL"
         )
-        recombCoolingTerm = cm.dvEnergyTerm(
-            "f",
-            sc.VarData(
-                reqRowVars=["ni"], reqMBRowVars=["rate2index" + str(recomb3bInds[0])]
-            ),
-            rk,
-            multConst=1.0,
-        )
 
-        crmModel.addTerm("recombCooling", recombCoolingTerm)
+        crmModel.ddt[f] += ni * (mbData["rate2index"+str(recomb3bInds[0])] @  cm.dvEnergyTerm(rk.grid,f).rename("recombCooling"))
+
     else:
-        if "ex" in includedJanevTransitions:
-            # Add Boltzmann term generators for excitation
-            exInds, exEnergies = mbData.getTransitionIndicesAndEnergies("JanevEx")
 
-            crmBoltzTermGenExE = crm.termGeneratorCRMBoltz(
-                "f", 1, exInds, exEnergies, implicitTermGroups=[1]
-            )  # Emission terms
+        janevMap = {"ex":"JanevEx",
+                    "ion":"JanevIon",
+                    "deex":"JanevDeex",
+                    "recomb3b":"JanevRecomb3b"}
+            
+        for key in janevMap:
+            
+            if key in includedJanevTransitions:
+                inds = mbData.getTransitionIndices(janevMap[key])
 
-            crmModel.addTermGenerator("exCRME", crmBoltzTermGenExE)
+                if key == "ion":
+                    ionInds+=inds 
+                if key == "recomb3b":
+                    recomb3bInds+=inds 
 
-            crmBoltzTermGenExE2 = crm.termGeneratorCRMBoltz(
-                "f", 2, exInds, exEnergies, implicitTermGroups=[1], associatedVarIndex=2
-            )  # Emission terms for l=1
+                crmModel.addTermGenerator(crm.CRMBoltzTermGenerator(key+"CRME",f,1,inds,mbData))
 
-            crmModel.addTermGenerator("exCRME2", crmBoltzTermGenExE2)
+                crmModel.addTermGenerator(crm.CRMBoltzTermGenerator(key+"CRME2",f,2,inds,mbData,associatedVarIndex=2))
 
-            crmBoltzTermGenExA = crm.termGeneratorCRMBoltz(
-                "f", 1, exInds, exEnergies, absorptionTerms=True, implicitTermGroups=[1]
-            )  # Absorption terms
-
-            crmModel.addTermGenerator("exCRMA", crmBoltzTermGenExA)
-
-        # Add Boltzmann term generators for ionization
-
-        if "ion" in includedJanevTransitions:
-            ionInds, ionEnergies = mbData.getTransitionIndicesAndEnergies("JanevIon")
-
-            crmBoltzTermGenIonE = crm.termGeneratorCRMBoltz(
-                "f", 1, ionInds, ionEnergies, implicitTermGroups=[2]
-            )  # Emission terms
-
-            crmModel.addTermGenerator("ionCRME", crmBoltzTermGenIonE)
-
-            crmBoltzTermGenIonA = crm.termGeneratorCRMBoltz(
-                "f",
-                1,
-                ionInds,
-                ionEnergies,
-                absorptionTerms=True,
-                implicitTermGroups=[2],
-            )  # Absorption terms
-
-            crmModel.addTermGenerator("ionCRMA", crmBoltzTermGenIonA)
-
-            crmBoltzTermGenIonE2 = crm.termGeneratorCRMBoltz(
-                "f", 2, ionInds, ionEnergies, associatedVarIndex=2
-            )  # Emission terms for l=1
-
-            crmModel.addTermGenerator("ionCRME2", crmBoltzTermGenIonE2)
-
-        if "deex" in includedJanevTransitions:
-            # Add Boltzmann term generators for deexcitation
-
-            deexInds, deexEnergies = mbData.getTransitionIndicesAndEnergies("JanevDeex")
-
-            crmBoltzTermGenDeexE = crm.termGeneratorCRMBoltz(
-                "f",
-                1,
-                deexInds,
-                deexEnergies,
-                detailedBalanceTerms=True,
-                implicitTermGroups=[2],
-            )  # Emission terms
-
-            crmModel.addTermGenerator("deexCRME", crmBoltzTermGenDeexE)
-
-            crmBoltzTermGenDeexE2 = crm.termGeneratorCRMBoltz(
-                "f",
-                2,
-                deexInds,
-                deexEnergies,
-                detailedBalanceTerms=True,
-                implicitTermGroups=[2],
-                associatedVarIndex=2,
-            )  # Emission terms for l=1
-
-            crmModel.addTermGenerator("deexCRME2", crmBoltzTermGenDeexE2)
-
-            crmBoltzTermGenDeexA = crm.termGeneratorCRMBoltz(
-                "f",
-                1,
-                deexInds,
-                deexEnergies,
-                absorptionTerms=True,
-                detailedBalanceTerms=True,
-                implicitTermGroups=[2],
-            )  # Absorption terms
-
-            crmModel.addTermGenerator("deexCRMA", crmBoltzTermGenDeexA)
-
-        if "recomb3b" in includedJanevTransitions:
-            # #Add Boltzmann term generators for 3b recombination
-
-            recomb3bInds, recomb3bEnergies = mbData.getTransitionIndicesAndEnergies(
-                "JanevRecomb3b"
-            )
-
-            crmBoltzTermGen3bRecombE = crm.termGeneratorCRMBoltz(
-                "f", 1, recomb3bInds, recomb3bEnergies, detailedBalanceTerms=True
-            )  # Emission terms
-
-            crmModel.addTermGenerator("recomb3bCRME", crmBoltzTermGen3bRecombE)
-
-            crmBoltzTermGen3bRecombE2 = crm.termGeneratorCRMBoltz(
-                "f",
-                2,
-                recomb3bInds,
-                recomb3bEnergies,
-                detailedBalanceTerms=True,
-                associatedVarIndex=2,
-            )  # Emission terms for l=1
-
-            crmModel.addTermGenerator("recomb3bCRME2", crmBoltzTermGen3bRecombE2)
-
-            crmBoltzTermGen3bRecombA = crm.termGeneratorCRMBoltz(
-                "f",
-                1,
-                recomb3bInds,
-                recomb3bEnergies,
-                absorptionTerms=True,
-                detailedBalanceTerms=True,
-            )  # Absorption terms
-
-            crmModel.addTermGenerator("recomb3bCRMA", crmBoltzTermGen3bRecombA)
+                crmModel.addTermGenerator(crm.CRMBoltzTermGenerator(key+"CRMA",f,1,inds,mbData,absorptionTerms=True))
 
     # Add secondary electron sources/sinks due to ionization and recombination
 
     secElInds = ionInds + recomb3bInds
 
-    crmSecElTermGen = crm.termGeneratorCRMSecEl("f", secElInds)
+    crmModel.addTermGenerator(crm.CRMSecElTermGenerator("secElCRM",f,secElInds))
 
-    crmModel.addTermGenerator("secElCRM", crmSecElTermGen)
-
-    # Add model to wrapper
-
-    rk.addModel(crmModel.dict())
+    rk.models.add(crmModel)
 
     # ### Integrator options
 
-    integrator = sc.picardBDEIntegrator(
-        absTol=100.0,
-        convergenceVars=["ne", "ni", "Ge_dual", "Gi_dual", "We", "n1"],
-        associatedPETScGroup=1,
-        maxNonlinIters=50,
-        nonlinTol=1e-10,
-        internalStepControl=True,
-    )
+    integrator = rmk.BDEIntegrator("BDE",absTol=100.0,convergenceVars=[ne,ni,Ge_dual,Gi_dual,We,nn[0]],maxNonlinIters=50,internalStepControl=True,nonlinTol=1e-10)
+    integrationStep = rmk.IntegrationStep("BE",integrator)
+    integrationStep.add(rk.models) 
+    rk.integrationScheme = rmk.IntegrationScheme(dt=rmk.Timestep(kwargs.get("initialTimestep",0.1)*Te**(1.5)/ne),steps=integrationStep)
 
-    rk.addIntegrator("BE", integrator)
-
-    # ### Timestep control
-    #
-    # Here the timestep is rescaled based on collisionality.
-
-    initialTimestep = kwargs.get("initialTimestep", 0.1)
-    rk.setIntegratorGlobalData(4, 2, initialTimestep)
-
-    timestepControllerOptions = sc.scalingTimestepController(["ne", "Te"], [-1.0, 1.5])
-
-    rk.setTimestepController(timestepControllerOptions)
-
-    # ### Controlling integration steps
-
-    bdeStep = sc.IntegrationStep(
-        "BE",
-        defaultEvaluateGroups=[1, 2, 3, 4],
-        defaultUpdateModelData=True,
-        defaultUpdateGroups=[1, 2, 3, 4],
-        globalStepFraction=1.0,
-    )
-    for tag in rk.modelTags():
-        bdeStep.addModel(tag)
-
-    rk.addIntegrationStep("StepBDE", bdeStep.dict())
-
-    # ### Time loop options
-    #
-    # The main part of ReMKiT1D is the time loop, where the variables are advanced through time by repeatedly calling the integrators defined above. The following shows a way to set timeloop options based on a time target:
-
-    rk.setTimeTargetTimestepping(50.0)
-    rk.setMinimumIntervalOutput(10.0)
-    rk.setRestartOptions(True, False, 100)  # Change to True when restarting
+    rk.integrationScheme.setOutputPoints(kwargs.get("outputPoints",[10.0,20.0,30.0,40.0,50.0]))
+    rk.IOContext.setRestartOptions(save=True) 
 
     if kwargs.get("initFromFluidRun", False):
-        rk.setHDF5FileInitialData(
-            ["f", "ni", "Gi_dual", "E_dual"] + neutralDensList,
-            filename=kwargs.get("hdf5InputFile", "ReMKiT1DVarInput"),
-        )
+        rk.IOContext.setHDF5InputOptions(inputFile=kwargs.get("hdf5InputFile", "ReMKiT1DVarInput"),inputVars=[f,ni,Gi_dual,E_dual]+nn)
 
-    rk.addTermDiagnosisForVars(["Gi_dual", "ni", "E_dual"])
-    rk.addTermDiagnosisForDistVars(["f"])
+    rk.addTermDiagnostics(Gi_dual,ni,E_dual,f)
 
-    rk.addVar(
-        "gammaRight",
-        isDerived=True,
-        isScalar=True,
-        isCommunicated=True,
-        hostScalarProcess=hostProc,
-    )
+    # rk.variables.add(rmk.Variable("gammaRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
+    # rk.manipulators.add(rmk.MBDataExtractor("gammaExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["gamma"],rk.variables["gammaRight"]))
 
-    rk.addManipulator(
-        "gammaExtRight", sc.extractorManipulator("lbc_right", "gamma", "gammaRight")
-    )
+    # rk.variables.add(rmk.Variable("TRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
+    # rk.manipulators.add(rmk.MBDataExtractor("tempExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["shTemp"],rk.variables["TRight"]))
 
-    rk.addVar(
-        "TRight",
-        isDerived=True,
-        isScalar=True,
-        isCommunicated=True,
-        hostScalarProcess=hostProc,
-    )
-
-    rk.addManipulator(
-        "tempExtRight", sc.extractorManipulator("lbc_right", "shTemp", "TRight")
-    )
-
-    rk.addVar("logLee", isDerived=True)
-    rk.addManipulator(
-        "logLeeExtract", sc.extractorManipulator("e-e0", "logLee", "logLee")
-    )
+    rk.manipulators.add(rmk.MBDataExtractor("logLeeExtract",rk.models["e-e0"],logLee))
 
     rk.setPETScOptions(
         cliOpts="-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
