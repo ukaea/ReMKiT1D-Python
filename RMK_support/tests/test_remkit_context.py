@@ -60,7 +60,7 @@ def test_add_var(grid: Grid):
 
     # Add the variables to another variable container and set the rk.variables container
     varCont = vc.VariableContainer(grid)
-    varCont.add(a, b, var, var_dual)
+    varCont.add(a, b, var)
 
     rk.variables = varCont
 

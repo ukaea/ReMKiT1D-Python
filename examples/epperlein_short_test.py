@@ -92,7 +92,7 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
     q_dual,q = rmk.varAndDual("q",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["heatFluxMoment"],derivationArgs=["f"])
 
     logLee = rmk.Variable("logLee",rk.grid,isDerived=True)
-    rk.variables.add(f,f_dual,W,n,n_dual,ni,ni_dual,T,T_dual,zeroVar,E_dual,E,q_dual,q,logLee)
+    rk.variables.add(f,W,n,ni,T,zeroVar,E,q,logLee)
     # ### Braginskii flux derivation objects
 
     nConstGradT = 12*np.pi**1.5*epsilon0**2/np.sqrt(elMass*elCharge)  # Comes from e-i collision time
