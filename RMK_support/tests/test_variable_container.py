@@ -110,6 +110,7 @@ def test_var_and_dual(grid):
     assert c.name == "c"
     assert c.dual.name == "c_dual"
     assert c.isOnDualGrid
+    assert c.dims == ["x_dual"]
 
     b_dual, b = varAndDual("b", grid, primaryOnDualGrid=True)
 

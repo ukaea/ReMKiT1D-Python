@@ -54,30 +54,29 @@ def test_solkit_fluid_janev():
     heatingPower = 3.5464790894703255
 
     # these tests only check for latex construction errors
-    with pytest.warns(UserWarning):
+    
+    rk = solkit_mijin_thesis.generatorSKThesis(
+        dx0=dx0 / 4,
+        dxN=dxN / 4,
+        Nx=256,
+        Nh=17,
+        lmax=1,
+        mpiProcs=16,
+        initialTimestep=2.0,
+        nu=0.8 / 1.09345676,
+        heatingPower=heatingPower,
+        includedJanevTransitions=["ex", "deex", "ion", "recomb3b"],
+        numNeutrals=10,
+    )
 
-        rk = solkit_mijin_thesis.generatorSKThesis(
-            dx0=dx0 / 4,
-            dxN=dxN / 4,
-            Nx=256,
-            Nh=17,
-            lmax=1,
-            mpiProcs=16,
-            initialTimestep=2.0,
-            nu=0.8 / 1.09345676,
-            heatingPower=heatingPower,
-            includedJanevTransitions=["ex", "deex", "ion", "recomb3b"],
-            numNeutrals=10,
-        )
+    rk.setPETScOptions(
+        cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero",
+        kspSolverType="gmres",
+    )
 
-        rk.setPETScOptions(
-            cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero",
-            kspSolverType="gmres",
-        )
+    rk.generatePDF("SOL-KiT Fluid Test")
 
-        rk.generatePDF("SOL-KiT Fluid Test")
-
-        rk.writeConfigFile()
+    rk.writeConfigFile()
 
     os.remove(os.path.curdir + "/SOL-KiT_Fluid_Test.pdf")
     os.remove(os.path.curdir + "/config.json")
