@@ -278,7 +278,6 @@ class Variable(DerivationArgument):
         )
 
         dataTemp: Union[np.ndarray, None] = kwargs.get("data", None)
-        
 
         if dataTemp is not None:
             self.__data__: np.ndarray = dataTemp
@@ -392,9 +391,7 @@ class Variable(DerivationArgument):
 
     @property
     def dataArr(self):
-        return xr.DataArray(
-            self.__data__, dims=self.dims, attrs=self.__properties__
-        )
+        return xr.DataArray(self.__data__, dims=self.dims, attrs=self.__properties__)
 
     @property
     def name(self):
@@ -504,9 +501,7 @@ class Variable(DerivationArgument):
     @property
     def dims(self) -> Optional[List[str]]:
 
-        dims: Union[List[str], None] = (
-            ["x"] if not self.isOnDualGrid else ["x_dual"]
-        )
+        dims: Union[List[str], None] = ["x"] if not self.isOnDualGrid else ["x_dual"]
 
         if self.__isDistribution__:
             cast(List[str], dims).append("h")
@@ -519,11 +514,10 @@ class Variable(DerivationArgument):
             dims = None
 
         if self.__timeDimSize__ > 0:
-            dims = (
-                ["t"] + dims if dims is not None else ["t"]
-            )
-            
+            dims = ["t"] + dims if dims is not None else ["t"]
+
         return dims
+
     @property
     def dataShape(self):
 
@@ -547,6 +541,7 @@ class Variable(DerivationArgument):
             )
 
         return dataShape
+
     @property
     def isScalar(self):
         return self.__isScalar__

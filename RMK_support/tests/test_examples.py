@@ -54,7 +54,7 @@ def test_solkit_fluid_janev():
     heatingPower = 3.5464790894703255
 
     # these tests only check for latex construction errors
-    
+
     rk = solkit_mijin_thesis.generatorSKThesis(
         dx0=dx0 / 4,
         dxN=dxN / 4,
