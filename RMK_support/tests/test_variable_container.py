@@ -117,6 +117,10 @@ def test_var_and_dual(grid):
     assert b_dual.dual.name == "b"
     assert not b.isOnDualGrid
 
+    d = Variable("d", grid).withDual("dd")
+    assert d.dual.derivation.name == "gridToDual"
+    assert d.dual.name == "dd"
+
 
 def test_node_var(grid):
 

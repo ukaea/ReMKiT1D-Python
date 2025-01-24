@@ -403,6 +403,16 @@ class Variable(DerivationArgument):
 
         return dualVar
 
+    def withDual(self, name: Optional[str] = None):
+        """Generate dual variable of self if not already associated, and return self
+
+        Args:
+            name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
+        """
+
+        _ = self.makeDual(name)
+        return self
+
     @property
     def data(self):
         return self.__data__
