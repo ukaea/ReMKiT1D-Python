@@ -278,34 +278,7 @@ class Variable(DerivationArgument):
         )
 
         dataTemp: Union[np.ndarray, None] = kwargs.get("data", None)
-        self.__dims__: Union[List[str], None] = (
-            ["x"] if not self.isOnDualGrid else ["x_dual"]
-        )
-        dataShape = [gridObj.numX]
-
-        if self.__isDistribution__:
-            cast(List[str], self.__dims__).append("h")
-            dataShape.append(gridObj.numH)
-            cast(List[str], self.__dims__).append("v")
-            dataShape.append(gridObj.numV)
-
-        if self.__isSingleHarmonic__:
-            cast(List[str], self.__dims__).append("v")
-            dataShape.append(gridObj.numV)
-
-        if self.__isScalar__:
-            self.__dims__ = None
-            dataShape = [1]
-
-        if self.__timeDimSize__ > 0:
-            dataShape = (
-                [self.__timeDimSize__] + dataShape
-                if self.__dims__ is not None
-                else [self.__timeDimSize__]
-            )
-            self.__dims__ = (
-                ["t"] + self.__dims__ if self.__dims__ is not None else ["t"]
-            )
+        
 
         if dataTemp is not None:
             self.__data__: np.ndarray = dataTemp
@@ -316,9 +289,9 @@ class Variable(DerivationArgument):
                     + " has been initialised with non-zero data. Make sure that the rightmost cell is zeroed out or intentionally left as non-zero."
                 )
         else:
-            self.__data__ = np.zeros(dataShape)
+            self.__data__ = np.zeros(self.dataShape)
 
-        assert self.__data__.shape == tuple(dataShape), (
+        assert self.__data__.shape == tuple(self.dataShape), (
             "Non-conforming data in Variable constructor for variable " + name
         )
         self.__derivRule__: Union[Dict[Any, Any], str] = (
@@ -420,7 +393,7 @@ class Variable(DerivationArgument):
     @property
     def dataArr(self):
         return xr.DataArray(
-            self.__data__, dims=self.__dims__, attrs=self.__properties__
+            self.__data__, dims=self.dims, attrs=self.__properties__
         )
 
     @property
@@ -474,14 +447,14 @@ class Variable(DerivationArgument):
         Args:
             data (np.ndarray): Data to assign to the expanded variable
         """
-        if self.__dims__ is not None:
-            assert "t" not in self.__dims__, "t already Variable dim"
+        if self.dims is not None:
+            assert "t" not in self.dims, "t already Variable dim"
         assert (
             self.__data__.shape == (1,)
             and len(data.shape) == 1
             or self.__data__.shape == data.shape[1:]
         ), "data passed to addTimeDim does not conform with dimensions"
-        self.__dims__ = ["t"] + self.__dims__ if self.__dims__ is not None else ["t"]
+        self.dims = ["t"] + self.dims if self.dims is not None else ["t"]
         self.__data__ = data
 
     @property
@@ -529,9 +502,51 @@ class Variable(DerivationArgument):
         return self.__normConst__
 
     @property
-    def dims(self):
-        return self.__dims__
+    def dims(self) -> Optional[List[str]]:
 
+        dims: Union[List[str], None] = (
+            ["x"] if not self.isOnDualGrid else ["x_dual"]
+        )
+
+        if self.__isDistribution__:
+            cast(List[str], dims).append("h")
+            cast(List[str], dims).append("v")
+
+        if self.__isSingleHarmonic__:
+            cast(List[str], dims).append("v")
+
+        if self.__isScalar__:
+            dims = None
+
+        if self.__timeDimSize__ > 0:
+            dims = (
+                ["t"] + dims if dims is not None else ["t"]
+            )
+            
+        return dims
+    @property
+    def dataShape(self):
+
+        if self.__isScalar__:
+            return [1]
+
+        dataShape = [self.grid.numX]
+
+        if self.__isDistribution__:
+            dataShape.append(self.grid.numH)
+            dataShape.append(self.grid.numV)
+
+        if self.__isSingleHarmonic__:
+            dataShape.append(self.grid.numV)
+
+        if self.__timeDimSize__ > 0:
+            dataShape = (
+                [self.__timeDimSize__] + dataShape
+                if self.dims is not None
+                else [self.__timeDimSize__]
+            )
+
+        return dataShape
     @property
     def isScalar(self):
         return self.__isScalar__
