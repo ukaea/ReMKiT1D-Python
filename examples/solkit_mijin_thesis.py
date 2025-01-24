@@ -134,28 +134,28 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     ni,ni_dual = rmk.varAndDual("ni",rk.grid,data=nInit,units="$10^{19} m^{-3}$")
     ionSpecies.associateVar(ni)
 
-    rk.variables.add(ne,ne_dual,ni,ni_dual)
+    rk.variables.add(ne,ni)
     Ge_dual,Ge = rmk.varAndDual("Ge",rk.grid,primaryOnDualGrid=True)
     Gi_dual,Gi = rmk.varAndDual("Gi",rk.grid,primaryOnDualGrid=True)
 
-    rk.variables.add(Ge_dual,Ge,Gi_dual,Gi)
+    rk.variables.add(Ge,Gi)
 
     We, We_dual = rmk.varAndDual("We",rk.grid,units="$10^{20} eV m^{-3}$",data=WInit)
     Te,Te_dual = rmk.varAndDual("Te",rk.grid,units="$10eV$",isStationary=True,data=TInit)
 
-    rk.variables.add(We,We_dual,Te,Te_dual)
+    rk.variables.add(We,Te)
 
     # Set heat fluxes
 
     qe_dual,qe = rmk.varAndDual("qe",rk.grid,primaryOnDualGrid=True,isStationary=True)
 
-    rk.variables.add(qe_dual,qe)
+    rk.variables.add(qe)
 
     # Set E field
 
     E_dual, E = rmk.varAndDual("E",rk.grid,primaryOnDualGrid=True)
 
-    rk.variables.add(E_dual,E)
+    rk.variables.add(E)
     # Set derived fluid quantities
 
     rk.textbook = rmk.Textbook(rk.grid,tempDerivSpeciesIDs=[0])
@@ -163,7 +163,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     ue_dual,ue = rmk.varAndDual("ue",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["flowSpeedFromFlux"],derivationArgs=[Ge_dual.name,ne_dual.name])
     ui_dual,ui = rmk.varAndDual("ui",rk.grid,primaryOnDualGrid=True,derivation=rk.textbook["flowSpeedFromFlux"],derivationArgs=[Gi_dual.name,ni_dual.name])
 
-    rk.variables.add(ue_dual,ue,ui_dual,ui)
+    rk.variables.add(ue,ui)
 
     cs = rmk.Variable("cs",rk.grid,derivation=rk.textbook["sonicSpeedD+"],derivationArgs=[Te.name,Te.name])
 
@@ -223,7 +223,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         nn.append(n)
         neutralSpecies[i].associateVar(n)
         nn_dual.append(n_dual)
-        rk.variables.add(n,n_dual)
+        rk.variables.add(n)
 
     # We need a distribution function to calculate rates from cross-sections built into the code
     fInit = np.zeros([rk.grid.numX, rk.grid.numH, rk.grid.numV])

@@ -26,7 +26,7 @@ def grid():
 
 @pytest.fixture
 def vCont(grid):
-    return VariableContainer(grid)
+    return VariableContainer(grid, autoAddDuals=False)
 
 
 def test_fluid_zero_var(grid):
@@ -108,7 +108,7 @@ def test_var_and_dual(grid):
 
     c = a.onDualGrid().rename("c")
     assert c.name == "c"
-    assert c.dual.name == "a_dual"
+    assert c.dual.name == "c_dual"
     assert c.isOnDualGrid
 
     b_dual, b = varAndDual("b", grid, primaryOnDualGrid=True)

@@ -154,11 +154,11 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     electronSpecies.associateVar(ne,ne_dual)
     ionSpecies.associateVar(ni,ni_dual)
 
-    rk.variables.add(f,f_dual,We,ne,ne_dual,Ge_dual,Ge,qe_tot_dual,qe_tot,Te,Te_dual,qe_dual,qe,ue_dual,ue,ni,ni_dual,Gi,Gi_dual,ui,ui_dual)
+    rk.variables.add(f,We,ne,Ge,qe_tot,Te,qe,ue,ni,Gi,ui)
 
     E_dual, E = rmk.varAndDual("E",rk.grid,primaryOnDualGrid=True)
 
-    rk.variables.add(E_dual,E)
+    rk.variables.add(E)
 
     cs = rmk.Variable("cs",rk.grid,derivation=rk.textbook["sonicSpeedD+"],derivationArgs=[Te.name,Te.name])
 
@@ -198,7 +198,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     qt_dual = qt.makeDual()
 
     q_ratio = varFromNode("qRatio",rk.grid,node(qe_dual)/node(qt_dual),isOnDualGrid=True)
-    rk.variables.add(qt,qt_dual,q_ratio,logLee)
+    rk.variables.add(qt,q_ratio,logLee)
 
     # Set neutral densities
 
@@ -209,7 +209,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
         nn.append(n)
         neutralSpecies[i].associateVar(n,n_dual)
         nn_dual.append(n_dual)
-        rk.variables.add(n,n_dual)
+        rk.variables.add(n)
     
     # ### Models
 
@@ -456,11 +456,11 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     rk.addTermDiagnostics(Gi_dual,ni,E_dual,f)
 
-    # rk.variables.add(rmk.Variable("gammaRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
-    # rk.manipulators.add(rmk.MBDataExtractor("gammaExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["gamma"],rk.variables["gammaRight"]))
+    rk.variables.add(rmk.Variable("gammaRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
+    rk.manipulators.add(rmk.MBDataExtractor("gammaExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["gamma"],rk.variables["gammaRight"]))
 
-    # rk.variables.add(rmk.Variable("TRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
-    # rk.manipulators.add(rmk.MBDataExtractor("tempExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["shTemp"],rk.variables["TRight"]))
+    rk.variables.add(rmk.Variable("TRight",rk.grid,isScalar=True,scalarHostProcess=rk.mpiContext.fluidProcs[-1]))
+    rk.manipulators.add(rmk.MBDataExtractor("tempExtRight",rk.models["lbc_right"],rk.models["lbc_right"].mbData["shTemp"],rk.variables["TRight"]))
 
     rk.manipulators.add(rmk.MBDataExtractor("logLeeExtract",rk.models["e-e0"],logLee))
 

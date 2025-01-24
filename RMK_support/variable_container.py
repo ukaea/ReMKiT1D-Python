@@ -432,9 +432,12 @@ class Variable(DerivationArgument):
         self.__name__ = name
 
     def rename(self, name: str):
-        """Create a copy of this variable and rename it"""
+        """Create a copy of this variable and rename it. If the variable has a dual, it will be remade to avoid name clashes"""
         newVar = deepcopy(self)
         newVar.name = name
+        if newVar.dual is not None:
+            newVar.dual = None
+            _ = newVar.withDual()
         return newVar
 
     @property
@@ -561,9 +564,12 @@ class Variable(DerivationArgument):
         return self.__inOutput__
 
     def onDualGrid(self, dual=True):
-        """Return a copy of this variable setting it to live on the dual or regular grid"""
+        """Return a copy of this variable setting it to live on the dual or regular grid. If the variable has a dual associated with it, it will be remade to avoid having duals that live on the same grid"""
         newVar = deepcopy(self)
         newVar.__isOnDualGrid__ = dual
+        if newVar.dual is not None:
+            newVar.dual = None
+            _ = newVar.withDual()
         return newVar
 
     def switchUnits(self):
@@ -747,12 +753,15 @@ def varAndDual(
 class VariableContainer:
     """Container object for Variables"""
 
-    def __init__(self, gridObj: Grid, timestamps: np.ndarray = np.array([])) -> None:
+    def __init__(
+        self, gridObj: Grid, timestamps: np.ndarray = np.array([]), autoAddDuals=True
+    ) -> None:
         """Container object for Variables
 
         Args:
             gridObj (Grid): Grid on which all the variables will live
             timestamps (np.ndarray, optional): Timestamps in case a time dimension should be added. Defaults to np.array([]).
+            autoAddDuals (bool, optional): If true will automatically add dual variables if associated at time of adding. Defaults to True.
         """
         self.__coords__ = {
             "x": gridObj.xGrid,
@@ -786,6 +795,8 @@ class VariableContainer:
             )
         ]
 
+        self.__autoAddDuals__ = autoAddDuals
+
     def add(self, *args: Variable):
         """Add any number of variables to the container"""
         for var in args:
@@ -804,6 +815,17 @@ class VariableContainer:
                 self.__variables__[self.varNames.index(var.name)] = var
             else:
                 self.__variables__.append(var)
+
+            if self.__autoAddDuals__ and var.dual is not None:
+                if var.dual.name in self.varNames:
+                    warnings.warn(
+                        "Variable "
+                        + var.dual.name
+                        + " already in VariableContainer. Overwriting."
+                    )
+                    self.__variables__[self.varNames.index(var.dual.name)] = var.dual
+                else:
+                    self.__variables__.append(var.dual)
 
     def setVar(
         self,
