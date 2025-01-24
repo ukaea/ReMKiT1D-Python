@@ -451,7 +451,7 @@ class Variable(DerivationArgument):
             and len(data.shape) == 1
             or self.__data__.shape == data.shape[1:]
         ), "data passed to addTimeDim does not conform with dimensions"
-        self.dims = ["t"] + self.dims if self.dims is not None else ["t"]
+        self.__timeDimSize__ = data.shape[0]
         self.__data__ = data
 
     @property

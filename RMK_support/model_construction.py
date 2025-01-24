@@ -1522,11 +1522,13 @@ class VarlikeModelboundData(ModelboundData):
                 + var.name
                 + " does not have a derivation associated to it - cannot add to VarlikeModelboundData"
             )
-            assert "t" not in var.dims, (
-                "Variable "
-                + var.name
-                + " has time dimension - cannot add to VarlikeModelboundData"
-            )
+
+            if var.dims is not None:
+                assert "t" not in cast(List[str], var.dims), (
+                    "Variable "
+                    + var.name
+                    + " has time dimension - cannot add to VarlikeModelboundData"
+                )
 
             assert var.name not in self.varNames, (
                 "Variable " + var.name + " already in VarlikeModelboundData"
