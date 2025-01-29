@@ -690,7 +690,7 @@ class RMKContext:
         configFile.update(self.__IOContext__.dict())
         configFile.update(
             cast(it.IntegrationScheme, self.__integrationScheme__).dict(
-                implicitGroups, configFile["MPI"]["commData"]
+                implicitGroups, configFile["MPI"]["commData"], self.models
             )
         )
         configFile["timeloop"].update(self.__IOContext__.dict()["timeloop"])
@@ -747,7 +747,7 @@ class RMKContext:
         )
         implicitGroups, _ = cast(mc.ModelCollection, self.__models__).numGroups()
         cast(it.IntegrationScheme, self.__integrationScheme__).addLatexToDoc(
-            doc, implicitGroups, latexRemap=latexRemap
+            doc, implicitGroups, latexRemap=latexRemap, models=self.models
         )
 
         doc.generate_pdf(latexFilename.replace(" ", "_"), clean_tex=cleanTex)

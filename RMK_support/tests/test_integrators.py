@@ -55,7 +55,9 @@ def test_steps(grid):
 
     model = mc.Model("mod")
     model.ddt[Variable("a", grid)] += mc.DiagonalStencil()(Variable("a", grid))
-    step1.add(model)
+    model2 = mc.Model("mod2")  # to test if this model is removed
+    model2.ddt[Variable("a", grid)] += mc.DiagonalStencil()(Variable("a", grid))
+    step1.add(model, model2)
 
     scheme = it.IntegrationScheme(10.0)
 
@@ -66,68 +68,73 @@ def test_steps(grid):
     )
 
     scheme.setFixedNumTimesteps(100, 10)
-
-    assert scheme.dict(1, {}) == {
-        "integrator": {
-            "initialTimestep": 10.0,
-            "timestepController": {
-                "active": False,
-                "rescaleTimestep": True,
-                "requiredVarNames": [],
-                "requiredVarPowers": [],
-                "multConst": 1.0,
-                "useMaxVal": False,
-            },
-            "stepTags": ["step12", "step20", "step11"],
-            "integratorTags": ["BDE"],
-            "BDE": integrator.dict(),
-            "step12": {
-                "integratorTag": "BDE",
-                "evolvedModels": ["mod"],
-                "globalStepFraction": 1.0,
-                "useInitialInput": False,
-                "allowTimeEvolution": False,
-                "commData": {},
-                "mod": {
-                    "groupIndices": [1],
-                    "internallyUpdatedGroups": [1],
-                    "internallyUpdateModelData": True,
+    with pytest.warns(
+        UserWarning,
+        match=(
+            "Model mod2 excluded from integration rules - not present in filtering models"
+        ),
+    ):
+        assert scheme.dict(1, {}, models=mc.ModelCollection(model)) == {
+            "integrator": {
+                "initialTimestep": 10.0,
+                "timestepController": {
+                    "active": False,
+                    "rescaleTimestep": True,
+                    "requiredVarNames": [],
+                    "requiredVarPowers": [],
+                    "multConst": 1.0,
+                    "useMaxVal": False,
+                },
+                "stepTags": ["step12", "step20", "step11"],
+                "integratorTags": ["BDE"],
+                "BDE": integrator.dict(),
+                "step12": {
+                    "integratorTag": "BDE",
+                    "evolvedModels": ["mod"],
+                    "globalStepFraction": 1.0,
+                    "useInitialInput": False,
+                    "allowTimeEvolution": False,
+                    "commData": {},
+                    "mod": {
+                        "groupIndices": [1],
+                        "internallyUpdatedGroups": [1],
+                        "internallyUpdateModelData": True,
+                    },
+                },
+                "step11": {
+                    "integratorTag": "BDE",
+                    "evolvedModels": ["mod"],
+                    "globalStepFraction": 0.5,
+                    "useInitialInput": False,
+                    "allowTimeEvolution": True,
+                    "commData": {},
+                    "mod": {
+                        "groupIndices": [1],
+                        "internallyUpdatedGroups": [1],
+                        "internallyUpdateModelData": True,
+                    },
+                },
+                "step20": {
+                    "integratorTag": "BDE",
+                    "evolvedModels": ["mod"],
+                    "globalStepFraction": 1.0,
+                    "useInitialInput": True,
+                    "allowTimeEvolution": True,
+                    "commData": {},
+                    "mod": {
+                        "groupIndices": [1],
+                        "internallyUpdatedGroups": [1],
+                        "internallyUpdateModelData": True,
+                    },
                 },
             },
-            "step11": {
-                "integratorTag": "BDE",
-                "evolvedModels": ["mod"],
-                "globalStepFraction": 0.5,
-                "useInitialInput": False,
-                "allowTimeEvolution": True,
-                "commData": {},
-                "mod": {
-                    "groupIndices": [1],
-                    "internallyUpdatedGroups": [1],
-                    "internallyUpdateModelData": True,
-                },
+            "timeloop": {
+                "mode": "fixedNumSteps",
+                "numTimesteps": 100,
+                "fixedSaveInterval": 10,
+                "outputPoints": [],
             },
-            "step20": {
-                "integratorTag": "BDE",
-                "evolvedModels": ["mod"],
-                "globalStepFraction": 1.0,
-                "useInitialInput": True,
-                "allowTimeEvolution": True,
-                "commData": {},
-                "mod": {
-                    "groupIndices": [1],
-                    "internallyUpdatedGroups": [1],
-                    "internallyUpdateModelData": True,
-                },
-            },
-        },
-        "timeloop": {
-            "mode": "fixedNumSteps",
-            "numTimesteps": 100,
-            "fixedSaveInterval": 10,
-            "outputPoints": [],
-        },
-    }
+        }
 
     scheme.setOutputPoints([10, 20])
 

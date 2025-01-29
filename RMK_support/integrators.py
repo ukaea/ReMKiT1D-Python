@@ -7,6 +7,7 @@ import pylatex as tex  # type: ignore
 from .tex_parsing import numToScientificTex
 from . import model_construction as mc
 from .variable_container import Variable, VariableContainer, MultiplicativeArgument
+import warnings
 
 
 class Integrator(ABC):
@@ -131,6 +132,10 @@ class IntegrationStepBase(ABC):
     def addLatexToDoc(self, doc: tex.Document, implicitGroups: int, **kwargs):
         pass
 
+    @abstractmethod
+    def only(self, *args: mc.Model) -> Self:
+        pass
+
 
 class IntegrationStepSequence:
     """Container class for integration steps, allowing for their chaining using the multiplication operator"""
@@ -168,7 +173,13 @@ class IntegrationStepSequence:
         newSequence.__steps__ += [lhs.rename(lhs.name + str(len(self.steps)))]
         return newSequence
 
-    def addLatexToDoc(self, doc: tex.Document, implicitGroups: int, **kwargs):
+    def addLatexToDoc(
+        self,
+        doc: tex.Document,
+        implicitGroups: int,
+        models: mc.ModelCollection,
+        **kwargs
+    ):
         doc.append(
             tex.NoEscape(
                 "Scheme: $"
@@ -185,7 +196,8 @@ class IntegrationStepSequence:
         )
         for step in self.steps:
             with doc.create(tex.Subsection(step.name)):
-                step.addLatexToDoc(doc, implicitGroups, **kwargs)
+                filteredStep = step.only(*models.models)
+                filteredStep.addLatexToDoc(doc, implicitGroups, **kwargs)
 
 
 class Rules:
@@ -213,6 +225,22 @@ class Rules:
     @property
     def evolvedModels(self):
         return [m.modelName for m in self.__rules__]
+
+    def only(self, *args: mc.Model) -> Self:
+        """Filter to include only rules for given Models"""
+        newRules = Rules()
+        argNames = [arg.name for arg in args]
+        for rule in self.__rules__:
+            if rule.modelName in argNames:
+                newRules.__rules__.append(rule)
+            else:
+                warnings.warn(
+                    "Model "
+                    + rule.modelName
+                    + " excluded from integration rules - not present in filtering models"
+                )
+
+        return cast(Self, newRules)
 
 
 class IntegrationStep(IntegrationStepBase):
@@ -317,6 +345,13 @@ class IntegrationStep(IntegrationStepBase):
             if isinstance(arg, mc.ModelCollection):
                 for model in arg.models:
                     self.add(model)
+
+    def only(self, *args: mc.Model) -> Self:
+        """Filter integration step rules to only include those for given models"""
+        newStep = deepcopy(self)
+        newStep.rules = self.rules.only(*args)
+
+        return cast(Self, newStep)
 
     def __mul__(
         self, rhs: Union[Self, IntegrationStepSequence]
@@ -519,7 +554,9 @@ class IntegrationScheme:
         self.__outputPoints__ = outputPoints
         self.__mode__ = "outputDriven"
 
-    def dict(self, implicitGroups: int, mpiComm: dict) -> dict:
+    def dict(
+        self, implicitGroups: int, mpiComm: dict, models: mc.ModelCollection
+    ) -> dict:
 
         scheme: Dict[str, object] = {
             "stepTags": [step.name for step in self.steps],
@@ -528,7 +565,8 @@ class IntegrationScheme:
         scheme.update(self.__timestep__.dict())
         for step in self.steps:
             scheme[step.name] = {"commData": mpiComm}
-            cast(Dict, scheme[step.name]).update(step.dict(implicitGroups))
+            filteredStep = step.only(*models.models)
+            cast(Dict, scheme[step.name]).update(filteredStep.dict(implicitGroups))
             scheme.update({step.integrator.name: step.integrator.dict()})
 
         timeloop = {
@@ -539,7 +577,13 @@ class IntegrationScheme:
         }
         return {"integrator": scheme, "timeloop": timeloop}
 
-    def addLatexToDoc(self, doc: tex.Document, implicitGroups: int, **kwargs):
+    def addLatexToDoc(
+        self,
+        doc: tex.Document,
+        implicitGroups: int,
+        models: mc.ModelCollection,
+        **kwargs
+    ):
         with doc.create(tex.Section("Integration scheme")):
             doc.append(tex.NoEscape("$dt =" + self.timestep.latex(**kwargs) + " $ "))
             if self.__mode__ == "fixedNumSteps":
@@ -567,7 +611,9 @@ class IntegrationScheme:
                 )
             )
             with doc.create(tex.Subsection("Integration steps")):
-                self.__stepSequence__.addLatexToDoc(doc, implicitGroups, **kwargs)
+                self.__stepSequence__.addLatexToDoc(
+                    doc, implicitGroups, models, **kwargs
+                )
 
 
 class BDEIntegrator(Integrator):
