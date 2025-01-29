@@ -10,9 +10,9 @@ def AMJUELDeriv(
     reaction: str,
     section: str,
     amjuelFilename="../data/amjuel.tex",
-    timeNorm=0.72204953888999173e-7,
-    densNorm=1e19,
-    tempNorm=1,
+    timeNorm: float = 0.72204953888999173e-7,
+    densNorm: float = 1e19,
+    tempNorm: float = 1,
 ):
     fit = ar.read2DAMJUELFitCoeffs(
         ar.loadAMJUELReactionData(reaction, section, amjuelFilename)
@@ -32,9 +32,9 @@ def AMJUELDeriv1D(
     section: str,
     coefName="b",
     amjuelFilename="../data/amjuel.tex",
-    timeNorm=0.72204953888999173e-7,
-    densNorm=1e19,
-    tempNorm=1,
+    timeNorm: float = 0.72204953888999173e-7,
+    densNorm: float = 1e19,
+    tempNorm: float = 1,
 ):
     fit = ar.read1DAMJUELFitCoeffs(
         ar.loadAMJUELReactionData(reaction, section, amjuelFilename), coefName=coefName
