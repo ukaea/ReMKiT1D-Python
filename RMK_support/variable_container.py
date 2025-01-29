@@ -486,9 +486,25 @@ class Variable(DerivationArgument):
     def unitsSI(self):
         return self.__unitSI__
 
+    @unitsSI.setter
+    def unitsSI(self,units:str):
+        self.__unitSI__ = units
+
     @property
     def units(self):
         return self.__units__
+
+    @units.setter
+    def units(self,units:str):
+        self.__units__ = units
+
+    @property
+    def normSI(self):
+        return self.__normSI__ 
+
+    @normSI.setter
+    def normSI(self,norm:float):
+        self.__normSI__ = norm 
 
     @property
     def unitsNorm(self):
