@@ -324,9 +324,9 @@ def test_wrapper(grid: Grid):
     rk.integrationScheme = integrationScheme
 
     assert rk.integrationScheme.dict(
-        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables), models=rk.models
     ) == integrationScheme.dict(
-        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+        implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables), models=rk.models
     )
 
     # Textbook
@@ -434,14 +434,16 @@ def test_wrapper(grid: Grid):
 
     assert cfg["timeloop"] == {
         **rk.integrationScheme.dict(
-            implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables)
+            implicitGroups, mpiComm=rk.mpiContext.dict(rk.variables), models=rk.models
         )["timeloop"],
         **rk.IOContext.dict()["timeloop"],
     }
 
     assert cfg["integrator"] == {
         **rk.integrationScheme.dict(
-            implicitGroups, rk.mpiContext.dict(rk.variables)["commData"]
+            implicitGroups,
+            rk.mpiContext.dict(rk.variables)["commData"],
+            models=rk.models,
         )["integrator"],
         "numImplicitGroups": implicitGroups,
         "numGeneralGroups": generalGroups,
