@@ -152,7 +152,7 @@ def loadVarContFromHDF5(
             else:
                 time.append(len(time) + 1)
 
-    varCont = vc.VariableContainer(args[0].grid, timestamps=np.array(time))
+    varCont = vc.VariableContainer(args[0].grid, timestamps=np.array(time),autoAddDuals=False)
 
     for var in args:
         varCont.add(loadVariableFromHDF5(var, filepaths))
@@ -185,7 +185,7 @@ def loadFromHDF5(
             else:
                 time.append(len(time) + 1)
 
-    varCont = vc.VariableContainer(grid, timestamps=np.array(time))
+    varCont = vc.VariableContainer(grid, timestamps=np.array(time),autoAddDuals=False)
 
     varCont.add(*vars)
     return varCont
