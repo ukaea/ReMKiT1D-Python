@@ -5,74 +5,399 @@ import numpy as np
 from .grid import Grid
 from .variable_container import VariableContainer, Variable
 from . import IO_support as io
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Tuple, Type, ClassVar
+from typing_extensions import Self
 import param  # type: ignore
 
 
-class RMKExplorer:
+def fluidVarX(var: Variable, time: int):
 
-    def __init__(
-        self, variables: VariableContainer, runPaths: Dict[str, str], **kwargs
-    ):
+    return hv.Curve(
+        (
+            var.grid.xGridDual if var.isOnDualGrid else var.grid.xGrid,
+            var.dataArr[time, :],
+        ),
+        "$x[m]$",
+        var.units,
+        label=var.name,
+    )
 
+
+def fluidVarT(var: Variable, x: int, time: Variable):
+
+    return hv.Curve(
+        (time.dataArr, var.dataArr[:, x]), "$t[t_0]$", var.units, label=var.name
+    )
+
+
+class LazyLoader:
+
+    def __init__(self, variables: VariableContainer, **kwargs) -> None:
         self.__variables__ = variables
-        self.__runPaths__ = runPaths
+        self.__runPaths__: Dict[str, str] = kwargs.get("runPaths", {})
 
-        self.__runTimes__ = {
-            run: io.loadVariableFromHDF5(
-                self.__variables__["time"],
-                filepaths=[path + file for file in io.getOutputFilenames(path)],
-            ).data
-            for run, path in runPaths.items()
-        }
-
-        self.__runMaxTime__ = max(
-            np.max(self.__runTimes__[run]) for run in self.__runTimes__
-        )
-        self.__runMinTime__ = min(
-            np.min(self.__runTimes__[run]) for run in self.__runTimes__
-        )
-
-        self.__timeResolution__ = kwargs.get("timeResolution", 50)
-
-        self.__datasets__ = {
-            run: io.loadVarContFromHDF5(
-                self.__variables__["time"],
-                filepaths=[path + file for file in io.getOutputFilenames(path)],
-            ).dataset.interp(
-                t=np.linspace(
-                    self.__runMinTime__,
-                    self.__runMaxTime__,
-                    self.__timeResolution__,
-                    endpoint=True,
-                )
-            )
-            for run, path in runPaths.items()
-        }
+        self.__runs__: Dict[str, VariableContainer] = {}
 
     def __load__(self, varName: str, run: str):
         path = self.__runPaths__[run]
-        if varName in self.__datasets__[run]:
+        if run not in self.__runs__:
+            self.__runs__[run] = io.loadVarContFromHDF5(
+                self.__variables__["time"],
+                filepaths=[path + file for file in io.getOutputFilenames(path)],
+            )
+
+        if varName in self.__runs__[run].varNames:
             return
 
-        newVarCont = io.loadVarContFromHDF5(
+        loadedVar = io.loadVariableFromHDF5(
             self.__variables__[varName],
             filepaths=[path + file for file in io.getOutputFilenames(path)],
         )
-        self.__datasets__[run] = xr.merge(
-            [
-                self.__datasets__[run],
-                newVarCont.dataset.interp(
-                    t=np.linspace(
-                        self.__runMinTime__,
-                        self.__runMaxTime__,
-                        self.__timeResolution__,
-                        endpoint=True,
-                    )
-                ),
-            ],
-            compat="override",
+        self.__runs__[run].add(loadedVar)
+
+    def setRunPath(self, run, path):
+        self.__runPaths__[run] = path
+
+    def __getitem__(self, key: Tuple[str, str]) -> Variable:
+        assert key[0] in self.__variables__.varNames, (
+            key[0] + " not in LazyLoader variables"
         )
+        assert key[1] in self.__runPaths__, key[1] + " not in LazyLoader run paths"
+
+        self.__load__(key[0], key[1])
+
+        return self.__runs__[key[1]][key[0]]
+
+    def getDataset(self, run) -> xr.Dataset:
+
+        return self.__runs__[run].dataset
+
+
+class DashboardElement(param.Parameterized):
+
+    alias = "Selector"
+    __sc__: ClassVar[Dict[str, Type[Self]]] = {}
+
+    def __init__(self, loader: LazyLoader, **params):
+        self.__loader__ = loader
+        super().__init__(**params)
+
+    def __init_subclass__(cls) -> None:
+        DashboardElement.__sc__[cls.alias] = cls
+
+    def view(self):
+        pass
+
+
+class ElementDisplay(param.Parameterized):
+
+    alias = "Selector"
+    widgets = param.Selector(default=alias)
+    element = param.Parameter(instantiate=False, precedence=-1)
+
+    def __init__(self, loader: LazyLoader, **params):
+        self.param["widgets"].objects.append("Selector")
+        for name in DashboardElement.__sc__:
+            self.param["widgets"].objects.append(name)
+        self.__loader__ = loader
+        self.__last__ = "Selector"
+        self.element = DashboardElement(self.__loader__, name="Selector")
+        super().__init__(**params)
+        self.__layout__ = pn.Column(pn.Param(self.param, name=""), self.element.view())
+
+    def __init_subclass__(cls) -> None:
+        DashboardElement.__sc__[cls.alias] = cls
+
+    @param.depends("widgets", "element.param", watch=True)
+    def _update(self):
+        if self.widgets != self.__last__:
+            if self.widgets == "Selector":
+                self.element = DashboardElement(self.__loader__, name="Selector")
+            else:
+                self.element = DashboardElement.__sc__[self.widgets](
+                    self.__loader__, name=self.widgets
+                )
+        self.__last__ = self.widgets
+        self.__layout__[1] = self.element.view()
+
+    @property
+    def layout(self):
+        return self.__layout__
+
+
+class FluidMultiVariablePlot(DashboardElement):
+
+    alias = "Fluid Multi Variable Plot"
+    variables = param.ListSelector(default=[])
+    runs = param.Selector()
+    dim = param.Selector(objects=["Fixed time", "Fixed position"])
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variables"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isFluid
+        ]
+        self.param["runs"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if self.runs is None:
+            self.runs = self.param["runs"].objects[0]
+        if self.runs is None:
+            self.runs = self.param["runs"].objects[0]
+
+        if len(self.variables):
+            for var in self.variables:
+                self.__loader__.__load__(var, self.runs)
+            if self.dim == "Fixed position":
+                val = pn.widgets.IntSlider(
+                    name="x",
+                    value=0,
+                    start=0,
+                    end=self.__loader__[(self.variables[0], self.runs)].dataShape[1]
+                    - 1,
+                )
+            else:
+                val = pn.widgets.IntSlider(
+                    name="t",
+                    value=0,
+                    start=0,
+                    end=self.__loader__[(self.variables[0], self.runs)].dataShape[0]
+                    - 1,
+                )
+        else:
+            return pn.Column(
+                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+            )
+
+        def loadFluidT(ind):
+            curves = {
+                var: fluidVarT(
+                    self.__loader__[(var, self.runs)],
+                    ind,
+                    self.__loader__[("time", self.runs)],
+                )
+                for var in self.variables
+            }
+            return hv.NdOverlay(curves).opts(
+                xlim=(self.x_lower_limit, self.x_upper_limit),
+                ylim=(self.y_lower_limit, self.y_upper_limit),
+                title="",
+            )
+
+        def loadFluidX(ind):
+            curves = {
+                var: fluidVarX(self.__loader__[(var, self.runs)], ind)
+                for var in self.variables
+            }
+            return hv.NdOverlay(curves).opts(
+                xlim=(self.x_lower_limit, self.x_upper_limit),
+                ylim=(self.y_lower_limit, self.y_upper_limit),
+                title="",
+            )
+
+        if self.dim == "Fixed position":
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
+
+        else:
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
+
+        return pn.Row(
+            pn.Column(
+                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+            ),
+            pn.panel(dmap),
+        )
+
+
+class FluidMultiRunPlot(DashboardElement):
+
+    alias = "Fluid Multi Run Plot"
+    variable = param.Selector()
+    runs = param.ListSelector([])
+    dim = param.Selector(objects=["Fixed time", "Fixed position"])
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variable"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isFluid
+        ]
+        self.param["runs"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if self.variable is None:
+            self.variable = self.param["variable"].objects[0]
+        if self.variable is None:
+            self.variable = self.param["variable"].objects[0]
+
+        if len(self.runs):
+            for run in self.runs:
+                self.__loader__.__load__(self.variable, run)
+            if self.dim == "Fixed position":
+                val = pn.widgets.IntSlider(
+                    name="x",
+                    value=0,
+                    start=0,
+                    end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
+                )
+            else:
+                val = pn.widgets.IntSlider(
+                    name="t",
+                    value=0,
+                    start=0,
+                    end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
+                )
+
+        else:
+            return pn.Column(
+                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+            )
+
+        def loadFluidT(ind):
+            curves = {
+                run: fluidVarT(
+                    self.__loader__[(self.variable, run)],
+                    ind,
+                    self.__loader__[("time", run)],
+                )
+                for run in self.runs
+            }
+            return hv.NdOverlay(curves).opts(
+                xlim=(self.x_lower_limit, self.x_upper_limit),
+                ylim=(self.y_lower_limit, self.y_upper_limit),
+                title="",
+            )
+
+        def loadFluidX(ind):
+            curves = {
+                run: fluidVarX(self.__loader__[(self.variable, run)], ind)
+                for run in self.runs
+            }
+
+            return hv.NdOverlay(curves).opts(
+                xlim=(self.x_lower_limit, self.x_upper_limit),
+                ylim=(self.y_lower_limit, self.y_upper_limit),
+                title="",
+            )
+
+        if self.dim == "Fixed position":
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
+
+        else:
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
+
+        return pn.Row(
+            pn.Column(
+                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+            ),
+            pn.panel(dmap),
+        )
+
+
+# class RMKExplorer(param.Parameterized):
+
+#     variables = param.Selector(
+#         doc="The list of available variables"
+#     )
+
+#     runs = param.Selector(
+#         doc="The list of runs"
+#     )
+
+#     time = param.Selector(doc="Valid time values")
+
+#     def __init__(
+#         self, variables: VariableContainer, runPaths: Dict[str, str], **kwargs
+#     ):
+
+#         self.__variables__ = variables
+#         self.param["variables"].objects = [name for name in variables.varNames if variables[name].isFluid]
+#         self.variables = self.param["variables"].objects[0]
+#         self.param["runs"].objects = list(runPaths.keys())
+#         self.runs = self.param["runs"].objects[0]
+#         self.__runPaths__ = runPaths
+
+#         self.__runTimes__ = {
+#             run: io.loadVariableFromHDF5(
+#                 self.__variables__["time"],
+#                 filepaths=[path + file for file in io.getOutputFilenames(path)],
+#             ).data
+#             for run, path in runPaths.items()
+#         }
+
+#         self.__runMaxTime__ = max(
+#             np.max(self.__runTimes__[run]) for run in self.__runTimes__
+#         )
+#         self.__runMinTime__ = min(
+#             np.min(self.__runTimes__[run]) for run in self.__runTimes__
+#         )
+
+#         self.__timeResolution__ = kwargs.get("timeResolution", max(max(len(self.__runTimes__[run]) for run in self.__runTimes__),50))
+
+#         self.__datasets__ = {
+#             run: io.loadVarContFromHDF5(
+#                 self.__variables__["time"],
+#                 filepaths=[path + file for file in io.getOutputFilenames(path)],
+#             ).dataset.interp(
+#                 t=np.linspace(
+#                     self.__runMinTime__,
+#                     self.__runMaxTime__,
+#                     self.__timeResolution__,
+#                     endpoint=True,
+#                 )
+#             )
+#             for run, path in runPaths.items()
+#         }
+
+#         self.param["time"].objects = list(range(self.__timeResolution__))
+
+#         self.time = 0
+#         super().__init__(**kwargs)
+
+#     def __load__(self, varName: str, run: str):
+#         path = self.__runPaths__[run]
+#         if varName in self.__datasets__[run]:
+#             return
+
+#         newVarCont = io.loadVarContFromHDF5(
+#             self.__variables__[varName],
+#             filepaths=[path + file for file in io.getOutputFilenames(path)],
+#         )
+#         self.__datasets__[run] = xr.merge(
+#             [
+#                 self.__datasets__[run],
+#                 newVarCont.dataset.interp(
+#                     t=np.linspace(
+#                         self.__runMinTime__,
+#                         self.__runMaxTime__,
+#                         self.__timeResolution__,
+#                         endpoint=True,
+#                     )
+#                 ),
+#             ],
+#             compat="override",
+#         )
+
+#     @param.depends('variables','runs','time')
+#     def view(self):
+
+#         self.__load__(self.variables,self.runs)
+#         fig = hv.Curve(self.__datasets__[self.runs][self.variables][self.time,:], label=self.variables).opts(
+#                     framewise=True
+#                 )
+
+#         return pn.pane.HoloViews(fig, sizing_mode="stretch_width").servable()
 
 
 class ReMKiT1DDashboard:
@@ -92,36 +417,6 @@ class ReMKiT1DDashboard:
         )
         self.__gridObj__ = gridObj
         self.__dualGrid__ = gridObj.xGrid + gridObj.xWidths / 2
-
-    def __load_dist_curve__(
-        self, dataname, time, pos, harmonic, logY, energyGrid, maxV, **kwargs
-    ):
-        assert self.__data__[dataname].coords.dims == (
-            "t",
-            "x",
-            "h",
-            "v",
-        ) or self.__data__[dataname].coords.dims == (
-            "t",
-            "x_dual",
-            "h",
-            "v",
-        ), "Non-dist dataname in load_dist"
-
-        if energyGrid:
-            curve = hv.Curve(
-                (
-                    self.__energyGrid__[: maxV + 1],
-                    self.__data__[dataname][time, pos, harmonic, : maxV + 1],
-                ),
-                label=dataname,
-            ).opts(framewise=True, logy=logY)
-        else:
-            curve = hv.Curve(
-                self.__data__[dataname][time, pos, harmonic, : maxV + 1], label=dataname
-            ).opts(framewise=True, logy=logY)
-
-        return curve
 
     def __load_fluid__(
         self, dataname, val, mode, logy=False, removeTitle=False, **kwargs
