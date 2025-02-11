@@ -9,7 +9,6 @@ from typing import Union, List, Dict, Tuple, Type, ClassVar
 from typing_extensions import Self
 import param  # type: ignore
 
-
 def fluidVarX(var: Variable, time: int):
 
     return hv.Curve(
@@ -30,6 +29,40 @@ def fluidVarT(var: Variable, x: int, time: Variable):
     )
 
 
+def distVarV(var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False):
+
+    if energyGrid:
+        curve = hv.Curve(
+            (
+                var.grid.vGrid**2,
+                var.dataArr[time, x, harmonic, :],
+            ),
+            "$v^2[v_0^2]$",
+            var.units,
+            label=var.name,
+        )
+    else:
+
+        curve = hv.Curve(
+            (
+                var.grid.vGrid,
+                var.dataArr[time, x, harmonic, :],
+            ),
+            "$v[v_0]$",
+            var.units,
+            label=var.name,
+        )
+
+    return curve
+
+
+def scalarVarT(var: Variable, time: Variable):
+
+    return hv.Curve(
+        (time.dataArr, var.dataArr[:]), "$t[t_0]$", var.units, label=var.name
+    )
+
+
 class LazyLoader:
 
     def __init__(self, variables: VariableContainer, **kwargs) -> None:
@@ -38,7 +71,7 @@ class LazyLoader:
 
         self.__runs__: Dict[str, VariableContainer] = {}
 
-    def __load__(self, varName: str, run: str):
+    def load(self, varName: str, run: str):
         path = self.__runPaths__[run]
         if run not in self.__runs__:
             self.__runs__[run] = io.loadVarContFromHDF5(
@@ -64,7 +97,7 @@ class LazyLoader:
         )
         assert key[1] in self.__runPaths__, key[1] + " not in LazyLoader run paths"
 
-        self.__load__(key[0], key[1])
+        self.load(key[0], key[1])
 
         return self.__runs__[key[1]][key[0]]
 
@@ -92,13 +125,13 @@ class DashboardElement(param.Parameterized):
 class ElementDisplay(param.Parameterized):
 
     alias = "Selector"
-    widgets = param.Selector(default=alias)
+    widget = param.Selector(default=alias)
     element = param.Parameter(instantiate=False, precedence=-1)
 
     def __init__(self, loader: LazyLoader, **params):
-        self.param["widgets"].objects.append("Selector")
+        self.param["widget"].objects.append("Selector")
         for name in DashboardElement.__sc__:
-            self.param["widgets"].objects.append(name)
+            self.param["widget"].objects.append(name)
         self.__loader__ = loader
         self.__last__ = "Selector"
         self.element = DashboardElement(self.__loader__, name="Selector")
@@ -108,16 +141,16 @@ class ElementDisplay(param.Parameterized):
     def __init_subclass__(cls) -> None:
         DashboardElement.__sc__[cls.alias] = cls
 
-    @param.depends("widgets", "element.param", watch=True)
+    @param.depends("widget", "element.param", watch=True)
     def _update(self):
-        if self.widgets != self.__last__:
-            if self.widgets == "Selector":
+        if self.widget != self.__last__:
+            if self.widget == "Selector":
                 self.element = DashboardElement(self.__loader__, name="Selector")
             else:
-                self.element = DashboardElement.__sc__[self.widgets](
-                    self.__loader__, name=self.widgets
+                self.element = DashboardElement.__sc__[self.widget](
+                    self.__loader__, name=self.widget
                 )
-        self.__last__ = self.widgets
+        self.__last__ = self.widget
         self.__layout__[1] = self.element.view()
 
     @property
@@ -129,7 +162,7 @@ class FluidMultiVariablePlot(DashboardElement):
 
     alias = "Fluid Multi Variable Plot"
     variables = param.ListSelector(default=[])
-    runs = param.Selector()
+    run = param.Selector()
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
     x_lower_limit = param.Number()
     x_upper_limit = param.Number()
@@ -143,32 +176,30 @@ class FluidMultiVariablePlot(DashboardElement):
             for name in loader.__variables__.varNames
             if loader.__variables__[name].isFluid
         ]
-        self.param["runs"].objects = list(loader.__runPaths__.keys())
+        self.param["run"].objects = list(loader.__runPaths__.keys())
 
     def view(self):
-        if self.runs is None:
-            self.runs = self.param["runs"].objects[0]
-        if self.runs is None:
-            self.runs = self.param["runs"].objects[0]
+        if self.run is None:
+            self.run = self.param["run"].objects[0]
+        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
+            self.variables = [self.param["variables"].objects[0]]
 
-        if len(self.variables):
+        if len(self.variables) > 0:
             for var in self.variables:
-                self.__loader__.__load__(var, self.runs)
+                self.__loader__.load(var, self.run)
             if self.dim == "Fixed position":
                 val = pn.widgets.IntSlider(
                     name="x",
                     value=0,
                     start=0,
-                    end=self.__loader__[(self.variables[0], self.runs)].dataShape[1]
-                    - 1,
+                    end=self.__loader__[(self.variables[0], self.run)].dataShape[1] - 1,
                 )
             else:
                 val = pn.widgets.IntSlider(
                     name="t",
                     value=0,
                     start=0,
-                    end=self.__loader__[(self.variables[0], self.runs)].dataShape[0]
-                    - 1,
+                    end=self.__loader__[(self.variables[0], self.run)].dataShape[0] - 1,
                 )
         else:
             return pn.Column(
@@ -178,9 +209,9 @@ class FluidMultiVariablePlot(DashboardElement):
         def loadFluidT(ind):
             curves = {
                 var: fluidVarT(
-                    self.__loader__[(var, self.runs)],
+                    self.__loader__[(var, self.run)],
                     ind,
-                    self.__loader__[("time", self.runs)],
+                    self.__loader__[("time", self.run)],
                 )
                 for var in self.variables
             }
@@ -192,7 +223,7 @@ class FluidMultiVariablePlot(DashboardElement):
 
         def loadFluidX(ind):
             curves = {
-                var: fluidVarX(self.__loader__[(var, self.runs)], ind)
+                var: fluidVarX(self.__loader__[(var, self.run)], ind)
                 for var in self.variables
             }
             return hv.NdOverlay(curves).opts(
@@ -212,6 +243,58 @@ class FluidMultiVariablePlot(DashboardElement):
                 pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
             ),
             pn.panel(dmap),
+        )
+
+
+class ScalarMultiVariablePlot(DashboardElement):
+
+    alias = "Scalar Multi Variable Plot"
+    variables = param.ListSelector(default=[])
+    run = param.Selector()
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variables"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isScalar
+        ]
+        self.param["run"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if self.run is None:
+            self.run = self.param["run"].objects[0]
+        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
+            self.variables = [self.param["variables"].objects[0]]
+
+        if len(self.variables) > 0:
+            for var in self.variables:
+                self.__loader__.load(var, self.run)
+
+        else:
+            return pn.Column(pn.Param(self.param))
+
+        curves = {
+            var: scalarVarT(
+                self.__loader__[(var, self.run)],
+                self.__loader__[("time", self.run)],
+            )
+            for var in self.variables
+        }
+
+        return pn.Row(
+            pn.Column(pn.Param(self.param)),
+            pn.panel(
+                hv.NdOverlay(curves).opts(
+                    xlim=(self.x_lower_limit, self.x_upper_limit),
+                    ylim=(self.y_lower_limit, self.y_upper_limit),
+                    title="",
+                )
+            ),
         )
 
 
@@ -238,12 +321,12 @@ class FluidMultiRunPlot(DashboardElement):
     def view(self):
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if self.variable is None:
-            self.variable = self.param["variable"].objects[0]
+        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
+            self.runs = [self.param["runs"].objects[0]]
 
-        if len(self.runs):
+        if len(self.runs) > 0:
             for run in self.runs:
-                self.__loader__.__load__(self.variable, run)
+                self.__loader__.load(self.variable, run)
             if self.dim == "Fixed position":
                 val = pn.widgets.IntSlider(
                     name="x",
@@ -303,6 +386,146 @@ class FluidMultiRunPlot(DashboardElement):
             ),
             pn.panel(dmap),
         )
+
+
+class ScalarMultiRunPlot(DashboardElement):
+
+    alias = "Scalar Multi Run Plot"
+    variable = param.Selector()
+    runs = param.ListSelector([])
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variable"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isScalar
+        ]
+        self.param["runs"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if self.variable is None:
+            self.variable = self.param["variable"].objects[0]
+        if len(self.runs) == 0 and len(self.param["runs"].objects):
+            self.runs = [self.param["runs"].objects[0]]
+
+        if len(self.runs) > 0:
+            for run in self.runs:
+                self.__loader__.load(self.variable, run)
+
+        else:
+            return pn.Column(pn.Param(self.param))
+
+        curves = {
+            run: scalarVarT(
+                self.__loader__[(self.variable, run)],
+                self.__loader__[("time", run)],
+            )
+            for run in self.runs
+        }
+
+        return pn.Row(
+            pn.Column(pn.Param(self.param)),
+            pn.panel(
+                hv.NdOverlay(curves).opts(
+                    xlim=(self.x_lower_limit, self.x_upper_limit),
+                    ylim=(self.y_lower_limit, self.y_upper_limit),
+                    title="",
+                )
+            ),
+        )
+
+
+class DistExplorer(DashboardElement):
+    alias = "Distribution Explorer"
+    logarithmic_y = param.Boolean(default=False)
+    energy_grid = param.Boolean(default=False)
+    variable = param.Selector()
+    runs = param.ListSelector([])
+    auto_x_limits = param.Boolean(default=True)
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    auto_y_limits = param.Boolean(default=True)
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variable"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isDistribution
+        ]
+        self.param["runs"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if not len(self.param["variable"].objects) > 0:
+            return pn.Column(pn.Param(self.param))
+        if self.variable is None:
+            self.variable = self.param["variable"].objects[0]
+        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
+            self.runs = [self.param["runs"].objects[0]]
+
+        if len(self.runs) > 0:
+            for run in self.runs:
+                self.__loader__.load(self.variable, run)
+            pos = pn.widgets.IntSlider(
+                name="x",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
+            )
+            t = pn.widgets.IntSlider(
+                name="t",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
+            )
+            h = pn.widgets.IntSlider(
+                name="h",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variable, self.runs[0])].dataShape[2] - 1,
+            )
+
+        else:
+            return pn.Column(pn.Param(self.param))
+
+        def load_dist_curves(x: int, time: int, harmonic: int):
+
+            xlims = (
+                (None, None)
+                if self.auto_x_limits
+                else (self.x_lower_limit, self.x_upper_limit)
+            )
+            ylims = (
+                (None, None)
+                if self.auto_y_limits
+                else (self.y_lower_limit, self.y_upper_limit)
+            )
+
+            curves = {
+                run: distVarV(
+                    self.__loader__[(self.variable, run)],
+                    x,
+                    time,
+                    harmonic,
+                    self.energy_grid,
+                ).opts(framewise=True, logy=self.logarithmic_y, xlim=xlims, ylim=ylims)
+                for run in self.runs
+            }
+
+            return hv.NdOverlay(curves).opts(
+                title="",
+            )
+
+        dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h))
+
+        return pn.Row(pn.Column(self.param, pos, t, h), pn.panel(dmap))
 
 
 # class RMKExplorer(param.Parameterized):
@@ -365,7 +588,7 @@ class FluidMultiRunPlot(DashboardElement):
 #         self.time = 0
 #         super().__init__(**kwargs)
 
-#     def __load__(self, varName: str, run: str):
+#     def load(self, varName: str, run: str):
 #         path = self.__runPaths__[run]
 #         if varName in self.__datasets__[run]:
 #             return
@@ -392,7 +615,7 @@ class FluidMultiRunPlot(DashboardElement):
 #     @param.depends('variables','runs','time')
 #     def view(self):
 
-#         self.__load__(self.variables,self.runs)
+#         self.load(self.variables,self.runs)
 #         fig = hv.Curve(self.__datasets__[self.runs][self.variables][self.time,:], label=self.variables).opts(
 #                     framewise=True
 #                 )
