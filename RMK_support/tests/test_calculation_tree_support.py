@@ -275,6 +275,8 @@ def test_funs():
         partial(ct.shift, shiftAmount=1),
         ct.step,
         partial(ct.absFloor, floorVal=0.1),
+        partial(ct.expand, expandVals=np.array([2.0, 1.0])),
+        partial(ct.contract, contractVals=np.array([2.0, 1.0]), resultLen=2),
     ]
 
     funTags = [
@@ -293,6 +295,8 @@ def test_funs():
         "shift",
         "step",
         "absFloor",
+        "expand",
+        "cont",
     ]
 
     numFuns = [
@@ -311,6 +315,8 @@ def test_funs():
         lambda arg: np.roll(arg, 1),
         lambda arg: np.where(arg > 0, 1, 0),
         lambda arg: np.where(np.abs(arg) < 0.1, np.sign(arg) * 0.1, arg),
+        lambda arg: np.outer(arg, np.array([2.0, 1.0])).flatten(),
+        lambda arg: np.dot(np.reshape(arg, (2, 2)), np.array([2.0, 1.0])),
     ]
 
     for i, fun in enumerate(funs):

@@ -324,6 +324,8 @@ class Variable(DerivationArgument):
         self.__inOutput__: bool = kwargs.get("inOutput", True)
 
         self.__dual__: Union[Variable, None] = None
+        self.__updateDataArr__ = True
+        self.__dataArr__ = self.dataArr
 
     @property
     def dual(self) -> Optional[Self]:
@@ -391,7 +393,12 @@ class Variable(DerivationArgument):
 
     @property
     def dataArr(self):
-        return xr.DataArray(self.__data__, dims=self.dims, attrs=self.__properties__)
+        if self.__updateDataArr__:
+            self.__dataArr__ = xr.DataArray(
+                self.__data__, dims=self.dims, attrs=self.__properties__
+            )
+            self.__updateDataArr__ = False
+        return self.__dataArr__
 
     @property
     def name(self):
@@ -421,6 +428,7 @@ class Variable(DerivationArgument):
         ), "data passed to values setter on Variable does not conform with dimensions"
 
         self.__data__ = data
+        self.__updateDataArr__ = True
 
     @property
     def derivation(self):
@@ -453,6 +461,7 @@ class Variable(DerivationArgument):
         ), "data passed to addTimeDim does not conform with dimensions"
         self.__timeDimSize__ = data.shape[0]
         self.__data__ = data
+        self.__updateDataArr__ = True
 
     @property
     def properties(self):
@@ -489,6 +498,7 @@ class Variable(DerivationArgument):
     @unitsSI.setter
     def unitsSI(self, units: str):
         self.__unitSI__ = units
+        self.__updateDataArr__ = True
 
     @property
     def units(self):
@@ -497,6 +507,7 @@ class Variable(DerivationArgument):
     @units.setter
     def units(self, units: str):
         self.__units__ = units
+        self.__updateDataArr__ = True
 
     @property
     def normSI(self):
@@ -505,6 +516,7 @@ class Variable(DerivationArgument):
     @normSI.setter
     def normSI(self, norm: float):
         self.__normSI__ = norm
+        self.__updateDataArr__ = True
 
     @property
     def unitsNorm(self):
@@ -611,6 +623,8 @@ class Variable(DerivationArgument):
             self.__data__ *= self.normConst
             self.__normConst__ = self.__normSI__
 
+        self.__updateDataArr__ = True
+
     @classmethod
     def apply(cls, deriv: DerivBase, *args: Self) -> Self:
         DerivationArgument.apply(deriv, *args)
@@ -712,6 +726,8 @@ class Variable(DerivationArgument):
             self.__data__ = self.derivation.evaluate(
                 *tuple(dataset[name].data for name in self.__derivationArgs__)
             )
+            self.__updateDataArr__ = True
+
         return self.data
 
 
