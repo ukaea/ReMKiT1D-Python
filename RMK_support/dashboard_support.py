@@ -5,11 +5,24 @@ import numpy as np
 from .grid import Grid
 from .variable_container import VariableContainer, Variable
 from . import IO_support as io
-from typing import Union, List, Dict, Tuple, Type, ClassVar
+from typing import List, Dict, Tuple, Type, ClassVar
 from typing_extensions import Self
 import param  # type: ignore
+from warnings import warn
 
-def fluidVarX(var: Variable, time: int):
+
+def fluidVarX(var: Variable, time: int) -> hv.Curve:
+    """Generate holoviews curve with the spatial profile of a given fluid variable
+
+    Args:
+        var (Variable): Fluid variable to plot
+        time (int): Time index to plot the spatial profile for
+
+    Returns:
+        hv.Curve: Holoviews curve of fluid variable spatial profile
+    """
+
+    assert var.isFluid, "fluidVarX accepts only fluid variables"
 
     return hv.Curve(
         (
@@ -22,15 +35,43 @@ def fluidVarX(var: Variable, time: int):
     )
 
 
-def fluidVarT(var: Variable, x: int, time: Variable):
+def fluidVarT(var: Variable, x: int, time: Variable) -> hv.Curve:
+    """Produce a holoviews time profile of a given variable for a given spatial location
+
+    Args:
+        var (Variable): Fluid variable to plot
+        x (int): Spatial index to plot the timetrace for
+        time (Variable): Scalar time variable corresponding to the time values
+
+    Returns:
+        hv.Curve: Holoviews curve of fluid variable timetrace
+    """
+
+    assert var.isFluid, "fluidVarT accepts only fluid variables"
+    assert time.isScalar, "The time variable in fluidVarT must be a scalar"
 
     return hv.Curve(
         (time.dataArr, var.dataArr[:, x]), "$t[t_0]$", var.units, label=var.name
     )
 
 
-def distVarV(var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False):
+def distVarV(
+    var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False
+) -> hv.Curve:
+    """Produce a holoviews curve of a distribution variable velocity space profile
 
+    Args:
+        var (Variable): Distribution variable to plot
+        x (int): Spatial index for which to plot the profile
+        time (int): Time index for which to plot the profile
+        harmonic (int): Harmonic index for which to plot the profile
+        energyGrid (bool, optional): If true will plot against v**2 instead of v. Defaults to False.
+
+    Returns:
+        hv.Curve: Holoviews curve of distribution variable velocity profile
+    """
+
+    assert var.isDistribution, "distVarV accepts only distribution variables"
     if energyGrid:
         curve = hv.Curve(
             (
@@ -56,22 +97,49 @@ def distVarV(var: Variable, x: int, time: int, harmonic: int, energyGrid: bool =
     return curve
 
 
-def scalarVarT(var: Variable, time: Variable):
+def scalarVarT(var: Variable, time: Variable) -> hv.Curve:
+    """Produce a holoviews curve of the timetrace for a given scalar variable
 
+    Args:
+        var (Variable): Scalar variable to plot
+        time (Variable): Scalar time variable corresponding to the time values
+
+    Returns:
+        hv.Curve: Holoviews curve of scalar variable timetrace
+    """
+
+    assert var.isScalar, "scalarVarT accepts only scalar variables"
+    assert time.isScalar, "The time variable in scalarVarT must be a scalar"
     return hv.Curve(
         (time.dataArr, var.dataArr[:]), "$t[t_0]$", var.units, label=var.name
     )
 
 
 class LazyLoader:
+    """Loader class allowing for the dynamic loading of Variables in a given VariableContainer from a number of different paths"""
 
-    def __init__(self, variables: VariableContainer, **kwargs) -> None:
+    def __init__(self, variables: VariableContainer, runPaths: Dict[str, str]) -> None:
+        """Loader allowing for lazy loading of variables from multiple paths
+
+        Args:
+            variables (VariableContainer): Variable container with variables that the loader can load
+            runPaths (Dict[str,str]): Paths containing ReMKiT1D hdf5 output files. These must conform to the VariableContainer's properties.
+        """
         self.__variables__ = variables
-        self.__runPaths__: Dict[str, str] = kwargs.get("runPaths", {})
+        self.__runPaths__: Dict[str, str] = runPaths
+        assert (
+            len(runPaths.keys()) > 0
+        ), "At least one run path must be supplied to the LazyLoader"
 
         self.__runs__: Dict[str, VariableContainer] = {}
 
     def load(self, varName: str, run: str):
+        """Load a variable with a given name from a given run. If it is already loaded this is a no-op.
+
+        Args:
+            varName (str): Name of the variable to load
+            run (str): Key of the run path which contains the data
+        """
         path = self.__runPaths__[run]
         if run not in self.__runs__:
             self.__runs__[run] = io.loadVarContFromHDF5(
@@ -88,7 +156,13 @@ class LazyLoader:
         )
         self.__runs__[run].add(loadedVar)
 
-    def setRunPath(self, run, path):
+    def setRunPath(self, run: str, path: str):
+        """Set the path of a given run in the loader. This can be used to add more runs.
+
+        Args:
+            run (str): Run key
+            path (str): Run path
+        """
         self.__runPaths__[run] = path
 
     def __getitem__(self, key: Tuple[str, str]) -> Variable:
@@ -101,12 +175,17 @@ class LazyLoader:
 
         return self.__runs__[key[1]][key[0]]
 
-    def getDataset(self, run) -> xr.Dataset:
+    def getDataset(self, run: str) -> xr.Dataset:
+        """Retrieve the dataset associated with a given run. It will only contain the loaded variables.
 
+        Args:
+            run (str): Run key for which the dataset is extracted
+        """
         return self.__runs__[run].dataset
 
 
 class DashboardElement(param.Parameterized):
+    """Base parameterised class used to extend dashboard element types"""
 
     alias = "Selector"
     __sc__: ClassVar[Dict[str, Type[Self]]] = {}
@@ -124,8 +203,7 @@ class DashboardElement(param.Parameterized):
 
 class ElementDisplay(param.Parameterized):
 
-    alias = "Selector"
-    widget = param.Selector(default=alias)
+    widget = param.Selector(default="Selector")
     element = param.Parameter(instantiate=False, precedence=-1)
 
     def __init__(self, loader: LazyLoader, **params):
@@ -137,9 +215,6 @@ class ElementDisplay(param.Parameterized):
         self.element = DashboardElement(self.__loader__, name="Selector")
         super().__init__(**params)
         self.__layout__ = pn.Column(pn.Param(self.param, name=""), self.element.view())
-
-    def __init_subclass__(cls) -> None:
-        DashboardElement.__sc__[cls.alias] = cls
 
     @param.depends("widget", "element.param", watch=True)
     def _update(self):
@@ -528,109 +603,20 @@ class DistExplorer(DashboardElement):
         return pn.Row(pn.Column(self.param, pos, t, h), pn.panel(dmap))
 
 
-# class RMKExplorer(param.Parameterized):
-
-#     variables = param.Selector(
-#         doc="The list of available variables"
-#     )
-
-#     runs = param.Selector(
-#         doc="The list of runs"
-#     )
-
-#     time = param.Selector(doc="Valid time values")
-
-#     def __init__(
-#         self, variables: VariableContainer, runPaths: Dict[str, str], **kwargs
-#     ):
-
-#         self.__variables__ = variables
-#         self.param["variables"].objects = [name for name in variables.varNames if variables[name].isFluid]
-#         self.variables = self.param["variables"].objects[0]
-#         self.param["runs"].objects = list(runPaths.keys())
-#         self.runs = self.param["runs"].objects[0]
-#         self.__runPaths__ = runPaths
-
-#         self.__runTimes__ = {
-#             run: io.loadVariableFromHDF5(
-#                 self.__variables__["time"],
-#                 filepaths=[path + file for file in io.getOutputFilenames(path)],
-#             ).data
-#             for run, path in runPaths.items()
-#         }
-
-#         self.__runMaxTime__ = max(
-#             np.max(self.__runTimes__[run]) for run in self.__runTimes__
-#         )
-#         self.__runMinTime__ = min(
-#             np.min(self.__runTimes__[run]) for run in self.__runTimes__
-#         )
-
-#         self.__timeResolution__ = kwargs.get("timeResolution", max(max(len(self.__runTimes__[run]) for run in self.__runTimes__),50))
-
-#         self.__datasets__ = {
-#             run: io.loadVarContFromHDF5(
-#                 self.__variables__["time"],
-#                 filepaths=[path + file for file in io.getOutputFilenames(path)],
-#             ).dataset.interp(
-#                 t=np.linspace(
-#                     self.__runMinTime__,
-#                     self.__runMaxTime__,
-#                     self.__timeResolution__,
-#                     endpoint=True,
-#                 )
-#             )
-#             for run, path in runPaths.items()
-#         }
-
-#         self.param["time"].objects = list(range(self.__timeResolution__))
-
-#         self.time = 0
-#         super().__init__(**kwargs)
-
-#     def load(self, varName: str, run: str):
-#         path = self.__runPaths__[run]
-#         if varName in self.__datasets__[run]:
-#             return
-
-#         newVarCont = io.loadVarContFromHDF5(
-#             self.__variables__[varName],
-#             filepaths=[path + file for file in io.getOutputFilenames(path)],
-#         )
-#         self.__datasets__[run] = xr.merge(
-#             [
-#                 self.__datasets__[run],
-#                 newVarCont.dataset.interp(
-#                     t=np.linspace(
-#                         self.__runMinTime__,
-#                         self.__runMaxTime__,
-#                         self.__timeResolution__,
-#                         endpoint=True,
-#                     )
-#                 ),
-#             ],
-#             compat="override",
-#         )
-
-#     @param.depends('variables','runs','time')
-#     def view(self):
-
-#         self.load(self.variables,self.runs)
-#         fig = hv.Curve(self.__datasets__[self.runs][self.variables][self.time,:], label=self.variables).opts(
-#                     framewise=True
-#                 )
-
-#         return pn.pane.HoloViews(fig, sizing_mode="stretch_width").servable()
-
-
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):
         """Constructor for a dashboard object
+
+        NOTE: This is the pre-v2.0.0 dashboard. It is depracated and might be removed in a future version.
 
         Args:
             data (xr.Dataset): Data loaded into the dashboard to be visualized
             gridObj (Grid): Grid object used to set axis ticks and labels.
         """
+        warn(
+            "This is the pre-v2.0.0 dashboard. It is depracated and might be removed in a future version.",
+            category=DeprecationWarning,
+        )
         self.__data__ = data
         self.__fluidNames__ = list(
             data.filter_by_attrs(isDistribution=False, isScalar=False).data_vars.keys()
