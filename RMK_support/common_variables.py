@@ -21,6 +21,8 @@ def density(name: str, context: RMKContext, **kwargs) -> Variable:
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in density call"
 
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "density"
     var = Variable(
         name,
         context.grid,
@@ -46,6 +48,9 @@ def temperature(name: str, context: RMKContext, **kwargs) -> Variable:
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in temperature call"
 
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "temperature"
+
     var = Variable(
         name,
         context.grid,
@@ -70,6 +75,9 @@ def flux(name: str, context: RMKContext, **kwargs) -> Variable:
     """
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in flux call"
+
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "flux"
 
     var = Variable(
         name,
@@ -97,6 +105,9 @@ def speed(name: str, context: RMKContext, **kwargs) -> Variable:
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in speed call"
 
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "speed"
+
     var = Variable(
         name,
         context.grid,
@@ -122,6 +133,9 @@ def energyDensity(name: str, context: RMKContext, **kwargs) -> Variable:
 
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in energy density call"
+
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "energyDensity"
 
     var = Variable(
         name,
@@ -149,6 +163,9 @@ def energyFlux(name: str, context: RMKContext, **kwargs) -> Variable:
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in energy flux call"
 
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "energyFlux"
+
     var = Variable(
         name,
         context.grid,
@@ -174,6 +191,9 @@ def electricField(name: str, context: RMKContext, **kwargs) -> Variable:
 
     for key in ["units", "unitSI", "normSI"]:
         assert key not in kwargs, key + " not allowed in electric field call"
+
+    if "subtype" not in kwargs:
+        kwargs["subtype"] = "eField"
 
     var = Variable(
         name,
@@ -268,6 +288,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if n.name not in self.species.associatedVarNames:
                 self.species.associateVar(n, n.dual)
+            self.species[n.subtype] = n
         if self.__addOnCreation__:
             if n.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(n)
@@ -291,6 +312,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if G.name not in self.species.associatedVarNames:
                 self.species.associateVar(G, G.dual)
+            self.species[G.subtype] = G.dual
         if self.__addOnCreation__:
             if G.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(G)
@@ -311,6 +333,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if W.name not in self.species.associatedVarNames:
                 self.species.associateVar(W, W.dual)
+            self.species[W.subtype] = W
         if self.__addOnCreation__:
             if W.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(W)
@@ -331,6 +354,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if T.name not in self.species.associatedVarNames:
                 self.species.associateVar(T, T.dual)
+            self.species[T.subtype] = T
         if self.__addOnCreation__:
             if T.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(T)
@@ -359,6 +383,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
                 self.species.associateVar(u, u.dual)
+            self.species[u.subtype] = u.dual
         if self.__addOnCreation__:
             if u.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(u)
@@ -379,10 +404,12 @@ class StandardFluidVariables(VariableFactory):
             data=initVals,
             isStationary=True,
             isOnDualGrid=True,
+            subtype="heatflux",
         ).withDual("q" + self.species.name)
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:
                 self.species.associateVar(q, q.dual)
+            self.species[q.subtype] = q.dual
         if self.__addOnCreation__:
             if q.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(q)
@@ -405,10 +432,12 @@ class StandardFluidVariables(VariableFactory):
                 "p" + self.species.name,
                 node=node(self.density()) * node(self.temperature()),
             ),
+            subtype="pressure",
         ).withDual()
         if self.__associateOnCreation__:
             if p.name not in self.species.associatedVarNames:
                 self.species.associateVar(p, p.dual)
+            self.species[p.subtype] = p
         if self.__addOnCreation__:
             if p.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(p)
@@ -424,11 +453,16 @@ class StandardFluidVariables(VariableFactory):
             Variable: Standard viscosity variable
         """
         pi = energyDensity(
-            "pi" + self.species.name, self.__context__, data=initVals, isStationary=True
+            "pi" + self.species.name,
+            self.__context__,
+            data=initVals,
+            isStationary=True,
+            subtype="viscosity",
         ).withDual()
         if self.__associateOnCreation__:
             if pi.name not in self.species.associatedVarNames:
                 self.species.associateVar(pi, pi.dual)
+            self.species[pi.subtype] = pi
         if self.__addOnCreation__:
             if pi.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(pi)

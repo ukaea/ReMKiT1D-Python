@@ -10,6 +10,7 @@ from math import isclose
 from .tex_parsing import numToScientificTex
 from scipy import special  # type: ignore
 from scipy.interpolate import RegularGridInterpolator  # type: ignore
+import warnings
 
 
 class DerivBase(ABC):
@@ -34,6 +35,11 @@ class DerivationArgument(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def subtype(self) -> str:
         pass
 
     @property
@@ -83,6 +89,7 @@ class Species:
         self.__charge__ = charge
         self.__associatedVars__ = [] if associatedVars is None else associatedVars
         self.__latexName__ = latexName
+        self.__varsByType__: Dict[str, DerivationArgument] = {}
 
     @property
     def name(self):
@@ -109,11 +116,48 @@ class Species:
     def associatedVarNames(self):
         return [var.name for var in self.__associatedVars__]
 
-    def associateVar(self, *args: DerivationArgument):
-        """Associate variable with this species"""
+    def associateVar(self, *args: DerivationArgument, associateSubtype=False):
+        """Associate variable with this species
+
+        Args:
+            associateSubtype (bool, optional): If true will try to associate variables by subtype as well, for example, if the variables subtype is "density", it can be accessed by indexing the species object using ["density"]. Only the first variable of a given subtype will be associated and warning will be raised for duplicates. Defaults to False.
+        """
         for arg in args:
             if arg.name not in self.associatedVarNames:
                 self.__associatedVars__.append(arg)
+                if associateSubtype:
+                    if arg.subtype not in self.__varsByType__:
+                        self.__varsByType__[arg.subtype] = arg
+                    else:
+                        warnings.warn(
+                            "Species "
+                            + self.name
+                            + " already has a variable with subtype "
+                            + arg.subtype
+                            + " associated. Variable "
+                            + arg.name
+                            + " will not be set as the "
+                            + arg.subtype
+                            + " variable for this species. You can still manually override this by overriding the ["
+                            + arg.subtype
+                            + "] element of this species."
+                        )
+
+    def __getitem__(self, key: str):
+        return self.__varsByType__[key]
+
+    def __setitem__(self, key: str, var: DerivationArgument):
+        assert key == var.subtype, (
+            "key "
+            + key
+            + " and variable subtype "
+            + var.subtype
+            + " must match for the variable to be assigned as the relevant subtype variable for the species"
+        )
+        assert (
+            var.name in self.associatedVarNames
+        ), "If setting subtype variable manually on species it must already be associated t"
+        self.__varsByType__[key] = var
 
     def dict(self) -> dict:
         """Return Species objects as dictionary entry for JSON output

@@ -20,12 +20,12 @@ def grid():
 
 def test_species(grid):
 
-    a = Variable("a", grid)
+    a = Variable("a", grid, subtype="a")
 
     sp1 = dv.Species("sp1", 1)
     sp2 = dv.Species("sp2", 2, 2.0, 3.0)
     sp3 = dv.Species("sp3", 3, 2.0, 3.0)
-    sp1.associateVar(a)
+    sp1.associateVar(a, associateSubtype=True)
 
     species = dv.SpeciesContainer(sp1)
     species.add(sp2)
@@ -36,6 +36,7 @@ def test_species(grid):
         0.0,
         1.0,
     )
+    assert species["sp1"]["a"].name == "a"
     assert (sp2.name, sp2.speciesID, sp2.charge, sp2.atomicA) == ("sp2", 2, 3.0, 2.0)
     species["sp4"] = sp3
 
