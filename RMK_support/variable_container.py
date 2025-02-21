@@ -199,6 +199,7 @@ class Variable(DerivationArgument):
             isCommunicated (bool): Whether the variable is communicated. Defaults to True
             scalarHostProcess (int): The process on which the variable lives if it is a scalar. Defaults to 0.
             inOutput (int): True if the variable should be added to any hdf5 output. Defaults to True.
+            subtype (str): Denotes subtype of variable. Useful for filtering variables and working with species. Defaults to "untyped".
         """
         self.__grid__ = gridObj
 
@@ -327,6 +328,8 @@ class Variable(DerivationArgument):
         self.__updateDataArr__ = True
         self.__dataArr__ = self.dataArr
 
+        self.__subtype__ = kwargs.get("subtype", "untyped")
+
     @property
     def dual(self) -> Optional[Self]:
         """The dual variable to this variable. If no dual returns None."""
@@ -335,6 +338,7 @@ class Variable(DerivationArgument):
     @dual.setter
     def dual(self, var: Self):
         self.__dual__ = var
+        var.__dual__ = self
 
     def makeDual(self, name: Optional[str] = None):
         """Create a dual variable from this variable, assigning the dual to self. If dual is already assigned will return existing dual instead of constructing new.
@@ -370,10 +374,10 @@ class Variable(DerivationArgument):
             unitSI=self.__unitSI__,
             isCommunicated=self.isCommunicated,
             inOutput=self.inOutput,
+            subtype=self.__subtype__,
         )
 
         self.dual = dualVar
-        dualVar.dual = self
 
         return dualVar
 
@@ -408,12 +412,16 @@ class Variable(DerivationArgument):
     def name(self, name: str):
         self.__name__ = name
 
+    @property
+    def subtype(self):
+        return self.__subtype__
+
     def rename(self, name: str):
         """Create a copy of this variable and rename it. If the variable has a dual, it will be remade to avoid name clashes"""
         newVar = deepcopy(self)
         newVar.name = name
         if newVar.dual is not None:
-            newVar.dual = None
+            newVar.__dual__ = None
             _ = newVar.withDual()
         return newVar
 
@@ -606,7 +614,7 @@ class Variable(DerivationArgument):
         newVar = deepcopy(self)
         newVar.__isOnDualGrid__ = dual
         if newVar.dual is not None:
-            newVar.dual = None
+            newVar.__dual__ = None
             _ = newVar.withDual()
         return newVar
 
