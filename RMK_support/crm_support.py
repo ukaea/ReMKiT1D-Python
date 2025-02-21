@@ -1282,7 +1282,7 @@ class CRMTermGenerator(TermGenerator):
             (
                 "$" + latexRemap[var] + "$"
                 if var in latexRemap
-                else "$\\text{" + var + "}$"
+                else "$\\text{" + var.replace("_", r"\_") + "}$"
             )
             for var in self.evolvedVars
         )
