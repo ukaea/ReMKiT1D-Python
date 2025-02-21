@@ -74,3 +74,7 @@ def test_standard_variable_factory(context):
 
     E = cv.electricField("E", rk)
     assert E.normConst == rk.norms["EField"]
+
+    assert factory.species["density"].name == "nn"
+    assert factory.species["temperature"].name == "Tn"
+    assert factory.species["heatflux"].name == "qn"
