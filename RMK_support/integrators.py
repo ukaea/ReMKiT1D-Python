@@ -600,7 +600,7 @@ class IntegrationScheme:
                     tex.NoEscape(
                         "\\newline Output points: "
                         + ", ".join(
-                            "$" + numToScientificTex(point,decimals=4) + "$"
+                            "$" + numToScientificTex(point, decimals=4) + "$"
                             for point in self.__outputPoints__
                         )
                     )
