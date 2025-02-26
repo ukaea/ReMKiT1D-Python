@@ -189,7 +189,7 @@ class IntegrationStepSequence:
                     + "}("
                     + numToScientificTex(step.stepFraction, removeUnity=True)
                     + "dt)"
-                    for step in self.steps
+                    for step in reversed(self.steps)
                 )
                 + "$"
             )
@@ -599,8 +599,8 @@ class IntegrationScheme:
                 doc.append(
                     tex.NoEscape(
                         "\\newline Output points: "
-                        + ",".join(
-                            "$" + numToScientificTex(point) + "$"
+                        + ", ".join(
+                            "$" + numToScientificTex(point,decimals=4) + "$"
                             for point in self.__outputPoints__
                         )
                     )
