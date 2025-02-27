@@ -1327,7 +1327,18 @@ def test_flowingIonEIColl():
     elIonMassRatio = elMass / amu
 
     newModel = cm.flowingIonEIColl(
-        "ei", "f", "nion", "uion", "n", "T", "ion", rk, [2], "f_dual", "G_ion"
+        "ei",
+        "f",
+        "nion",
+        "uion",
+        "n",
+        "T",
+        "ion",
+        rk,
+        [2],
+        "f_dual",
+        "G_ion",
+        "nion_dual",
     )
 
     assert newModel.dict() == {
@@ -1375,7 +1386,9 @@ def test_flowingIonEIColl():
                     "normPowers": [1.0, 1.0, -3.0],
                 },
                 "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "CII2sh"]).dict(),
+                "varData": sc.VarData(
+                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "CII2sh"]
+                ).dict(),
                 "stencilData": {
                     "stencilType": "vDiffusionStencil",
                     "modelboundA": "none",
@@ -1402,7 +1415,9 @@ def test_flowingIonEIColl():
                     "normPowers": [1.0, 1.0, -3.0],
                 },
                 "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "CIJ-1sh"]).dict(),
+                "varData": sc.VarData(
+                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "CIJ-1sh"]
+                ).dict(),
                 "stencilData": {
                     "stencilType": "vDiffusionStencil",
                     "modelboundA": "none",
@@ -1429,7 +1444,9 @@ def test_flowingIonEIColl():
                     "normPowers": [1.0, 1.0, -3.0],
                 },
                 "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "IJSum2"]).dict(),
+                "varData": sc.VarData(
+                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "IJSum2"]
+                ).dict(),
                 "stencilData": {
                     "stencilType": "ddvStencil",
                     "modelboundC": "none",
@@ -1456,7 +1473,9 @@ def test_flowingIonEIColl():
                     "normPowers": [1.0, 1.0, -3.0],
                 },
                 "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "IJSum"]).dict(),
+                "varData": sc.VarData(
+                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "IJSum"]
+                ).dict(),
                 "stencilData": {
                     "stencilType": "diagonalStencil",
                     "evolvedXCells": [],

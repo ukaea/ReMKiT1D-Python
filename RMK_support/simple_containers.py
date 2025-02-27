@@ -563,18 +563,18 @@ class TermGenerator:
         return tgDict
 
 
-class CustomModel:
-    """Custom model object property container"""
+class Model:
+    """Model object property container"""
 
     def __init__(self, modelTag: str) -> None:
         self.__modelTag__ = modelTag
-        self.__termTags__: List[str] = []
-        self.__terms__: List[Term] = []
+        self.terms: Dict[str, Term] = (
+            {}
+        )  # Set to "public" naming currently, to be changed if further refactor needed
         self.__modelboundData__: Dict[str, object] = {}
-        self.__termGeneratorTags__: List[str] = []
         self.__termGeneratorProperties__: Dict[str, object] = {}
-        self.__activeImplicitGroups__: List[int] = []
-        self.__activeGeneralGroups__: List[int] = []
+        self.__termGeneratorActiveImplicitGroups__: Dict[str, List[int]] = {}
+        self.__termGeneratorActiveGeneralGroups__: Dict[str, List[int]] = {}
 
     @property
     def mbData(self):
@@ -582,37 +582,54 @@ class CustomModel:
 
     @property
     def activeImplicitGroups(self):
-        return self.__activeImplicitGroups__
+        activeGroups = sum([self.terms[tag].implicitGroups for tag in self.terms], [])
+        activeGroups += sum(
+            [
+                self.__termGeneratorActiveImplicitGroups__[tag]
+                for tag in self.__termGeneratorProperties__.keys()
+            ],
+            [],
+        )
+
+        return list(set(activeGroups))
 
     @property
     def activeGeneralGroups(self):
-        return self.__activeGeneralGroups__
+        activeGroups = sum([self.terms[tag].generalGroups for tag in self.terms], [])
+        activeGroups += sum(
+            [
+                self.__termGeneratorActiveGeneralGroups__[tag]
+                for tag in self.__termGeneratorProperties__.keys()
+            ],
+            [],
+        )
+
+        return list(set(activeGroups))
 
     def addTerm(self, termTag: str, term: Term):
-        self.__termTags__.append(termTag)
-        self.__terms__.append(term)
-        self.__activeImplicitGroups__ += term.implicitGroups
-        self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
-        self.__activeGeneralGroups__ += term.generalGroups
-        self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
+        self.terms[termTag] = term
 
     def addTermGenerator(
         self, generatorTag: str, generatorProperties: Union[dict, TermGenerator]
     ):
-        self.__termGeneratorTags__.append(generatorTag)
+        propertiesDict = {}
 
         if isinstance(generatorProperties, dict):
             propertiesDict = generatorProperties
             warnings.warn(
                 "Adding term generator as dictionary. This is deprecated and provided only for legacy scripts. Useful checks are disabled. Use at own risk."
             )
+            self.__termGeneratorActiveImplicitGroups__[generatorTag] = []
+            self.__termGeneratorActiveGeneralGroups__[generatorTag] = []
 
         if isinstance(generatorProperties, TermGenerator):
             propertiesDict = generatorProperties.dict()
-            self.__activeImplicitGroups__ += generatorProperties.implicitGroups
-            self.__activeImplicitGroups__ = list(set(self.__activeImplicitGroups__))
-            self.__activeGeneralGroups__ += generatorProperties.generalGroups
-            self.__activeGeneralGroups__ = list(set(self.__activeGeneralGroups__))
+            self.__termGeneratorActiveImplicitGroups__[generatorTag] = (
+                generatorProperties.implicitGroups
+            )
+            self.__termGeneratorActiveGeneralGroups__[generatorTag] = (
+                generatorProperties.generalGroups
+            )
 
         self.__termGeneratorProperties__[generatorTag] = propertiesDict
 
@@ -626,9 +643,9 @@ class CustomModel:
             varCont (VariableContainer): Variable container to be used in this check
         """
         print("Checking terms in model " + self.__modelTag__ + ":")
-        for i, term in enumerate(self.__terms__):
-            print("   Checking term " + self.__termTags__[i])
-            term.checkTerm(varCont)
+        for tag in self.terms:
+            print("   Checking term " + tag)
+            self.terms[tag].checkTerm(varCont)
 
     def dict(self):
         """Returns dictionary form of CustomModel to be used in json output
@@ -639,21 +656,24 @@ class CustomModel:
         cModel = {
             self.__modelTag__: {
                 "type": "customModel",
-                "termTags": self.__termTags__,
+                "termTags": list(self.terms.keys()),
                 "modelboundData": self.__modelboundData__,
-                "termGenerators": {"tags": self.__termGeneratorTags__},
+                "termGenerators": {
+                    "tags": list(self.__termGeneratorProperties__.keys())
+                },
             }
         }
 
         cModel[self.__modelTag__]["termGenerators"].update(
             self.__termGeneratorProperties__
         )
-        for i in range(len(self.__termTags__)):
-            cModel[self.__modelTag__].update(
-                {self.__termTags__[i]: self.__terms__[i].dict()}
-            )
+        for tag in self.terms:
+            cModel[self.__modelTag__].update({tag: self.terms[tag].dict()})
 
         return cModel
+
+
+CustomModel = Model
 
 
 def derivationRule(derivationName: str, requiredVars: List[str]) -> dict:
@@ -1518,14 +1538,15 @@ def upwindedDiv(fluxJacVar: str) -> dict:
 
 
 def diffusionStencil(
-    ruleName: str, reqVarNames: List[str], doNotInterpolate=False
+    ruleName: str, reqVarNames: List[str], doNotInterpolate=False, ignoreJacobian=False
 ) -> dict:
     """Return diffusion stencil in x which assumes that both the implicit and evolved variables live on the regular grid.
 
     Args:
-        ruleName (str): Name of derivation used to calculate the diffusion coefficent
+        ruleName (str): Name of derivation used to calculate the diffusion coefficient
         reqVarNames (List[str]): Variable names required for the derivation
         doNotInterpolate (bool, optional): If true will assume that the rule already calculates the diffusion coefficient on cell boundaries. Defaults to False.
+        ignoreJacobian (bool, optional): If true, the face Jacobians are ignored when calculating the diffusive flux divergence (for example when neutrals do not need to see the B-field). Defaults to False.
     Returns:
         dict: Stencil property dictionary
     """
@@ -1535,6 +1556,7 @@ def diffusionStencil(
         "ruleName": ruleName,
         "requiredVarNames": reqVarNames,
         "doNotInterpolateDiffCoeff": doNotInterpolate,
+        "ignoreJacobian": ignoreJacobian,
     }
 
     return stencil
@@ -1876,6 +1898,7 @@ def picardBDEIntegrator(
     stepMultiplier=2,
     stepDecrament=1,
     minNonlinIters=5,
+    consolidationInterval=50,
     maxBDERestarts=3,
     relaxationWeight: float = 1.0,
 ) -> dict:
@@ -1893,8 +1916,9 @@ def picardBDEIntegrator(
         stepMultiplier (int, optional): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
         stepDecrament (int, optional): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
         minNonlinIters (int, optional): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        consolidationInterval (int, optional): Number of steps after which to attempt consolidating the number of substeps back to 1. Defaults to 50.
         maxBDERestarts (int, optional): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
-        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxatioWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+        relaxationWeight (float, optional): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
 
 
     Returns:
@@ -1917,6 +1941,7 @@ def picardBDEIntegrator(
             "stepDecrament": stepDecrament,
             "minNumNonlinIters": minNonlinIters,
             "maxBDERestarts": maxBDERestarts,
+            "BDEConsolidationInterval": consolidationInterval,
         },
     }
 

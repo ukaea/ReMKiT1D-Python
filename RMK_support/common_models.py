@@ -1233,13 +1233,14 @@ def flowingIonEIColl(
     evolvedHarmonics: List[int],
     dualDistFun: Union[str, None] = None,
     ionFluxVar: Union[str, None] = None,
+    ionDensVarDual: Union[str, None] = None,
 ) -> sc.CustomModel:
     """Return a flowing cold ion electron-ion collision model using matrix terms. Assumes default normalization.
 
     Args:
         modelTag (str): Tag of model to be added
         distFunName (str):  Name of the electron distribution function variable - this is the evolved variable
-        ionDensVar (str): Name of the implicit ion density variable
+        ionDensVar (str): Name of ion density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         ionFlowSpeedVar (str): Name of ion flow speed variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronDensVar (str): Name of electron density variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
         electronTempVar (str): Name of electron temperature variable - should live on the same grid as the evolved harmonics - regular if even l dual if odd
@@ -1248,6 +1249,7 @@ def flowingIonEIColl(
         evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
         dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
         ionFluxVar (Union[str,None], optional): Ion flux variable (should be implicit) - when present generates ion friction terms corresponding to the electron-ion collision operators. Defaults to None.
+        ionDensVarDual (Union[str,None], optional): Ion density variable on the dual grid - used instead of the ionDensVar in some terms if present - use when using staggered grids and odd harmonics. Defaults to None
     """
     # NOTE: Needs a lot of work on optimization
     assert (
@@ -1408,6 +1410,7 @@ def flowingIonEIColl(
         ],
     )
 
+    rowDens = ionDensVarDual if ionDensVarDual is not None else ionDensVar
     for harmonic in evolvedHarmonics:
         l = lNums[harmonic - 1]
 
@@ -1419,8 +1422,8 @@ def flowingIonEIColl(
             normNames=["density", "time", "velGrid"],
             normPowers=[1.0, 1.0, -3.0],
         )
-        varDataI = sc.VarData(reqMBRowVars=["logLei", "CII2sh"])
-        varDataJ = sc.VarData(reqMBRowVars=["logLei", "CIJ-1sh"])
+        varDataI = sc.VarData(reqRowVars=[rowDens], reqMBRowVars=["logLei", "CII2sh"])
+        varDataJ = sc.VarData(reqRowVars=[rowDens], reqMBRowVars=["logLei", "CIJ-1sh"])
 
         adfdvAtZero = [0, 0] if l > 1 else [1.0 / vGrid[1], 0]
         termI = sc.GeneralMatrixTerm(
@@ -1453,7 +1456,7 @@ def flowingIonEIColl(
             normNames=["density", "time", "velGrid"],
             normPowers=[1.0, 1.0, -3.0],
         )
-        varData = sc.VarData(reqMBRowVars=["logLei", "IJSum2"])
+        varData = sc.VarData(reqRowVars=[rowDens], reqMBRowVars=["logLei", "IJSum2"])
 
         termdfldv = sc.GeneralMatrixTerm(
             distFunName,
@@ -1472,7 +1475,7 @@ def flowingIonEIColl(
             normNames=["density", "time", "velGrid"],
             normPowers=[1.0, 1.0, -3.0],
         )
-        varData = sc.VarData(reqMBRowVars=["logLei", "IJSum"])
+        varData = sc.VarData(reqRowVars=[rowDens], reqMBRowVars=["logLei", "IJSum"])
 
         termll = sc.GeneralMatrixTerm(
             distFunName,
@@ -1817,6 +1820,7 @@ def addFlowingIonEIColl(
     evolvedHarmonics: List[int],
     dualDistFun: Union[str, None] = None,
     ionFluxVar: Union[str, None] = None,
+    ionDensVarDual: Union[str, None] = None,
 ) -> None:
     """Add a flowing cold ion electron-ion collision model using matrix terms. Assumes default normalization.
 
@@ -1832,6 +1836,7 @@ def addFlowingIonEIColl(
         evolvedHarmonics (List[int]): List of evolved harmonics (useful when separating even and odd harmonics on staggered grid) - NOTE: Use Fortran indexing
         dualDistFun (Union[str,None], optional): Interpolated distribution function to be used instead the default for derivation of modelbound variables - use when using staggered grids. Defaults to None.
         ionFluxVar (Union[str,None], optional): Ion flux variable (should be implicit) - when present generates ion friction terms corresponding to the electron-ion collision operators. Defaults to None.
+        ionDensVarDual (Union[str,None], optional): Ion density variable on the dual grid - used instead of the ionDensVar in some terms if present - use when using staggered grids and odd harmonics. Defaults to None
     """
     newModel = flowingIonEIColl(
         modelTag,
@@ -1845,6 +1850,7 @@ def addFlowingIonEIColl(
         evolvedHarmonics,
         dualDistFun,
         ionFluxVar,
+        ionDensVarDual,
     )
 
     wrapper.addModel(newModel)

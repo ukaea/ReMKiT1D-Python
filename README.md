@@ -6,6 +6,8 @@
 
 Contact: stefan.mijin@ukaea.uk
 
+**IMPORTANT**: This is version 1.2.1 of the Python framework. It is the last v1.x release and is tied to v1.2.1 of the Fortran backend.  
+
 ## Overview
 
 RMK_support is a collection of tools designed to configure and analyze ReMKiT1D runs. [ReMKiT1D](https://github.com/ukaea/ReMKiT1D) is a framework for building multi-fluid models in 1D with reaction and kinetic electron support, aimed primarily at simulating the tokamak Scrape-Off Layer. 

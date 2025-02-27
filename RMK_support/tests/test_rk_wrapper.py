@@ -40,6 +40,7 @@ def test_wrapper_init(grid):
         "electronPolytropicCoeff": 1.0,
         "ionPolytropicCoeff": 1.0,
         "electronSheathGammaIonSpeciesID": -1,
+        "removeLogLeiDiscontinuity": False,
     }
 
     assert rk.speciesData == {"names": []}
@@ -240,6 +241,7 @@ def test_set_options():
         "electronPolytropicCoeff": 2.0,
         "ionPolytropicCoeff": 2.0,
         "electronSheathGammaIonSpeciesID": -2,
+        "removeLogLeiDiscontinuity": False,
     }
 
 
