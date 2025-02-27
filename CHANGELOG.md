@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v1.2.1, 2025-01-22
+## v1.2.1, 2025-02-27
 
 - New standard textbook option for logLei discontinuity fix
 - Support for changing BDE integrator consolidation interval
