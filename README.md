@@ -4,9 +4,7 @@
 [![codecov](https://codecov.io/gh/ukaea/ReMKiT1D-Python/branch/master/graph/badge.svg?token=HL5WMWDJIL)](https://codecov.io/gh/ukaea/ReMKiT1D-Python)
 [![Documentation Status](https://readthedocs.org/projects/remkit1d-python/badge/?version=latest)](https://remkit1d-python.readthedocs.io/en/latest/?badge=latest)
 
-Contact: stefan.mijin@ukaea.uk
-
-**IMPORTANT**: This is version 1.2.1 of the Python framework. It is the last v1.x release and is tied to v1.2.1 of the Fortran backend.  
+Contact: stefan.mijin@ukaea.uk 
 
 ## Overview
 
