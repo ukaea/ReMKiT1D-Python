@@ -35,7 +35,7 @@ jobs:
         pip install .
 
         sudo apt-get install --no-install-recommends pandoc
-        sudo apt-get install texlive-latex-recommended latexmk
+        sudo apt-get install texlive-latex-recommended texlive-latex-extra latexmk
         
     - name: Test with custom pytest runner
       run: |
