@@ -1811,7 +1811,9 @@ def standardBaseFluid(
     viscosity: Optional[Variable] = None,
     viscosityLimitMult: Optional[Variable] = None,
 ) -> mc.Model:
-    """Generates a standard base fluid model for a species with given variables (on regular grid, assumes duals are defined).
+    """Generates a standard base fluid model for a species with given variables.
+
+    Variables passed into this function should be defined on the regular grid and have dual grid variables.
 
     The model will include the continuity equation, momentum equation, and energy equation (if energyDensity present), with the default reflective boundary conditions (should be specified in a separate model).
 
@@ -1825,14 +1827,13 @@ def standardBaseFluid(
 
     Assumes default norms.
 
-
     Args:
         species (Species): Species for which the base model is generated
         density (Variable): Density variable
         flux (Variable): Particle flux variable
         flowSpeed (Variable): Flow speed variable corresponding to flux/density
         temperature (Variable): Temperature variable
-        eField (Variable): Electric field (used only for charged particles)
+        eField (Variable): Electric field (used only for charged particles). Must have both a regular and dual grid equivalent.
         energyDensity (Optional[Variable], optional): Energy density variable (total). Defaults to None, not adding the energy equation.
         heatflux (Optional[Variable], optional): Heatflux variable, if present adds its identity term. Defaults to None.
         viscosity (Optional[Variable], optional): Viscosity variable, if present adds its identity term. Defaults to None.
@@ -1841,6 +1842,48 @@ def standardBaseFluid(
     Returns:
         Model: Base fluid model ready to be extended or added to ReMKiT1D context
     """
+
+    assert (
+        isinstance(density.dual, Variable) and not density.isOnDualGrid
+    ), "standardBaseFluid model argument 'density' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    assert (
+        isinstance(flux.dual, Variable) and not flux.isOnDualGrid
+    ), "standardBaseFluid model argument 'flux' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    assert (
+        isinstance(flowSpeed.dual, Variable) and not flowSpeed.isOnDualGrid
+    ), "standardBaseFluid model argument 'flowSpeed' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    assert (
+        isinstance(temperature.dual, Variable) and not temperature.isOnDualGrid
+    ), "standardBaseFluid model argument 'temperature' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    assert (
+        isinstance(eField.dual, Variable) and not eField.isOnDualGrid
+    ), "standardBaseFluid model argument 'eField' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    if energyDensity is not None:
+        assert (
+            isinstance(energyDensity.dual, Variable) and not energyDensity.isOnDualGrid
+        ), "standardBaseFluid model argument 'energyDensity' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    if heatflux is not None:
+        assert (
+            isinstance(heatflux.dual, Variable) and not heatflux.isOnDualGrid
+        ), "standardBaseFluid model argument 'heatflux' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    if viscosity is not None:
+        assert (
+            isinstance(viscosity.dual, Variable) and not viscosity.isOnDualGrid
+        ), "standardBaseFluid model argument 'viscosity' must live on the regular grid and have a .dual Variable on the dual grid"
+
+    if viscosityLimitMult is not None:
+        assert (
+            isinstance(viscosityLimitMult.dual, Variable)
+            and not viscosityLimitMult.isOnDualGrid
+        ), "standardBaseFluid model argument 'viscosityLimitMult' must live on the regular grid and have a .dual Variable on the dual grid"
+
     newModel = mc.Model("fluidBase_" + species.name)
     elMass = 9.10938e-31
     amu = 1.6605390666e-27  # atomic mass unit
