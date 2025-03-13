@@ -1,26 +1,37 @@
 # CHANGELOG
 
-## v2.0.0, xxxx-xx-xx
+## v2.0.0-beta.1, 2025-03-13
+
+- Complete rewrite of the Python interface 
 
 ### Breaking Changes
 
-- 
+- Due to complete rewrite assume no backwards compatibility unless pointed out
 
 ### Deprecations
 
-- 
+- The old pre-v2.0.0 dashboard is still included for some of the old examples, but has been deprecated
 
 ### New Features
 
-- 
+- New OO hierarchy covering the complete workflow, starting from Variables to the IntegrationScheme 
+- DSL-like term and model construction through stencils
+- LaTeX rendering support for all objects in the new context class 
+- Extension of unit support for variables as well as introduction of common variables
+- Improved support for dual variables 
+- Improved I/O support 
+- Non-linear workflow support through lazy evaluation of all component json representations
+- New and improved modular and extensible dashboard 
+- Improved test coverage and introduction integrated testing for LaTeX summary construction
 
 ### Bug Fixes
 
-- Missing ion density added to flowing cold-ion collision operator in common_models
+- N/A
 
 ### New Notebooks 
 
-- 
+- Old example notebooks have been rewritten for v2.0.0 
+- New tutorial notebooks available in separate directory
 
 ## v1.2.1, 2025-02-27
 
