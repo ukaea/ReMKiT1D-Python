@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 
+@pytest.mark.latex
 def test_es():
 
     kLambda = 2.0  # Braginskii k * mfp - To reproduce points in Figure 17 in the paper use values from np.geomspace(0.5e-2,2,8)
@@ -47,6 +48,7 @@ def test_es():
     os.remove(os.path.curdir + "/config.json")
 
 
+@pytest.mark.latex
 def test_solkit_fluid_janev():
 
     dx0 = 0.13542325129584085e0 * 8.5 / 2.5 * 10.18 / 9.881556569543156
@@ -82,6 +84,7 @@ def test_solkit_fluid_janev():
     os.remove(os.path.curdir + "/config.json")
 
 
+@pytest.mark.latex
 def test_solkit_kinetic_janev():
 
     dx0 = 0.13542325129584085e0 * 8.5 / 2.5 * 10.18 / 9.881556569543156

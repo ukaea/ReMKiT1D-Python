@@ -29,8 +29,9 @@ All routines are written for Python3 (version 3.8 and greater), with the followi
 7. scipy
 8. pylatex
 
-**NOTE**: The earliest version of the Fortran core ReMKiT1D code compatible with v2.0.0 of the Python package is v1.2.1. From v2.0.0 version correspondence between the Fortran and Python packages is no longer direct. 
+> **_NOTE_**: The earliest version of the Fortran core ReMKiT1D code compatible with v2.0.0 of the Python package is v1.2.1. From v2.0.0 version correspondence between the Fortran and Python packages is no longer direct. 
 
+In order to use the pylatex features, a latexmk installation is required. See [pylatex documentation](https://jeltef.github.io/PyLaTeX/current).
 
 ## Installation
 
@@ -49,7 +50,7 @@ from the repository root.
 
 ## Testing
 
-Tests automatically run several example scripts, and these need to be pulled from the examples directory. To run tests using pytest run `bash ./test.sh` from the root directory. Any command line arguments will be passed on to pytest.
+Tests automatically run several example scripts, and these need to be pulled from the examples directory. To run tests using pytest run `bash ./test.sh` from the root directory. Any command line arguments will be passed on to pytest. To skip tests requiring latex add `--exclude_latex_tests` flag to the above call.
 
 ## Repository structure
 
@@ -65,7 +66,7 @@ The data directory contains some atomic data used by some of the examples, in pa
 
 This package has been rewritten for v2.0.0, rendering the majority of old workflows obsolete, and moving the package closer to a Domain Specific Language. 
 
-Many aspects of the old high-level workflow have been streamlined, so we include the Gaussian advection example from the examples directory here almost verbatim to showcase how v2.0.0 deals with the main aspects of the workflow on a simple example.
+Many aspects of the old high-level workflow have been streamlined, so we include the Gaussian advection example from the examples directory here almost verbatim to showcase how v2.0.0 deals with main aspects of the workflow on a simple example.
 
 For explanations of the terminology used (nodes, implicit/derived variables, staggered grids, matrix terms, etc.) see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188).
 
@@ -110,7 +111,7 @@ G_dual,G = rmk.varAndDual("G",rk.grid,primaryOnDualGrid=True) #the first return 
 rk.variables.add(n,n_dual,T,G_dual,G)
 ```
 
-In ReMKiT1D terminology, the above has added the implicit variables n and G_dual, while n_dual is a derived variable interpolated from cell centres to edges, while G is interpolated from edges to centres. 
+In ReMKiT1D terminology, the above has added the implicit variables n and G_dual, while n_dual is a derived variable interpolated from cell centres to edges, and G is interpolated from edges to centres. 
 
 
 #### Expression tree node arithmetic
@@ -171,17 +172,26 @@ From v2.0.0, the ReMKiT1D Python interface offers automatic generation of pdf su
 rk.generatePDF("Gaussian Advection Example")
 ```
 
+The first page of the summary then looks like:
+![](docs/Gaussian_Advection_Example.png "pdf summary example")
+
+> **_NOTE_**: In the above example no attempt has been made to remap any of the names in the example to something more LaTeX-friendly. This can be done by passing the additional argument `latexRemap` to `generatePDF` with a dictionary where entries are of the form `{variable_name:latex_string}`. For example `{"G_dual":"\vec{\Gamma}_{dual}}` would remap G_dual to $\vec{\Gamma}_{dual}$. Similarly other remapping options exist for things like model names and constants in equations.
+
 ### Data analysis and visualization 
 
 The secondary feature of RMK_support modules is data analysis and visualization, powered by variable data being stored in an xarray dataset and visualization tools built on holoviews and panel. Examples of loading simulation data and using holoviews/panel for visualization are in multiple notebooks. 
 
-Further development is planned to streamline data analysis, including improvements to the included interactive dashboard. 
+From v2.0.0 a new dynamic, composable, and extensible dashboard is available through `ElementDisplay` objects, which can be composed into a [panel](https://panel.holoviz.org/) app.
+
+![](docs/dashboard_example.png "ReMKiT1D v2.0.0 dashboard")
 
 ## Documentation, examples and tutorials
 
 For a high level explanation of both the framework and the interface the user is referred to the ReMKiT1D code paper, where the code design is explained and an example workflow with this Python package is explained. 
 
-The examples/tutorials in the examples directory supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) example partly reproduced in this readme. 
+The examples in the examples directory supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) example partly reproduced in this readme. 
+
+A collection of simplified tutorials which are meant to showcase the syntax without producing runnable scripts are available in the tutorials directory.
 
 For the list of the newest example notebooks, where new features are covered, see the CHANGELOG.
 
