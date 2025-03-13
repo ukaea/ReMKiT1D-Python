@@ -1,4 +1,4 @@
-from RMK_support.grid import Grid
+from RMK_support.grid import Grid, gridFromDict
 import numpy as np
 import pytest
 import json
@@ -17,7 +17,7 @@ def vGrid():
 def test_grid_x_simple(xGrid):
     grid = Grid(xGrid=xGrid)
     assert all(abs(xGrid - grid.xGrid) < 1e-15)
-    assert grid.numX() == 128
+    assert grid.numX == 128
     assert not grid.isLengthInMeters
 
 
@@ -41,8 +41,8 @@ def test_grid_v_simple(xGrid, vGrid):
     assert grid.lMax == 1
     assert grid.mMax == 1
     assert grid.getH(1, 0, im=False) == 2
-    assert grid.numH() == 4
-    assert grid.numV() == 120
+    assert grid.numH == 4
+    assert grid.numV == 120
 
     assert grid.lGrid == [0, 1, 1, 1]
     assert grid.mGrid == [0, 0, 1, 1]
@@ -57,7 +57,7 @@ def test_grid_v_widths(xGrid, vGrid):
 
     assert all(abs(vGrid - grid.vWidths) < 1e-12)
 
-    assert grid.numV() == 120
+    assert grid.numV == 120
 
     gridPoints = np.zeros(len(vGrid))
     gridPoints[0] = vGrid[0] / 2
@@ -204,3 +204,98 @@ def test_domain_integral_dual(xGrid):
     dV = grid.xGridCellVolumesDual(extendedBoundaryCells=True)
 
     assert all(grid.domainIntegral(data) == np.ones(3) * np.sum(dV[:-1]))
+
+
+def test_grid_to_dual():
+    grid = Grid(xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True)
+
+    data = np.linspace(0, 4, 5)
+    interpData = grid.gridToDual(data)
+    assert all(
+        np.isclose(interpData[:-1], np.interp(grid.xGridDual, grid.xGrid, data)[:-1])
+    )
+
+    assert np.isclose(
+        interpData[-1],
+        2
+        * (data[-1] - data[-2])
+        / (grid.xWidths[-1] + grid.xWidths[-2])
+        * grid.xWidths[-1]
+        / 2
+        + data[-1],
+    )
+
+    grid = Grid(
+        xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True, isPeriodic=True
+    )
+
+    data = np.linspace(0, 4, 5)
+    interpData = grid.gridToDual(data)
+    assert all(
+        np.isclose(
+            interpData,
+            np.interp(grid.xGridDual, grid.xGrid, data, period=grid.xGridDual[-1]),
+        )
+    )
+
+
+def test_dual_to_grid():
+
+    grid = Grid(xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True)
+
+    data = np.linspace(0, 4, 5)
+    interpData = grid.dualToGrid(data)
+    assert all(
+        np.isclose(interpData[1:-1], np.interp(grid.xGrid, grid.xGridDual, data)[1:-1])
+    )
+
+    assert np.isclose(
+        interpData[-1],
+        (data[-2] - data[-3]) / grid.xWidths[-2] * grid.xWidths[-1] / 2 + data[-2],
+    )
+
+    assert np.isclose(
+        interpData[0],
+        -(data[1] - data[0]) / grid.xWidths[1] * grid.xWidths[0] / 2 + data[0],
+    )
+
+    grid = Grid(
+        xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True, isPeriodic=True
+    )
+
+    data = np.linspace(0, 4, 5)
+    interpData = grid.dualToGrid(data)
+    assert all(
+        np.isclose(
+            interpData,
+            np.interp(grid.xGrid, grid.xGridDual, data, period=grid.xGridDual[-1]),
+        )
+    )
+
+
+def test_profile():
+    grid = Grid(xGrid=np.linspace(1, 2, 5), interpretXGridAsWidths=True)
+
+    p = grid.profile(np.linspace(0, 10, 5), "X", latexName="a")
+
+    assert all(p.data == np.linspace(0, 10, 5))
+    assert p.dim == "X"
+    assert p.latex() == "a"
+
+    p = grid.profile(np.linspace(0, 10, 5), "X")
+    assert p.latex() == "X"
+
+
+def test_load_from_dict(xGrid, vGrid):
+
+    expectedOutput = {
+        "xGrid": {
+            "isPeriodic": False,
+            "isLengthInMeters": False,
+            "cellCentreCoords": xGrid.tolist(),
+            "faceJacobians": np.ones(129).tolist(),
+        },
+        "vGrid": {"cellCentreCoords": vGrid.tolist(), "maxL": 1, "maxM": 1},
+    }
+
+    assert gridFromDict(expectedOutput).dict() == expectedOutput

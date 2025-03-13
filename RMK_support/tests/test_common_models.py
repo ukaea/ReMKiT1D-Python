@@ -1,1171 +1,1113 @@
+from RMK_support.grid import Grid, Profile
 import RMK_support.common_models as cm
-import pytest
+import RMK_support.derivations as dv
+import RMK_support.model_construction as mc
+import RMK_support.sk_normalization as sk
+import RMK_support.stencils as stencils
+import RMK_support.variable_container as vc
 import numpy as np
-from RMK_support import Grid, VariableContainer, RKWrapper
-import RMK_support.simple_containers as sc
+import pytest
 
 
-def test_collocated_advection():
-    newModel = cm.collocatedAdvection(
-        "adv",
-        "var",
-        "var_flux",
-        centralDiff=True,
-        lowerBoundVar="bound",
-        leftOutflow=True,
-        rightOutflow=True,
+elCharge = 1.60218e-19
+elMass = 9.10938e-31
+amu = 1.6605390666e-27  # atomic mass unit
+ionMass = 2.014 * amu  # deuterium mass
+epsilon0 = 8.854188e-12  # vacuum permittivity
+heavySpeciesMass = 2.014  # in amus
+
+
+@pytest.fixture
+def grid():
+    return Grid(
+        np.geomspace(5.0, 0.2, 128),
+        np.geomspace(0.01, 0.8, 120),
+        1,
+        0,
+        interpretXGridAsWidths=True,
+        interpretVGridAsWidths=True,
+    )
+
+
+@pytest.fixture
+def norms() -> dict:
+    return sk.calculateNorms(10.0, 1e19, 1)
+
+
+def test_simple_source_term(grid: Grid):
+
+    sourceProfile = Profile(np.ones(grid.numX), dim="X")
+
+    timeSignal = mc.TimeSignalData()
+
+    var = vc.Variable("evolvedVar", grid)
+
+    sourceTerm = cm.simpleSourceTerm(var, sourceProfile, timeSignal)
+    sourceTerm.evolvedVar = var
+
+    assert (
+        sourceTerm.dict()
+        == (
+            var**-1
+            * mc.MatrixTerm(
+                "custom",
+                mc.DiagonalStencil(),
+                evolvedVar=var,
+                implicitVar=var,
+                profiles={"X": sourceProfile},
+                T=timeSignal,
+            )
+        ).dict()
+    )
+
+    # Bad case - profile must be in X
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.simpleSourceTerm(var, Profile(np.ones(grid.numV), dim="V"), timeSignal)
+    assert e_info.value.args[0] == "simpleSourceTerm requires a spatial source profile"
+
+
+def test_advection(grid: Grid):
+
+    n, n_dual = vc.varAndDual("n", grid)
+    G, G_dual = vc.varAndDual("G", grid)
+
+    newModel = cm.advection(n, G_dual)
+
+    bulkDiv = -mc.MatrixTerm(
+        "bulk_div",
+        stencils.StaggeredDivStencil(),
+        evolvedVar=n,
+        implicitVar=G_dual,
     )
 
     assert newModel.dict() == {
-        "adv": {
-            "type": "customModel",
-            "termTags": ["divFlux", "leftBC", "rightBC"],
-            "divFlux": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "var",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "centralDifferenceInterpolated",
-                    "interpolatedVarName": "var_flux",
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "leftBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "var",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "fluxJacVar": "var_flux",
-                    "leftBoundary": True,
-                    "lowerBoundVar": "bound",
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "rightBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "var",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "fluxJacVar": "var_flux",
-                    "leftBoundary": False,
-                    "lowerBoundVar": "bound",
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+        "type": "customModel",
+        "termTags": [bulkDiv.name],
+        "termGenerators": {"tags": []},
+        bulkDiv.name: bulkDiv.dict(),
     }
 
+    # Using flux on regular grid
 
-def test_collocated_pressure_grad():
-    elCharge = 1.60218e-19
+    newModel = cm.advection(n, G)
 
-    newModel = cm.collocatedPressureGrad("pGrad", "flux", "n", "T", elCharge)
-
-    assert newModel.dict() == {
-        "pGrad": {
-            "type": "customModel",
-            "termTags": ["bulkGrad", "leftBC", "rightBC"],
-            "bulkGrad": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux",
-                "implicitVar": "n",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["eVTemperature", "time", "length", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["T"]).dict(),
-                "stencilData": {
-                    "stencilType": "centralDifferenceInterpolated",
-                    "ignoreJacobian": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "leftBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux",
-                "implicitVar": "n",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["eVTemperature", "time", "length", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["T"]).dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "leftBoundary": True,
-                    "ignoreJacobian": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "rightBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux",
-                "implicitVar": "n",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["eVTemperature", "time", "length", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["T"]).dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "leftBoundary": False,
-                    "ignoreJacobian": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
-    }
-
-
-def test_staggered_advection():
-    newModel = cm.staggeredAdvection(
-        "adv",
-        "var",
-        "varflux",
-        "u",
-        lowerBoundVar="cs",
-        leftOutflow=True,
-        rightOutflow=True,
+    centralDiv = -mc.MatrixTerm(
+        "bulk_div",
+        stencils.CentralDiffDivStencil(),
+        evolvedVar=n,
+        implicitVar=G,
     )
 
     assert newModel.dict() == {
-        "adv": {
-            "type": "customModel",
-            "termTags": ["divFlux", "leftBC", "rightBC"],
-            "divFlux": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "varflux",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "leftBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "var",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "fluxJacVar": "u",
-                    "leftBoundary": True,
-                    "lowerBoundVar": "cs",
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "rightBC": {
-                "termType": "matrixTerm",
-                "evolvedVar": "var",
-                "implicitVar": "var",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["speed", "time", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "boundaryStencil",
-                    "fluxJacVar": "u",
-                    "leftBoundary": False,
-                    "lowerBoundVar": "cs",
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+        "type": "customModel",
+        "termTags": [centralDiv.name],
+        "termGenerators": {"tags": []},
+        centralDiv.name: centralDiv.dict(),
     }
 
+    # Using outflow boundary condition (zero lower bound)
 
-def test_staggered_pressure_grad():
-    elCharge = 1.60218e-19
+    u, u_dual = vc.varAndDual("u", grid)
 
-    newModel = cm.staggeredPressureGrad("pGrad", "flux", "n", "T", elCharge)
+    divBCLeft = -mc.MatrixTerm(
+        "div_BC_left",
+        stencils.BCDivStencil(u, isLeft=True),
+        evolvedVar=n,
+        implicitVar=n,
+    )
 
-    assert newModel.dict() == {
-        "pGrad": {
+    divBCRight = -mc.MatrixTerm(
+        "div_BC_right",
+        stencils.BCDivStencil(u),
+        evolvedVar=n,
+        implicitVar=n,
+    )
+
+    for leftOutflow in [False, True]:
+
+        newModel = cm.advection(
+            n, G_dual, outflow=(leftOutflow, True), advectionSpeed=u
+        )
+
+        result = {
             "type": "customModel",
-            "termTags": ["bulkGrad"],
-            "bulkGrad": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux",
-                "implicitVar": "n",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["eVTemperature", "time", "length", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["T"]).dict(),
-                "stencilData": {
-                    "stencilType": "staggeredDifferenceStencil",
-                    "ignoreJacobian": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
+            "termTags": [bulkDiv.name, divBCRight.name],
             "termGenerators": {"tags": []},
+            bulkDiv.name: bulkDiv.dict(),
+            divBCRight.name: divBCRight.dict(),
         }
-    }
+
+        if leftOutflow:
+            result["termTags"] = [bulkDiv.name, divBCLeft.name, divBCRight.name]
+            result[divBCLeft.name] = divBCLeft.dict()
+
+        assert newModel.dict() == result
+
+    # Bad cases
+
+    # If flux is a MultiplicativeArgument (e.g. product of density and flow speed)
+    # then its scalar multiplier must equal 1
+
+    tempG_dual = 0.5 * n_dual * u_dual
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.advection(n, tempG_dual)
+    assert (
+        e_info.value.args[0]
+        == "flux cannot have non-trivial scalar multiplier in advection"
+    )
+
+    # If flux is a MultiplicativeArgument, all its components must live on the same grid
+    tempG = n_dual * u
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.advection(n, tempG)
+    assert (
+        e_info.value.args[0]
+        == "If flux in advection is a MultiplicativeArgument all components must live on the same grid"
+    )
+
+    # Outflow BC without advection speed
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.advection(n, G_dual, outflow=(False, True))
+    assert (
+        e_info.value.args[0]
+        == "advectionSpeed on the regular grid must be provided to advection if there is any outflow"
+    )
+
+    # Outflow advection speed must be on regular grid
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.advection(n, G_dual, outflow=(False, True), advectionSpeed=u_dual)
+    assert (
+        e_info.value.args[0]
+        == "advectionSpeed in advection model must be on regular grid"
+    )
 
 
-def test_lorentz_forces():
-    elCharge = 1.60218e-19
-    amu = 1.6605390666e-27
+def test_pressure_grad(grid: Grid):
 
-    species = [sc.Species("e", 0, charge=-1), sc.Species("ion", -1, charge=1)]
+    G, G_dual = vc.varAndDual("G", grid)
+    P, P_dual = vc.varAndDual("P", grid)
+    normConst = 2.0
 
-    newModel = cm.lorentzForces(
-        "lorentz", "E", ["flux_e", "flux_ion"], ["ne", "nion"], species
+    newModel = cm.pressureGrad(G_dual, P, normConst)
+
+    bulkGrad = -normConst * mc.MatrixTerm(
+        "bulk_grad",
+        stencils.StaggeredGradStencil(),
+        evolvedVar=G_dual,
+        implicitVar=P,
     )
 
     assert newModel.dict() == {
-        "lorentz": {
-            "type": "customModel",
-            "termTags": ["lorentzflux_e", "lorentzflux_ion"],
-            "lorentzflux_e": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux_e",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elCharge / amu,
-                    "normNames": ["EField", "time", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqRowVars=["ne"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "lorentzflux_ion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "flux_ion",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": elCharge / amu,
-                    "normNames": ["EField", "time", "speed"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqRowVars=["nion"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+        "type": "customModel",
+        "termTags": [bulkGrad.name],
+        "termGenerators": {"tags": []},
+        bulkGrad.name: bulkGrad.dict(),
     }
 
+    # Using flux on regular (non-periodic) grid
 
-def test_lorentz_force_work():
-    species = [sc.Species("e", 0, charge=-1), sc.Species("ion", -1, charge=1)]
+    newModel = cm.pressureGrad(G, P, normConst)
 
-    newModel = cm.lorentzForceWork(
-        "lorentz", "E", ["flux_e", "flux_ion"], ["We", "Wion"], species
+    bulkGradReg = -normConst * mc.MatrixTerm(
+        "bulk_grad",
+        stencils.CentralDiffGradStencil(),
+        evolvedVar=G,
+        implicitVar=P,
+    )
+
+    gradBCLeft = -normConst * mc.MatrixTerm(
+        "grad_BC_left",
+        stencils.BCGradStencil(isLeft=True),
+        evolvedVar=G,
+        implicitVar=P,
+    )
+
+    gradBCRight = -normConst * mc.MatrixTerm(
+        "grad_BC_right",
+        stencils.BCGradStencil(),
+        evolvedVar=G,
+        implicitVar=P,
     )
 
     assert newModel.dict() == {
-        "lorentz": {
-            "type": "customModel",
-            "termTags": ["lorentzWorkflux_e", "lorentzWorkflux_ion"],
-            "lorentzWorkflux_e": {
-                "termType": "matrixTerm",
-                "evolvedVar": "We",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1,
-                    "normNames": ["EField", "time", "speed", "eVTemperature"],
-                    "normPowers": [1.0, 1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["flux_e"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "lorentzWorkflux_ion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Wion",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 1,
-                    "normNames": ["EField", "time", "speed", "eVTemperature"],
-                    "normPowers": [1.0, 1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqColVars=["flux_ion"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+        "type": "customModel",
+        "termTags": [bulkGradReg.name, gradBCLeft.name, gradBCRight.name],
+        "termGenerators": {"tags": []},
+        bulkGradReg.name: bulkGradReg.dict(),
+        gradBCLeft.name: gradBCLeft.dict(),
+        gradBCRight.name: gradBCRight.dict(),
     }
 
+    # Bad cases
 
-def test_implicit_temperature():
-    elCharge = 1.60218e-19
-    amu = 1.6605390666e-27  # atomic mass unit
+    # Pressure must live on regular grid
 
-    species = [sc.Species("e", 0, charge=-1), sc.Species("ion", -1, charge=1)]
+    with pytest.raises(AssertionError) as e_info:
+        cm.pressureGrad(G_dual, P_dual, normConst)
+    assert e_info.value.args[0] == "pressure in pressureGrad must be on regular grid"
+
+    # If pressure is a MultiplicativeArgument (e.g. product of density and temperature)
+    # then its scalar multiplier must equal 1
+
+    tempP = 1.5 * vc.Variable("n", grid) * vc.Variable("T", grid)
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.pressureGrad(G_dual, tempP, normConst)
+    assert (
+        e_info.value.args[0]
+        == "pressure cannot have non-trivial scalar multiplier in pressureGrad"
+    )
+
+    # If pressure is a MultiplicativeArgument, all its args must live on the regular grid
+
+    tempP_dual = vc.Variable("n_dual", grid, isOnDualGrid=True) * vc.Variable(
+        "T_dual", grid, isOnDualGrid=True
+    )
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.pressureGrad(G_dual, tempP_dual, normConst)
+    assert (
+        e_info.value.args[0]
+        == "If pressure in pressureGrad is a MultiplicativeArgument all components must live on the regular grid"
+    )
+
+
+def test_ampere_maxwell(grid: Grid, norms: dict):
+
+    E = vc.Variable("E", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, charge=-1, associatedVars=[Ge])
+    ion = dv.Species("i", -1, charge=+1, associatedVars=[Gi])
+
+    amModel = cm.ampereMaxwell(E, [Ge, Gi], [e, ion], norms)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    normConst = (
+        elCharge
+        / epsilon0
+        * norms["density"]
+        * norms["time"]
+        * norms["speed"]
+        / norms["EField"]
+    )
+
+    termTags = []
+
+    for i, flux in enumerate([Ge, Gi]):
+        current = f"current_{flux.name}"
+
+        termTags.append(current)
+
+        species = [e, ion][i]
+
+        amTerm = (
+            -species.charge
+            * normConst
+            * mc.MatrixTerm(
+                current,
+                mc.DiagonalStencil(),
+                evolvedVar=E,
+                implicitVar=flux,
+            )
+        )
+
+        result[current] = amTerm.dict()
+
+    result["termTags"] = termTags
+
+    assert amModel.dict() == result
+
+
+def test_lorentz_force(grid: Grid, norms: dict):
+
+    E = vc.Variable("E", grid)
+
+    ne = vc.Variable("ne", grid)
+    ni = vc.Variable("ni", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[ne, Ge])
+    ion = dv.Species(
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
+    )
+
+    lForceModel = cm.lorentzForces(E, [Ge, Gi], [ne, ni], [e, ion], norms)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    termTags = []
+
+    for i, species in enumerate([e, ion]):
+
+        density = [ne, ni][i]
+        flux = [Ge, Gi][i]
+
+        tag = f"lorentz_{flux.name}"
+        termTags.append(tag)
+
+        lForceNormConst = (
+            elCharge
+            * species.charge
+            / (amu * species.atomicA)
+            * norms["EField"]
+            * norms["time"]
+            / norms["speed"]
+        )
+
+        lForceTerm = (
+            lForceNormConst
+            * density
+            * mc.MatrixTerm(
+                tag,
+                mc.DiagonalStencil(),
+                evolvedVar=flux,
+                implicitVar=E,
+            )
+        )
+
+        result[tag] = lForceTerm.dict()
+
+    result["termTags"] = termTags
+
+    assert lForceModel.dict() == result
+
+
+def test_lorentz_force_work(grid: Grid, norms: dict):
+
+    E = vc.Variable("E", grid)
+
+    We = vc.Variable("We", grid)
+    Wi = vc.Variable("Wi", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[We, Ge])
+    ion = dv.Species(
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[Wi, Gi]
+    )
+
+    termTags = []
+
+    lWorkModel = mc.Model("lorentz_force_work")
+
+    for i, species in enumerate([e, ion]):
+
+        energy = [We, Wi][i]
+        flux = [Ge, Gi][i]
+
+        tag = f"lorentz_work_{energy.name}"
+        termTags.append(tag)
+
+        lWorkNormConst = (
+            species.charge
+            * norms["EField"]
+            * norms["time"]
+            * norms["speed"]
+            / norms["eVTemperature"]
+        )
+
+        lWorkModel.ddt[energy] += lWorkNormConst * mc.DiagonalStencil()(
+            flux * E
+        ).rename(tag)
+
+    assert (
+        cm.lorentzForceWork(E, [Ge, Gi], [We, Wi], [e, ion], norms).dict()
+        == lWorkModel.dict()
+    )
+
+
+def test_implicit_temperature(grid: Grid, norms: dict):
+
+    ne = vc.Variable("ne", grid)
+    ni = vc.Variable("ni", grid)
+
+    Ge = vc.Variable("Ge", grid)
+    Gi = vc.Variable("Gi", grid)
+
+    We = vc.Variable("We", grid)
+    Wi = vc.Variable("Wi", grid)
+
+    Te = vc.Variable("Te", grid, isStationary=True)
+    Ti = vc.Variable("Ti", grid, isStationary=True)
+
+    e = dv.Species("e", 0, atomicA=elMass / amu, charge=-1, associatedVars=[ne, Ge])
+    ion = dv.Species(
+        "i", -1, atomicA=heavySpeciesMass, charge=+1, associatedVars=[ni, Gi]
+    )
+
+    # Use 1 degree of freedom to avoid irrational numbers in constants
+    dof = 1
+
+    diag = mc.DiagonalStencil()
+
+    # If specified, the kinetic energy term(s) can be set to evolve T only at certain X grid cells
+    evolvedXCells = [1]
+    diagU2 = mc.DiagonalStencil(evolvedXCells=evolvedXCells)
+
+    kwargs = {
+        "degreesOfFreedom": dof,
+        "evolvedXU2Cells": evolvedXCells,
+    }
 
     newModel = cm.implicitTemperatures(
-        "temp",
-        ["flux_e", "flux_ion"],
-        ["We", "Wion"],
-        ["ne", "nion"],
-        ["Te", "Tion"],
-        species,
-        ["ne_dual", "nion_dual"],
+        [We, Wi], [ne, ni], [Te, Ti], [e, ion], norms, [Ge, Gi], **kwargs
+    )
+
+    # Electron terms
+
+    identity_Te = -mc.MatrixTerm(
+        "identity_Te",
+        diag,
+        evolvedVar=Te,
+        implicitVar=Te,
+    )
+
+    W_term_Te = (
+        (2 / dof)
+        * (ne**-1)
+        * mc.MatrixTerm(
+            "W_term_Te",
+            diag,
+            evolvedVar=Te,
+            implicitVar=We,
+        )
+    )
+
+    normU2e = (
+        -amu * e.atomicA / (3 * elCharge) * norms["speed"] ** 2 / norms["eVTemperature"]
+    )
+
+    U2_term_Te = normU2e * mc.MatrixTerm(
+        "U2_term_Te", diagU2, evolvedVar=Te, implicitVar=Ge, C=Ge / ne**2
+    )
+
+    # Ion terms
+
+    identity_Ti = -mc.MatrixTerm(
+        "identity_Ti",
+        diag,
+        evolvedVar=Ti,
+        implicitVar=Ti,
+    )
+
+    W_term_Ti = (
+        (2 / dof)
+        * (ni**-1)
+        * mc.MatrixTerm(
+            "W_term_Ti",
+            diag,
+            evolvedVar=Ti,
+            implicitVar=Wi,
+        )
+    )
+
+    normU2i = (
+        -amu
+        * ion.atomicA
+        / (3 * elCharge)
+        * norms["speed"] ** 2
+        / norms["eVTemperature"]
+    )
+
+    U2_term_Ti = normU2i * mc.MatrixTerm(
+        "U2_term_Ti", diagU2, evolvedVar=Ti, implicitVar=Gi, C=Gi / ni**2
     )
 
     assert newModel.dict() == {
-        "temp": {
-            "type": "customModel",
-            "termTags": [
-                "identityTermTe",
-                "wTermTe",
-                "u2TermTe",
-                "identityTermTion",
-                "wTermTion",
-                "u2TermTion",
-            ],
-            "identityTermTe": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Te",
-                "implicitVar": "Te",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "wTermTe": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Te",
-                "implicitVar": "We",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 2 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqRowVars=["ne"], reqRowPowers=[-1.0]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-            "u2TermTe": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Te",
-                "implicitVar": "flux_e",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -amu / (3 * elCharge),
-                    "normNames": ["speed", "eVTemperature"],
-                    "normPowers": [2.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqColVars=["flux_e", "ne_dual"], reqColPowers=[1.0, -2.0]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "identityTermTion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Tion",
-                "implicitVar": "Tion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "wTermTion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Tion",
-                "implicitVar": "Wion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 2 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqRowVars=["nion"], reqRowPowers=[-1.0]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-            "u2TermTion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Tion",
-                "implicitVar": "flux_ion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -amu / (3 * elCharge),
-                    "normNames": ["speed", "eVTemperature"],
-                    "normPowers": [2.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqColVars=["flux_ion", "nion_dual"], reqColPowers=[1.0, -2.0]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+        "type": "customModel",
+        "termGenerators": {"tags": []},
+        "termTags": [
+            identity_Te.name,
+            W_term_Te.name,
+            U2_term_Te.name,
+            identity_Ti.name,
+            W_term_Ti.name,
+            U2_term_Ti.name,
+        ],
+        identity_Te.name: identity_Te.dict(),
+        W_term_Te.name: W_term_Te.dict(),
+        U2_term_Te.name: U2_term_Te.dict(),
+        identity_Ti.name: identity_Ti.dict(),
+        W_term_Ti.name: W_term_Ti.dict(),
+        U2_term_Ti.name: U2_term_Ti.dict(),
     }
 
+    # Bad cases
 
-def test_implicit_temperature_non_default_degrees_of_freedom():
-    elCharge = 1.60218e-19
-    amu = 1.6605390666e-27  # atomic mass unit
+    # Temperature variable(s) not stationary
 
-    species = [sc.Species("e", 0, charge=-1), sc.Species("ion", -1, charge=1)]
+    TeTest = vc.Variable("Te", grid, isStationary=False)
 
-    newModel = cm.implicitTemperatures(
-        "temp",
-        ["flux_e", "flux_ion"],
-        ["We", "Wion"],
-        ["ne", "nion"],
-        ["Te", "Tion"],
-        species,
-        ["ne_dual", "nion_dual"],
-        degreesOfFreedom=2,
+    with pytest.raises(AssertionError) as e_info:
+        cm.implicitTemperatures([We], [ne], [TeTest], [e], norms, [Ge], **kwargs)
+    assert (
+        e_info.value.args[0]
+        == "Temperatures in implicitTemperatures are expected to be stationary"
     )
 
-    assert newModel.dict()["temp"]["wTermTe"]["customNormConst"]["multConst"] == 1
-    assert newModel.dict()["temp"]["wTermTion"]["customNormConst"]["multConst"] == 1
+
+def test_kinetic_advection(grid: Grid):
+    f = vc.Variable("f", grid, isDistribution=True)
+
+    result = {
+        "type": "customModel",
+        "termTags": [],
+        "termGenerators": {"tags": []},
+    }
+
+    termTags = []
+
+    lNums = [grid.lGrid[i - 1] for i in range(1, grid.numH + 1)]
+    mNums = [grid.mGrid[i - 1] for i in range(1, grid.numH + 1)]
+
+    vProfile = grid.profile(grid.vGrid, dim="V")
+
+    # By default, the kinAdvX model evolves distribution f at all harmonics
+
+    evolvedHarmonics = list(range(1, grid.numH + 1))
+
+    for harmonic in evolvedHarmonics:
+
+        if lNums[harmonic - 1] > 0:
+            normConst = -(lNums[harmonic - 1] - mNums[harmonic - 1]) / (
+                2.0 * lNums[harmonic - 1] - 1.0
+            )
+
+            tag = f"adv_minus_{harmonic}"
+
+            result[tag] = (
+                (
+                    normConst
+                    * mc.MatrixTerm(
+                        tag,
+                        stencil=stencils.DistGradStencil(
+                            harmonic,
+                            grid.getH(
+                                lNum=lNums[harmonic - 1] - 1,
+                                mNum=mNums[harmonic - 1],
+                                im=grid.imaginaryHarmonic[harmonic - 1],
+                            ),
+                        ),
+                        evolvedVar=f,
+                        implicitVar=f,
+                        profiles={"V": vProfile},
+                    )
+                )
+                .withFixedMatrix()
+                .dict()
+            )
+
+            termTags.append(tag)
+
+        if lNums[harmonic - 1] < grid.lMax:
+            normConst = -(lNums[harmonic - 1] + mNums[harmonic - 1] + 1.0) / (
+                2.0 * lNums[harmonic - 1] + 3.0
+            )
+
+            tag = f"adv_plus_{harmonic}"
+
+            result[tag] = (
+                (
+                    normConst
+                    * mc.MatrixTerm(
+                        tag,
+                        stencil=stencils.DistGradStencil(
+                            harmonic,
+                            grid.getH(
+                                lNum=lNums[harmonic - 1] + 1,
+                                mNum=mNums[harmonic - 1],
+                                im=grid.imaginaryHarmonic[harmonic - 1],
+                            ),
+                        ),
+                        evolvedVar=f,
+                        implicitVar=f,
+                        profiles={"V": vProfile},
+                    )
+                )
+                .withFixedMatrix()
+                .dict()
+            )
+
+            termTags.append(tag)
+
+    result["termTags"] = termTags
+
+    assert cm.kinAdvX(f, grid).dict() == result
+
+    # 1st harmonic only
+
+    harmonic = 1
+
+    result = dict(
+        {
+            "type": "customModel",
+            "termTags": [],
+            "termGenerators": {"tags": []},
+        }
+    )
+
+    tag = f"adv_plus_{harmonic}"
+
+    result[tag] = (
+        (
+            (-1.0 / 3.0)
+            * mc.MatrixTerm(
+                tag,
+                stencil=stencils.DistGradStencil(
+                    harmonic,
+                    grid.getH(
+                        lNum=lNums[0] + 1,
+                        mNum=mNums[0],
+                        im=grid.imaginaryHarmonic[0],
+                    ),
+                ),
+                evolvedVar=f,
+                implicitVar=f,
+                profiles={"V": vProfile},
+            )
+        )
+        .withFixedMatrix()
+        .dict()
+    )
+
+    result["termTags"] = [tag]
+
+    assert cm.kinAdvX(f, grid, evolvedHarmonics=[harmonic]).dict() == result
+
+    # Bad case - using non-distribution variable
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.kinAdvX(vc.Variable("notDist", grid, isDistribution=False), grid)
+    assert (
+        e_info.value.args[0] == "kinAdvX distribution must be a distribution variable"
+    )
 
 
-def test_kinAdvX():
+def test_kinetic_advectionEx(norms: dict):
+
+    # Use grid with lMax = 1, mMax = 2
+
     grid = Grid(
         np.geomspace(5.0, 0.2, 128),
         np.geomspace(0.01, 0.8, 120),
-        lMax=1,
+        1,
+        0,
         interpretXGridAsWidths=True,
         interpretVGridAsWidths=True,
     )
 
-    newModel = cm.kinAdvX("adv", "f", grid, evolvedHarmonics=[1, 2])
+    f = vc.Variable("f", grid, isDistribution=True)
 
-    assert newModel.dict() == {
-        "adv": {
-            "type": "customModel",
-            "termTags": ["adv_plus1", "adv_minus2"],
-            "adv_plus1": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": grid.vGrid.tolist(),
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0 / 3.0,
-                    "normNames": ["time", "velGrid", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "kineticSpatialDiffStencil",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 2,
-                },
-                "skipPattern": False,
-                "fixedMatrix": True,
+    E = vc.Variable("E", grid)
+
+    cm.advectionEx(f, E, grid, norms)
+
+    H1 = vc.Variable("H1", grid)
+    H2 = vc.Variable("H2", grid)
+    G1 = vc.Variable("G1", grid)
+
+    result = {
+        "type": "customModel",
+        "termTags": ["eAdv_H_1", "eAdv_G_2"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["G1", "H1", "G2", "H2"],
+            "G1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "G1",
+                "requiredVarNames": ["f"],
             },
-            "adv_minus2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": grid.vGrid.tolist(),
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": ["time", "velGrid", "length"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "kineticSpatialDiffStencil",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 1,
-                },
-                "skipPattern": False,
-                "fixedMatrix": True,
+            "H1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "H1",
+                "requiredVarNames": ["f"],
             },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+            "G2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "G2",
+                "requiredVarNames": ["f"],
+            },
+            "H2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "H2",
+                "requiredVarNames": ["f"],
+            },
+        },
+        "eAdv_G_2": (
+            (1.0)
+            * G1
+            @ mc.MatrixTerm(
+                "eAdv_G_2",
+                stencil=mc.DiagonalStencil(evolvedHarmonics=[2]),
+                evolvedVar=f,
+                implicitVar=E,
+            )
+        ).dict(),
+        "eAdv_H_1": (
+            (1 / 3)
+            * H2
+            @ mc.MatrixTerm(
+                "eAdv_H_1",
+                stencil=mc.DiagonalStencil(evolvedHarmonics=[1]),
+                evolvedVar=f,
+                implicitVar=E,
+            )
+        ).dict(),
     }
 
+    assert cm.advectionEx(f, E, grid, norms).dict() == result
 
-def test_ampere_maxwell():
-    elCharge = 1.60218e-19
-    epsilon0 = 8.854188e-12  # vacuum permittivity
 
-    species = [sc.Species("e", 0, charge=-1), sc.Species("ion", -1, charge=1)]
+def test_eeCollIsotropic(grid: Grid, norms: dict):
+    distribution = vc.Variable("f", grid, isDistribution=True)
 
-    newModel = cm.ampereMaxwell("amp", "E", ["flux_e", "flux_ion"], species)
+    elTemperature = vc.Variable("Te", grid)
 
-    assert newModel.dict() == {
-        "amp": {
-            "type": "customModel",
-            "termTags": ["currentflux_e", "currentflux_ion"],
-            "currentflux_e": {
-                "termType": "matrixTerm",
-                "evolvedVar": "E",
-                "implicitVar": "flux_e",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": elCharge / epsilon0,
-                    "normNames": ["density", "time", "speed", "EField"],
-                    "normPowers": [1.0, 1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+    elDensity = vc.Variable("ne", grid)
+
+    textbook = dv.Textbook(grid)
+
+    model = cm.eeCollIsotropic(
+        distribution,
+        elTemperature,
+        elDensity,
+        norms,
+        grid,
+        textbook,
+    )
+
+    velocityProfile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    normConst = (
+        elCharge**4
+        / (4 * np.pi * elMass**2 * epsilon0**2)
+        * norms["density"]
+        * norms["time"]
+        / norms["velGrid"] ** 3
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["drag_term", "diff_term"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["f0", "dragCCL", "diffCCL", "weightCCL", "logLee"],
+            "f0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["f"],
             },
-            "currentflux_ion": {
-                "termType": "matrixTerm",
-                "evolvedVar": "E",
-                "implicitVar": "flux_ion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elCharge / epsilon0,
-                    "normNames": ["density", "time", "speed", "EField"],
-                    "normPowers": [1.0, 1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "dragCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDragCoeff",
+                "requiredVarNames": ["f0"],
             },
-            "modelboundData": {},
-            "termGenerators": {"tags": []},
-        }
+            "diffCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclDiffusionCoeff",
+                "requiredVarNames": ["f0", "weightCCL"],
+            },
+            "weightCCL": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "cclWeight",
+                "requiredVarNames": ["dragCCL", "diffCCL"],
+            },
+            "logLee": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLee",
+                "requiredVarNames": ["Te", "ne"],
+            },
+        },
+        "drag_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "dragCCL",
+                "modelboundInterp": "weightCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diff_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "diffCCL",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
     }
 
+    assert model.dict() == result
 
-def test_E_adv():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=1,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
+
+def test_eiCollIsotropic(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    textbook = dv.Textbook(grid)
+
+    ionTemperature = vc.Variable("Ti", grid)
+
+    ionDensity = vc.Variable("ni", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    velocityProfile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    gamma0norm = (
+        elCharge**4
+        / (4 * np.pi * elMass**2 * epsilon0**2)
+        * ionSpecies.charge**2
+        * elMass
+        / (ionSpecies.atomicA * amu)
     )
 
-    newModel = cm.advectionEx("eAdv", "f", "E", rk, "f_dual")
+    normConst = gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
 
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    chargeMassRatio = elCharge / elMass
+    vBoundary = [grid.vGrid[i] + grid.vWidths[i] / 2 for i in range(len(grid.vWidths))]
 
-    assert newModel.dict() == {
-        "eAdv": {
-            "type": "customModel",
-            "termTags": ["eAdv_H1", "eAdv_G2"],
-            "eAdv_H1": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": chargeMassRatio / 3.0,
-                    "normNames": ["EField", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["H_h=2"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [1],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+    innerV = grid.profile(
+        np.array([1.0 / (2 * v) for v in vBoundary]), "V", latexName="\\frac{1}{2v}"
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["drag_term", "diff_term"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["logLei"],
+            "logLei": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLeini",
+                "requiredVarNames": ["Te", "ne"],
             },
-            "eAdv_G2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "E",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": chargeMassRatio,
-                    "normNames": ["EField", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -1.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["G_h=1"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+        },
+        "drag_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
             },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": ["G_h=1", "H_h=1", "G_h=2", "H_h=2"],
-                "G_h=1": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "G_h=1",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "H_h=1": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "H_h=1",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "G_h=2": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "G_h=2",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "H_h=2": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "H_h=2",
-                    "requiredVarNames": ["f_dual"],
-                },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
             },
-            "termGenerators": {"tags": []},
-        }
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diff_term": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["Ti", "ni"],
+                "requiredRowVarPowers": [1.0, 1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+                "fixedA": innerV.data.tolist(),
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
     }
 
-
-def test_eeCollIsotropic():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=1,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
+    assert (
+        cm.eiCollIsotropic(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            elTemperature,
+            elDensity,
+            ionTemperature,
+            ionDensity,
+            ionSpecies,
+        ).dict()
+        == result
     )
 
-    newModel = cm.eeCollIsotropic("ee", "f", "T", "n", rk)
+    # Using ion energy variable adds additional ion energy evolution terms
 
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    epsilon0 = 8.854188e-12  # vacuum permittivity
+    ionEnVar = vc.Variable("Wi", grid)
 
-    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
+    resultWithIonEnergy = dict(result)
 
-    assert newModel.dict() == {
-        "ee": {
-            "type": "customModel",
-            "termTags": ["dragTerm", "diffTerm"],
-            "dragTerm": {
+    resultWithIonEnergy.update(
+        {
+            "termTags": ["drag_term", "diff_term", "diff_term_en", "drag_term_en"],
+            "diff_term_en": {
                 "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1.0 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee"]).dict(),
-                "stencilData": {
-                    "stencilType": "ddvStencil",
-                    "modelboundC": "dragCCL",
-                    "modelboundInterp": "weightCCL",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 1,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "diffTerm": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1.0 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee"]).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "diffCCL",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 1,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": ["f0", "dragCCL", "diffCCL", "weightCCL", "logLee"],
-                "f0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "f0Extraction",
-                    "requiredVarNames": ["f"],
-                },
-                "dragCCL": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "cclDragCoeff",
-                    "requiredVarNames": ["f0"],
-                },
-                "diffCCL": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "cclDiffusionCoeff",
-                    "requiredVarNames": ["f0", "weightCCL"],
-                },
-                "weightCCL": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "cclWeight",
-                    "requiredVarNames": ["dragCCL", "diffCCL"],
-                },
-                "logLee": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "logLee",
-                    "requiredVarNames": ["T", "n"],
-                },
-            },
-            "termGenerators": {"tags": []},
-        }
-    }
-
-
-def test_eiCollIsotropic():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=1,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
-    )
-
-    rk.addSpecies("ion", -1, 1, 1.0)
-
-    newModel = cm.eiCollIsotropic(
-        "ei", "f", "T", "n", "Tion", "nion", "ion", "Wion", rk
-    )
-
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    epsilon0 = 8.854188e-12  # vacuum permittivity
-    amu = 1.6605390666e-27  # atomic mass unit
-
-    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-
-    gamma0norm = gamma0norm * elMass / amu
-
-    vGrid = rk.grid.vGrid
-    dv = rk.grid.vWidths
-    vBoundary = [vGrid[i] + dv[i] / 2 for i in range(len(dv))]
-    vOuter = [1.0 / v**2 for v in rk.grid.vGrid]
-    innerV = [1.0 / (2 * v) for v in vBoundary]
-
-    assert newModel.dict() == {
-        "ei": {
-            "type": "customModel",
-            "termTags": ["dragTerm", "diffTerm", "diffTermIon", "dragTermIon"],
-            "dragTerm": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": vOuter,
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqMBRowVars=["logLei"], reqRowVars=["nion"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "ddvStencil",
-                    "modelboundC": "none",
-                    "modelboundInterp": "none",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 1,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "diffTerm": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": vOuter,
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqMBRowVars=["logLei"], reqRowVars=["nion", "Tion"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "none",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 1,
-                    "fixedA": innerV,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "diffTermIon": {
-                "termType": "matrixTerm",
-                "evolvedVar": "Wion",
+                "evolvedVar": "Wi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1173,25 +1115,35 @@ def test_eiCollIsotropic():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": [],
-                    "normPowers": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 2,
                     "colHarmonic": 1,
-                    "termName": "diffTerm",
+                    "termName": "diff_term",
                 },
                 "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "dragTermIon": {
+            "drag_term_en": {
                 "termType": "matrixTerm",
-                "evolvedVar": "Wion",
+                "evolvedVar": "Wi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1199,151 +1151,857 @@ def test_eiCollIsotropic():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1.0,
-                    "normNames": [],
-                    "normPowers": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 2,
                     "colHarmonic": 1,
-                    "termName": "dragTerm",
+                    "termName": "drag_term",
                 },
                 "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": ["logLei"],
-                "logLei": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "logLeiion",
-                    "requiredVarNames": ["T", "n"],
-                },
-            },
-            "termGenerators": {"tags": []},
         }
+    )
+
+    assert (
+        cm.eiCollIsotropic(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            elTemperature,
+            elDensity,
+            ionTemperature,
+            ionDensity,
+            ionSpecies,
+            ionEnVar,
+        ).dict()
+        == resultWithIonEnergy
+    )
+
+
+def test_stationaryIonEIColl(grid: Grid, norms: dict):
+
+    textbook = dv.Textbook(grid)
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionDensity = vc.Variable("ni", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    evolvedHarmonics = list(range(1, grid.numH + 1))
+
+    model = cm.stationaryIonEIColl(
+        grid,
+        textbook,
+        norms,
+        distribution,
+        ionDensity,
+        elDensity,
+        elTemperature,
+        ionSpecies,
+        evolvedHarmonics,
+    )
+
+    hProfile = []
+    for l in grid.lGrid:
+        hProfile.append(l * (l + 1.0) / 2.0)
+    harmonicProfile = grid.profile(np.array(hProfile), "H")
+    velocityProfile = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]), dim="V")
+
+    gamma0norm = (
+        elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2) * ionSpecies.charge**2
+    )
+
+    normConst = -gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    result = {
+        "type": "customModel",
+        "termTags": ["ei_colls_stationary"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["logLei"],
+            "logLei": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLeini",
+                "requiredVarNames": [elTemperature.name, elDensity.name],
+            },
+        },
+        "ei_colls_stationary": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": harmonicProfile.data.tolist(),
+            "velocityProfile": velocityProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [ionDensity.name],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLei"],
+                "requiredMBRowVarPowers": [1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": evolvedHarmonics,
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
     }
 
+    assert model.dict() == result
 
-def test_stationaryIonEIColl():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=2,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
+
+def test_flowingIonEIColl(grid: Grid, norms: dict):
+
+    textbook = dv.Textbook(grid)
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionDensity = vc.Variable("ni", grid)
+
+    ionFlowSpeed = vc.Variable("ui", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    evolvedHarmonics = list(range(2, grid.numH + 1, 2))
+
+    model = cm.flowingIonEIColl(
+        grid,
+        textbook,
+        norms,
+        distribution,
+        ionDensity,
+        ionFlowSpeed,
+        elDensity,
+        elTemperature,
+        ionSpecies,
+        evolvedHarmonics,
     )
 
-    rk.addSpecies("ion", -1, 1, 1.0)
-
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    epsilon0 = 8.854188e-12  # vacuum permittivity
+    v1Profile = grid.profile(np.array([1.0 / v**1 for v in grid.vGrid]), dim="V")
+    v2Profile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+    v3Profile = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]), dim="V")
 
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
+    gamma0norm = gamma0norm * ionSpecies.charge**2
 
-    newModel = cm.stationaryIonEIColl("ei", "f", "nion", "n", "T", "ion", [2, 3], rk)
+    adfAtZero = [1 / grid.vGrid[1], 0]
 
-    vProfile = [1.0 / v**3 for v in rk.grid.vGrid]
+    normConst = (
+        gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
 
-    assert newModel.dict() == {
-        "ei": {
-            "type": "customModel",
-            "termTags": ["eiCollStationaryIons"],
-            "eiCollStationaryIons": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [0.0, 1.0, 3.0],
-                "velocityProfile": vProfile,
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqMBRowVars=["logLei"], reqRowVars=["nion"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2, 3],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+    l = 1
+
+    normLL2 = -(l * (l + 1.0) / 2.0) * normConst
+
+    C1 = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))
+    normC1 = (
+        C1 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C2 = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))
+    normC2 = (
+        C2 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C3 = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))
+    normC3 = C3 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C4 = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3)) + l / (2 * l + 1)
+    normC4 = C4 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C5 = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1)) - (l + 1) / (2 * l + 1)
+    normC5 = C5 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C6 = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))
+    normC6 = C6 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    result = {
+        "type": "customModel",
+        "termTags": [
+            "diffTermI2",
+            "diffTermJ2",
+            "dfdv2",
+            "termLL2",
+            "C1Il+2_h=2",
+            "C1J-l-1_h=2",
+            "C2Il_h=2",
+            "C2J1-l_h=2",
+            "C3Il+2_h=2",
+            "C4J-l-1_h=2",
+            "C5Il_h=2",
+            "C6J1-l_h=2",
+        ],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": [
+                "CII0",
+                "CII2",
+                "CIJ-1",
+                "CII0sh",
+                "CII2sh",
+                "CIJ-1sh",
+                "IJSum",
+                "IJSum2",
+                "df0",
+                "ddf0",
+                "logLei",
+                "CII1",
+                "CII3",
+                "CIJ-2",
+                "CIJ0",
+            ],
+            "CII0": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CII0",
+                "requiredVarNames": ["ui"],
             },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": ["logLei"],
-                "logLei": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "logLeiion",
-                    "requiredVarNames": ["T", "n"],
-                },
+            "CII2": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CII2",
+                "requiredVarNames": ["ui"],
             },
-            "termGenerators": {"tags": []},
-        }
+            "CIJ-1": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CIJ-1",
+                "requiredVarNames": ["ui"],
+            },
+            "CII0sh": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["CII0"],
+            },
+            "CII2sh": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["CII2"],
+            },
+            "CIJ-1sh": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["CIJ-1"],
+            },
+            "IJSum": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "sumTerm",
+                "requiredVarNames": ["CII2sh", "CIJ-1sh", "CII0sh"],
+            },
+            "IJSum2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "sumTerm2",
+                "requiredVarNames": ["CII2sh", "CIJ-1sh"],
+            },
+            "df0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "df0/dv",
+                "requiredVarNames": ["f"],
+            },
+            "ddf0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "d2f0/dv2",
+                "requiredVarNames": ["f"],
+            },
+            "logLei": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLeini",
+                "requiredVarNames": ["Te", "ne"],
+            },
+            "CII1": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CII1",
+                "requiredVarNames": ["ui"],
+            },
+            "CII3": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CII3",
+                "requiredVarNames": ["ui"],
+            },
+            "CIJ-2": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CIJ-2",
+                "requiredVarNames": ["ui"],
+            },
+            "CIJ0": {
+                "isDistribution": True,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "CIJ0",
+                "requiredVarNames": ["ui"],
+            },
+        },
+        "diffTermI2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CII2sh", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diffTermJ2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CIJ-1sh", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "dfdv2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normConst},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum2", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "termLL2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v3Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normLL2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["ni"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CII3", "ddf0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CIJ-2", "ddf0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C2Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CII1", "ddf0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C2J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CIJ0", "ddf0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C3Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC3},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CII3", "df0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C4J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC4},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CIJ-2", "df0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C5Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC5},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CII1", "df0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C6J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "ni",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC6},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["CIJ0", "df0", "logLei"],
+                "requiredMBRowVarPowers": [1.0, 1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
     }
 
+    assert model.dict() == result
 
-def test_flowingIonEIColl():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=1,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
+    # Using ionFlux argument
+
+    ionFlux = vc.Variable("Gi", grid)
+
+    modelWithIonFlux = cm.flowingIonEIColl(
+        grid,
+        textbook,
+        norms,
+        distribution,
+        ionDensity,
+        ionFlowSpeed,
+        elDensity,
+        elTemperature,
+        ionSpecies,
+        evolvedHarmonics,
+        ionFlux,
     )
 
-    rk.addSpecies("ion", -1, 1, 1.0)
+    elIonMassRatio = elMass / (ionSpecies.atomicA * amu)
 
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    epsilon0 = 8.854188e-12  # vacuum permittivity
+    normIonFriction = -elIonMassRatio / 3
 
-    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-    amu = 1.6605390666e-27  # atomic mass unit
+    resultWithIonFlux = dict(result)
 
-    elIonMassRatio = elMass / amu
-
-    newModel = cm.flowingIonEIColl(
-        "ei",
-        "f",
-        "nion",
-        "uion",
-        "n",
-        "T",
-        "ion",
-        rk,
-        [2],
-        "f_dual",
-        "G_ion",
-        "nion_dual",
-    )
-
-    assert newModel.dict() == {
-        "ei": {
-            "type": "customModel",
+    resultWithIonFlux.update(
+        {
             "termTags": [
                 "diffTermI2",
                 "diffTermJ2",
@@ -1357,345 +2015,22 @@ def test_flowingIonEIColl():
                 "C4J-l-1_h=2",
                 "C5Il_h=2",
                 "C6J1-l_h=2",
-                "diffTermIIon",
-                "diffTermJIon",
-                "dfdvTermIon",
-                "llTermIon",
-                "ddf0TermIon1",
-                "ddf0TermIon2",
-                "ddf0TermIon3",
-                "ddf0TermIon4",
-                "df0TermIon1",
-                "df0TermIon2",
-                "df0TermIon3",
-                "df0TermIon4",
+                "diffTermI2Ion",
+                "diffTermJ2Ion",
+                "dfdv2Ion",
+                "termLL2Ion",
+                "C1Il+2_h=2Ion",
+                "C1J-l-1_h=2Ion",
+                "C2Il_h=2Ion",
+                "C2J1-l_h=2Ion",
+                "C3Il+2_h=2Ion",
+                "C4J-l-1_h=2Ion",
+                "C5Il_h=2Ion",
+                "C6J1-l_h=2Ion",
             ],
-            "diffTermI2": {
+            "diffTermI2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "CII2sh"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "adfAtZero": [1.0 / rk.grid.vGrid[1], 0],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "diffTermJ2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "CIJ-1sh"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "adfAtZero": [1.0 / rk.grid.vGrid[1], 0],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "dfdv2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "IJSum2"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "ddvStencil",
-                    "modelboundC": "none",
-                    "modelboundInterp": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "termLL2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**3 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(
-                    reqRowVars=["nion_dual"], reqMBRowVars=["logLei", "IJSum"]
-                ).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "C1Il+2_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "ddf0", "CII3"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "C1J-l-1_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "ddf0", "CIJ-2"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C2Il_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "ddf0", "CII1"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C2J1-l_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "ddf0", "CIJ0"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C3Il+2_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "df0", "CII3"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C4J-l-1_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": (2.0 / 15.0 + 1.0 / 3.0) * gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "df0", "CIJ-2"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C5Il_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "df0", "CII1"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "C6J1-l_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "nion",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLei", "df0", "CIJ0"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
-            },
-            "diffTermIIon": {
-                "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
+                "evolvedVar": "Gi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1703,16 +2038,23 @@ def test_flowingIonEIColl():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
@@ -1722,9 +2064,9 @@ def test_flowingIonEIColl():
                 "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "diffTermJIon": {
+            "diffTermJ2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
+                "evolvedVar": "Gi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1732,28 +2074,35 @@ def test_flowingIonEIColl():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "diffTermJ2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "dfdvTermIon": {
+            "dfdv2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
+                "evolvedVar": "Gi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1761,28 +2110,35 @@ def test_flowingIonEIColl():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "dfdv2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "llTermIon": {
+            "termLL2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
+                "evolvedVar": "Gi",
                 "implicitVar": "f",
                 "spatialProfile": [],
                 "harmonicProfile": [],
@@ -1790,46 +2146,59 @@ def test_flowingIonEIColl():
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "termLL2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "ddf0TermIon1": {
+            "C1Il+2_h=2Ion": {
                 "termType": "matrixTerm",
-                "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
@@ -1839,113 +2208,141 @@ def test_flowingIonEIColl():
                 "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "ddf0TermIon2": {
+            "C1J-l-1_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C1J-l-1_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "ddf0TermIon3": {
+            "C2Il_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C2Il_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "ddf0TermIon4": {
+            "C2J1-l_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C2J1-l_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "df0TermIon1": {
+            "C3Il+2_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
@@ -1955,961 +2352,2441 @@ def test_flowingIonEIColl():
                 "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "df0TermIon2": {
+            "C4J-l-1_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C4J-l-1_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "df0TermIon3": {
+            "C5Il_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C5Il_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "df0TermIon4": {
+            "C6J1-l_h=2Ion": {
                 "termType": "matrixTerm",
-                "evolvedVar": "G_ion",
-                "implicitVar": "nion",
+                "evolvedVar": "Gi",
+                "implicitVar": "ni",
                 "spatialProfile": [],
                 "harmonicProfile": [],
                 "velocityProfile": [],
                 "evaluatedTermGroup": 0,
                 "implicitGroups": [1],
                 "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -elIonMassRatio / 3,
-                    "normNames": ["velGrid", "speed"],
-                    "normPowers": [
-                        1.0,
-                        -1.0,
-                    ],
+                "customNormConst": {"multConst": normIonFriction},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
                 },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
                 "stencilData": {
                     "stencilType": "termMomentStencil",
                     "momentOrder": 1,
                     "colHarmonic": 2,
                     "termName": "C6J1-l_h=2",
                 },
-                "skipPattern": True,
+                "skipPattern": False,
                 "fixedMatrix": False,
             },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": [
-                    "CII0",
-                    "CII2",
-                    "CIJ-1",
-                    "CII0sh",
-                    "CII2sh",
-                    "CIJ-1sh",
-                    "IJSum",
-                    "IJSum2",
-                    "logLei",
-                    "df0",
-                    "ddf0",
-                    "CII1",
-                    "CII3",
-                    "CIJ-2",
-                    "CIJ0",
-                ],
-                "CII0": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CII0",
-                    "requiredVarNames": ["uion"],
-                },
-                "CII2": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CII2",
-                    "requiredVarNames": ["uion"],
-                },
-                "CIJ-1": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CIJ-1",
-                    "requiredVarNames": ["uion"],
-                },
-                "CII0sh": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "f0Extraction",
-                    "requiredVarNames": ["CII0"],
-                },
-                "CII2sh": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "f0Extraction",
-                    "requiredVarNames": ["CII2"],
-                },
-                "CIJ-1sh": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "f0Extraction",
-                    "requiredVarNames": ["CIJ-1"],
-                },
-                "IJSum": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "sumTerm",
-                    "requiredVarNames": ["CII2sh", "CIJ-1sh", "CII0sh"],
-                },
-                "IJSum2": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "sumTerm2",
-                    "requiredVarNames": ["CII2sh", "CIJ-1sh"],
-                },
-                "logLei": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "logLeiion",
-                    "requiredVarNames": ["T", "n"],
-                },
-                "df0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "df0/dv",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "ddf0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "d2f0/dv2",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "CII1": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CII1",
-                    "requiredVarNames": ["uion"],
-                },
-                "CII3": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CII3",
-                    "requiredVarNames": ["uion"],
-                },
-                "CIJ-2": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CIJ-2",
-                    "requiredVarNames": ["uion"],
-                },
-                "CIJ0": {
-                    "isDistribution": True,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "CIJ0",
-                    "requiredVarNames": ["uion"],
-                },
-            },
-            "termGenerators": {"tags": []},
         }
-    }
-
-
-def test_eeCollHigherL():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=1,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
     )
 
-    elCharge = 1.60218e-19
-    elMass = 9.10938e-31
-    epsilon0 = 8.854188e-12  # vacuum permittivity
+    assert modelWithIonFlux.dict() == resultWithIonFlux
+
+    # Bad case - evolvedHarmonics cannot include l=1
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.flowingIonEIColl(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            ionDensity,
+            ionFlowSpeed,
+            elDensity,
+            elTemperature,
+            ionSpecies,
+            evolvedHarmonics=[1],
+        )
+    assert (
+        e_info.value.args[0]
+        == "flowingIonEIColl cannot be used to evolve harmonic with index 1"
+    )
+
+    # Bad case - evolvedHarmonics cannot include l=1
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.flowingIonEIColl(
+            grid,
+            textbook,
+            norms,
+            distribution,
+            ionDensity,
+            ionFlowSpeed,
+            elDensity,
+            elTemperature,
+            ionSpecies,
+            evolvedHarmonics=[1],
+        )
+    assert (
+        e_info.value.args[0]
+        == "flowingIonEIColl cannot be used to evolve harmonic with index 1"
+    )
+
+
+def test_eeCollHigherL(grid: Grid, norms: dict):
+    textbook = dv.Textbook(grid)
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elTemperature = vc.Variable("Te", grid)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionSpecies = dv.Species("ni", -1, atomicA=1.0, charge=1.0)
+
+    evolvedHarmonics = list(range(2, grid.numH + 1, 2))
+
+    model = cm.eeCollHigherL(
+        grid, textbook, norms, distribution, elTemperature, elDensity, evolvedHarmonics
+    )
+
+    v1Profile = grid.profile(np.array([1.0 / v**1 for v in grid.vGrid]), dim="V")
+    v2Profile = grid.profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+    v3Profile = grid.profile(np.array([1.0 / v**3 for v in grid.vGrid]), dim="V")
 
     gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
-    newModel = cm.eeCollHigherL("ee", "f", "T", "n", rk, [2], "f_dual")
+    gamma0norm = gamma0norm * ionSpecies.charge**2
 
-    assert newModel.dict() == {
-        "ee": {
-            "type": "customModel",
-            "termTags": [
-                "8pi*f0*fl",
-                "diffTermI2",
-                "diffTermJ2",
-                "dfdv2",
-                "termLL",
-                "C1Il+2_h=2",
-                "C1J-l-1_h=2",
-                "C2Il_h=2",
-                "C2J1-l_h=2",
-                "C3Il+2_h=2",
-                "C4J-l-1_h=2",
-                "C5Il_h=2",
-                "C6J1-l_h=2",
-            ],
-            "8pi*f0*fl": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 8 * np.pi * gamma0norm,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "f0"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+    adfAtZero = [1 / grid.vGrid[1], 0]
+
+    normf0fl = (
+        8
+        * np.pi
+        * gamma0norm
+        * norms["density"]
+        * norms["time"]
+        / norms["velGrid"] ** 3
+    )
+
+    normfl = gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    normLL = -gamma0norm / 3 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    l = 1
+
+    C1 = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))
+    normC1 = (
+        C1 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C2 = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))
+    normC2 = (
+        C2 * gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    )
+
+    C3 = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))
+    normC3 = C3 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C4 = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3))
+    normC4 = C4 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C5 = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1))
+    normC5 = C5 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    C6 = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
+    normC6 = C6 * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+
+    result = {
+        "type": "customModel",
+        "termTags": [
+            "8pif0fl",
+            "diffTermI2",
+            "diffTermJ2",
+            "dfdv2",
+            "termLL",
+            "C1Il+2_h=2",
+            "C1J-l-1_h=2",
+            "C2Il_h=2",
+            "C2J1-l_h=2",
+            "C3Il+2_h=2",
+            "C4J-l-1_h=2",
+            "C5Il_h=2",
+            "C6J1-l_h=2",
+        ],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "varlikeData",
+            "dataNames": ["f0", "I0", "I2", "J-1", "IJSum", "logLee", "df0", "ddf0"],
+            "f0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "f0",
+                "requiredVarNames": ["f"],
             },
-            "diffTermI2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "I2"]).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "adfAtZero": [1.0 / rk.grid.vGrid[1], 0],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "I0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "I0",
+                "requiredVarNames": ["f0"],
             },
-            "diffTermJ2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "J-1"]).dict(),
-                "stencilData": {
-                    "stencilType": "vDiffusionStencil",
-                    "modelboundA": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "adfAtZero": [1.0 / rk.grid.vGrid[1], 0],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "I2": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "I2",
+                "requiredVarNames": ["f0"],
             },
-            "dfdv2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "IJSum"]).dict(),
-                "stencilData": {
-                    "stencilType": "ddvStencil",
-                    "modelboundC": "none",
-                    "modelboundInterp": "none",
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "J-1": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "J-1",
+                "requiredVarNames": ["f0"],
             },
-            "termLL": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [0.0, 1.0],
-                "velocityProfile": [1 / v**3 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "IJSum"]).dict(),
-                "stencilData": {
-                    "stencilType": "diagonalStencil",
-                    "evolvedXCells": [],
-                    "evolvedHarmonics": [2],
-                    "evolvedVCells": [],
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "IJSum": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": True,
+                "derivationPriority": 0,
+                "ruleName": "sumTerm",
+                "requiredVarNames": ["I2", "J-1", "I0"],
             },
-            "C1Il+2_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "ddf0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": False,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 3,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "logLee": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": False,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "logLee",
+                "requiredVarNames": ["Te", "ne"],
             },
-            "C1J-l-1_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "ddf0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": True,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": -2,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "df0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "df0/dv",
+                "requiredVarNames": ["f"],
             },
-            "C2Il_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "ddf0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": False,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 1,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+            "ddf0": {
+                "isDistribution": False,
+                "isScalar": False,
+                "isSingleHarmonic": True,
+                "isDerivedFromOtherData": False,
+                "derivationPriority": 0,
+                "ruleName": "d2f0/dv2",
+                "requiredVarNames": ["f"],
             },
-            "C2J1-l_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "ddf0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": True,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 0,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+        },
+        "8pif0fl": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normf0fl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
             },
-            "C3Il+2_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -gamma0norm / 5,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "df0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": False,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 3,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["logLee", "f0"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
             },
-            "C4J-l-1_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 2 * gamma0norm / 15,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "df0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": True,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": -2,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
             },
-            "C5Il_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": gamma0norm / 3,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "df0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": False,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 1,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diffTermI2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
             },
-            "C6J1-l_h=2": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [1 / v**2 for v in rk.grid.vGrid],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -0.0,
-                    "normNames": ["density", "time", "velGrid"],
-                    "normPowers": [1.0, 1.0, -3.0],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData(reqMBRowVars=["logLee", "df0"]).dict(),
-                "stencilData": {
-                    "stencilType": "shkarofskyIJStencil",
-                    "JIntegral": True,
-                    "rowHarmonic": 2,
-                    "colHarmonic": 2,
-                    "integralIndex": 0,
-                },
-                "skipPattern": True,
-                "fixedMatrix": False,
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["I2", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
             },
-            "modelboundData": {
-                "modelboundDataType": "varlikeData",
-                "dataNames": [
-                    "f0",
-                    "I0",
-                    "I2",
-                    "J-1",
-                    "IJSum",
-                    "logLee",
-                    "df0",
-                    "ddf0",
-                ],
-                "f0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "f0Extraction",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "I0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "I0",
-                    "requiredVarNames": ["f0"],
-                },
-                "I2": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "I2",
-                    "requiredVarNames": ["f0"],
-                },
-                "J-1": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "J-1",
-                    "requiredVarNames": ["f0"],
-                },
-                "IJSum": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": True,
-                    "derivationPriority": 0,
-                    "ruleName": "sumTerm",
-                    "requiredVarNames": ["I2", "J-1", "I0"],
-                },
-                "logLee": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": False,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "logLee",
-                    "requiredVarNames": ["T", "n"],
-                },
-                "df0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "df0/dv",
-                    "requiredVarNames": ["f_dual"],
-                },
-                "ddf0": {
-                    "isDistribution": False,
-                    "isScalar": False,
-                    "isSingleHarmonic": True,
-                    "isDerivedFromOtherData": False,
-                    "derivationPriority": 0,
-                    "ruleName": "d2f0/dv2",
-                    "requiredVarNames": ["f_dual"],
-                },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
             },
-            "termGenerators": {"tags": []},
-        }
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "diffTermJ2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["J-1", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "vDiffusionStencil",
+                "modelboundA": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "adfAtZero": adfAtZero,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "dfdv2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normfl},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "termLL": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [0.0, 1.0],
+            "velocityProfile": v3Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normLL},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["IJSum", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "diagonalStencil",
+                "evolvedXCells": [],
+                "evolvedHarmonics": [2],
+                "evolvedVCells": [],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 3,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C1J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": -2,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C2Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 1,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C2J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v1Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["ddf0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 0,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "C3Il+2_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC3},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 3,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C4J-l-1_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC4},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": -2,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C5Il_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC5},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": False,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 1,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+        "C6J1-l_h=2": {
+            "termType": "matrixTerm",
+            "evolvedVar": "f",
+            "implicitVar": "f",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": v2Profile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normC6},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": ["df0", "logLee"],
+                "requiredMBRowVarPowers": [1.0, 1.0],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "shkarofskyIJStencil",
+                "JIntegral": True,
+                "rowHarmonic": 2,
+                "colHarmonic": 2,
+                "integralIndex": 0,
+            },
+            "skipPattern": True,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert model.dict() == result
+
+
+def test_ampere_maxwell_kinetic_term(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    amTerm = cm.ampereMaxwellKineticElTerm(distribution, norms)
+
+    # Must assign an evolved var to the term to convert to dict()
+    amTerm.evolvedVar = distribution
+
+    normConst = (
+        elCharge
+        / (3 * epsilon0)
+        * norms["density"]
+        * norms["time"]
+        * norms["velGrid"]
+        / norms["EField"]
+    )
+
+    assert amTerm.dict() == {
+        "termType": "matrixTerm",
+        "evolvedVar": distribution.name,
+        "implicitVar": distribution.name,
+        "spatialProfile": [],
+        "harmonicProfile": [],
+        "velocityProfile": [],
+        "evaluatedTermGroup": 0,
+        "implicitGroups": [1],
+        "generalGroups": [],
+        "customNormConst": {"multConst": normConst},
+        "timeSignalData": {
+            "timeSignalType": "none",
+            "timeSignalPeriod": 0.0,
+            "timeSignalParams": [],
+            "realTimePeriod": False,
+        },
+        "varData": {
+            "requiredRowVarNames": [],
+            "requiredRowVarPowers": [],
+            "requiredColVarNames": [],
+            "requiredColVarPowers": [],
+            "requiredMBRowVarNames": [],
+            "requiredMBRowVarPowers": [],
+            "requiredMBColVarNames": [],
+            "requiredMBColVarPowers": [],
+        },
+        "stencilData": {
+            "stencilType": "momentStencil",
+            "momentOrder": 1,
+            "momentHarmonic": 2,
+        },
+        "skipPattern": False,
+        "fixedMatrix": False,
     }
 
 
-def test_lbcModelRight():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=2,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
+def test_diffusive_heating_term(grid: Grid, norms: dict):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    density = vc.Variable("ne", grid)
+
+    heatingProfile = Profile(np.ones(grid.numX), dim="X")
+
+    heatingTerm = cm.diffusiveHeatingTerm(
+        grid,
+        norms,
+        distribution,
+        density,
+        heatingProfile,
     )
 
-    newModel = cm.lbcModel(
-        "lbc", "f", rk, {"rule": True}, "j_b", evolvedHarmonics=[1, 3]
+    # Must assign an evolved var to the term to convert to dict()
+    heatingTerm.evolvedVar = distribution
+
+    dv = grid.vWidths
+
+    vBoundary = [grid.vGrid[i] + dv[i] / 2 for i in range(len(dv))]
+
+    v2Profile = Profile(np.array([1.0 / v**2 for v in grid.vGrid]), dim="V")
+
+    v2bProfile = Profile(np.array([v**2 for v in vBoundary]), dim="V")
+
+    normConst = elCharge / (3 * elMass) * norms["eVTemperature"] / norms["velGrid"] ** 2
+
+    assert heatingTerm.dict() == {
+        "termType": "matrixTerm",
+        "evolvedVar": distribution.name,
+        "implicitVar": distribution.name,
+        "spatialProfile": heatingProfile.data.tolist(),
+        "harmonicProfile": [],
+        "velocityProfile": v2Profile.data.tolist(),
+        "evaluatedTermGroup": 0,
+        "implicitGroups": [1],
+        "generalGroups": [],
+        "customNormConst": {"multConst": normConst},
+        "timeSignalData": {
+            "timeSignalType": "none",
+            "timeSignalPeriod": 0.0,
+            "timeSignalParams": [],
+            "realTimePeriod": False,
+        },
+        "varData": {
+            "requiredRowVarNames": [density.name],
+            "requiredRowVarPowers": [-1.0],
+            "requiredColVarNames": [],
+            "requiredColVarPowers": [],
+            "requiredMBRowVarNames": [],
+            "requiredMBRowVarPowers": [],
+            "requiredMBColVarNames": [],
+            "requiredMBColVarPowers": [],
+        },
+        "stencilData": {
+            "stencilType": "vDiffusionStencil",
+            "modelboundA": "none",
+            "rowHarmonic": 1,
+            "colHarmonic": 1,
+            "fixedA": v2bProfile.data.tolist(),
+        },
+        "skipPattern": False,
+        "fixedMatrix": False,
+    }
+
+    # Bad case - heating profile is not in spatial coordinate X
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.diffusiveHeatingTerm(
+            grid,
+            norms,
+            distribution,
+            density,
+            heatingProfile=v2Profile,
+        )
+    assert (
+        e_info.value.args[0]
+        == "heatingProfile in diffusiveHeatingTerm must be a spatial profile"
     )
 
-    assert newModel.dict() == {
-        "lbc": {
-            "type": "customModel",
-            "termTags": [
-                "lbcPlus_odd1",
-                "lbcPlus_even1",
-                "lbcMinus_odd3",
-                "lbcMinus_even3",
-            ],
-            "lbcPlus_odd1": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "includedDecompHarmonics": [2],
-                    "rowHarmonic": 1,
-                    "colHarmonic": 2,
-                    "leftBoundary": False,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+
+def test_logicalBCmodel(grid: Grid):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    elDensity = vc.Variable("ne", grid)
+
+    ionCurrent = vc.Variable("J", grid, isDerived=True, isScalar=True)
+
+    # By default
+    # - No dual grid or boundary value density is used
+    # - Total current at boundary is zero
+    # - Bisection tolerance for velocity cutoff is 1e-12
+    # - BC is applied to the right boundary only
+    # - All harmonics are evolved
+
+    model = cm.logicalBCModel(
+        grid,
+        distribution,
+        ionCurrent,
+        elDensity,
+    )
+
+    # l+1 harmonic term constants at right boundary for 1st harmonic (l=0)
+    l = 0
+    normPlus0 = -(l + 1) / ((2 * l + 3))
+
+    # l-1 harmonic term constants at right boundary for 2nd harmonic (l=1)
+    l = 1
+    normMinus1 = -l / ((2 * l - 1))
+
+    result = {
+        "type": "customModel",
+        "termTags": [
+            "lbcPlus_odd1",
+            "lbcPlus_even1",
+            "lbcMinus_odd2",
+            "lbcMinus_even2",
+        ],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "modelboundLBCData",
+            "ionCurrentVarName": ionCurrent.name,
+            "totalCurrentVarName": "none",
+            "bisectionTolerance": 1e-12,
+            "leftBoundary": False,
+            "ruleName": "rightDistExt",
+            "requiredVarNames": [distribution.name, elDensity.name],
+        },
+        "lbcPlus_odd1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
             },
-            "lbcPlus_even1": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -1 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "includedDecompHarmonics": [1, 3],
-                    "rowHarmonic": 1,
-                    "colHarmonic": 2,
-                    "leftBoundary": False,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
             },
-            "lbcMinus_odd3": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -2 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "includedDecompHarmonics": [2],
-                    "rowHarmonic": 3,
-                    "colHarmonic": 2,
-                    "leftBoundary": False,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "lbcMinus_even3": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": -2 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "includedDecompHarmonics": [1, 3],
-                    "rowHarmonic": 3,
-                    "colHarmonic": 2,
-                    "leftBoundary": False,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
-            },
-            "modelboundData": {
-                "modelboundDataType": "modelboundLBCData",
-                "ionCurrentVarName": "j_b",
-                "totalCurrentVarName": "none",
-                "bisectionTolerance": 1e-12,
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
                 "leftBoundary": False,
-                "rule": True,
+                "includedDecompHarmonics": [2],
+                "ruleName": "rightDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
             },
-            "termGenerators": {"tags": []},
-        }
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcPlus_even1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
+                "leftBoundary": False,
+                "includedDecompHarmonics": [1],
+                "ruleName": "rightDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcMinus_odd2": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 2,
+                "colHarmonic": 1,
+                "leftBoundary": False,
+                "includedDecompHarmonics": [2],
+                "ruleName": "rightDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcMinus_even2": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 2,
+                "colHarmonic": 1,
+                "leftBoundary": False,
+                "includedDecompHarmonics": [1],
+                "ruleName": "rightDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
     }
 
+    assert model.dict() == result
 
-def test_lbcModelLeft():
-    rk = RKWrapper()
-    rk.grid = Grid(
-        np.geomspace(5.0, 0.2, 128),
-        np.geomspace(0.01, 0.8, 120),
-        lMax=2,
-        interpretXGridAsWidths=True,
-        interpretVGridAsWidths=True,
-    )
+    # Using evolvedHarmonics l=0 and l=1 at left boundary
 
-    newModel = cm.lbcModel(
-        "lbc",
-        "f",
-        rk,
-        {"rule": True},
-        "j_b",
-        evolvedHarmonics=[1, 3],
+    modelLeft = cm.logicalBCModel(
+        grid,
+        distribution,
+        ionCurrent,
+        elDensity,
         leftBoundary=True,
+        evolvedHarmonics=[0, 1],
     )
 
-    assert newModel.dict() == {
-        "lbc": {
-            "type": "customModel",
-            "termTags": ["lbcPlus1", "lbcMinus3"],
-            "lbcPlus1": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 1 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "rowHarmonic": 1,
-                    "colHarmonic": 2,
-                    "leftBoundary": True,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+    # l-1 harmonic term constants at right boundary for 2nd harmonic (l=1)
+    l = 1
+    normMinus0 = +l / ((2 * l - 1))
+
+    # l+1 harmonic term constants at right boundary for 1st harmonic (l=0)
+    l = 0
+    normPlus1 = +(l + 1) / ((2 * l + 3))
+
+    resultLeft = {
+        "type": "customModel",
+        "termTags": ["lbcMinus0", "lbcPlus1"],
+        "termGenerators": {"tags": []},
+        "modelboundData": {
+            "modelboundDataType": "modelboundLBCData",
+            "ionCurrentVarName": ionCurrent.name,
+            "totalCurrentVarName": "none",
+            "bisectionTolerance": 1e-12,
+            "leftBoundary": True,
+            "ruleName": "leftDistExt",
+            "requiredVarNames": [distribution.name, elDensity.name],
+        },
+        "lbcMinus0": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normMinus0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
             },
-            "lbcMinus3": {
-                "termType": "matrixTerm",
-                "evolvedVar": "f",
-                "implicitVar": "f",
-                "spatialProfile": [],
-                "harmonicProfile": [],
-                "velocityProfile": [],
-                "evaluatedTermGroup": 0,
-                "implicitGroups": [1],
-                "generalGroups": [],
-                "customNormConst": {
-                    "multConst": 2 / 3,
-                    "normNames": [],
-                    "normPowers": [],
-                },
-                "timeSignalData": sc.TimeSignalData().dict(),
-                "varData": sc.VarData().dict(),
-                "stencilData": {
-                    "stencilType": "scalingLogicalBoundaryStencil",
-                    "rowHarmonic": 3,
-                    "colHarmonic": 2,
-                    "leftBoundary": True,
-                    "rule": True,
-                },
-                "skipPattern": False,
-                "fixedMatrix": False,
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
             },
-            "modelboundData": {
-                "modelboundDataType": "modelboundLBCData",
-                "ionCurrentVarName": "j_b",
-                "totalCurrentVarName": "none",
-                "bisectionTolerance": 1e-12,
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 0,
+                "colHarmonic": 1,
                 "leftBoundary": True,
-                "rule": True,
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
             },
-            "termGenerators": {"tags": []},
-        }
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "lbcPlus1": {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": normPlus1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "scalingLogicalBoundaryStencil",
+                "rowHarmonic": 1,
+                "colHarmonic": 2,
+                "leftBoundary": True,
+                "ruleName": "leftDistExt",
+                "requiredVarNames": [distribution.name, elDensity.name],
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
     }
+
+    assert modelLeft.dict() == resultLeft
+
+
+def test_dv_energy_term(grid: Grid):
+
+    distribution = vc.Variable("f", grid, isDistribution=True)
+
+    vGrid = grid.vGrid
+
+    dv = grid.vWidths
+
+    vProfile = grid.profile(np.array([1 / (v**2) for v in vGrid]), dim="V")
+
+    interpCoeffs = Profile(np.zeros(len(dv)), dim="V")
+
+    # Repeat for different powers of v**k
+
+    for k in range(3):
+
+        energyTerm = cm.dvEnergyTerm(grid, distribution, k)
+
+        vSum = vGrid**k * np.zeros(len(vGrid))
+
+        vSum[:-1] = vGrid[:-1] ** (2 + k) / (vGrid[1:] ** 2 - vGrid[:-1] ** 2)
+
+        dragProfile = Profile(dv * np.ones(len(vGrid)) * vSum, dim="V")
+
+        # Must assign an evolved var to the term to convert to dict()
+        energyTerm.evolvedVar = distribution
+
+        assert energyTerm.dict() == {
+            "termType": "matrixTerm",
+            "evolvedVar": distribution.name,
+            "implicitVar": distribution.name,
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": vProfile.data.tolist(),
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": 1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "ddvStencil",
+                "modelboundC": "none",
+                "modelboundInterp": "none",
+                "rowHarmonic": 1,
+                "colHarmonic": 1,
+                "fixedC": dragProfile.data.tolist(),
+                "fixedInterp": interpCoeffs.data.tolist(),
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        }
+
+
+def test_standard_base_fluid(grid: Grid):
+
+    species = dv.Species("s", +1)
+
+    density, density_dual = vc.varAndDual("n", grid)
+
+    flux_dual, flux = vc.varAndDual("G", grid, primaryOnDualGrid=True)
+
+    flowSpeed_dual, flowSpeed = vc.varAndDual("u", grid, primaryOnDualGrid=True)
+
+    temperature, temperature_dual = vc.varAndDual("T", grid)
+
+    eField, eField_dual = vc.varAndDual("E", grid)
+
+    massRatio = elMass / (species.atomicA * amu)
+
+    # Minimum example with non-charged species
+
+    newModel = cm.standardBaseFluid(
+        species,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        eField,
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["cont_divFlux", "momentum_gradPressure", "momentum_divFlux"],
+        "termGenerators": {"tags": []},
+        "cont_divFlux": {
+            "termType": "matrixTerm",
+            "evolvedVar": "n",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_gradPressure": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -massRatio / 2},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": ["T"],
+                "requiredColVarPowers": [1.0],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "staggeredDifferenceStencil",
+                "ignoreJacobian": True,
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_divFlux": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "centralDifferenceInterpolated",
+                "interpolatedVarName": "u_dual",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert newModel.dict() == result
+
+    # Using a charged species with heat flux, energy density and viscosity (no viscosity limit multiplier)
+
+    chargedSpecies = dv.Species("s+", speciesID=-1, charge=-1.0)
+
+    energyDensity, energyDensity_dual = vc.varAndDual("U", grid)
+
+    heatflux_dual, heatflux = vc.varAndDual("q", grid, primaryOnDualGrid=True)
+
+    viscosity, viscosity_dual = vc.varAndDual("Pi", grid)
+
+    modelCharged = cm.standardBaseFluid(
+        chargedSpecies,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        eField,
+        energyDensity,
+        heatflux,
+        viscosity,
+    )
+
+    resultCharged = dict(result)
+
+    resultCharged.update(
+        {
+            "type": "customModel",
+            "termTags": [
+                "cont_divFlux",
+                "momentum_gradPressure",
+                "momentum_divFlux",
+                "momentum_lorentzForce",
+                "momentum_divpi",
+                "temperature_identity",
+                "temperature_w",
+                "temperature_U2",
+                "energy_wAdv",
+                "energy_pAdv",
+                "energy_lorentzWork",
+                "energy_divq",
+                "energy_divpiu",
+                "heatflux_identity",
+                "viscosity_identity",
+            ],
+            "termGenerators": {"tags": []},
+            "momentum_lorentzForce": {
+                "termType": "matrixTerm",
+                "evolvedVar": "G_dual",
+                "implicitVar": "E_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": chargedSpecies.charge * massRatio},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": ["n_dual"],
+                    "requiredRowVarPowers": [1.0],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "momentum_divpi": {
+                "termType": "matrixTerm",
+                "evolvedVar": "G_dual",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -massRatio / 2},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "temperature_identity": {
+                "termType": "matrixTerm",
+                "evolvedVar": "T",
+                "implicitVar": "T",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "temperature_w": {
+                "termType": "matrixTerm",
+                "evolvedVar": "T",
+                "implicitVar": "U",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": 2 / 3},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": ["n"],
+                    "requiredRowVarPowers": [-1.0],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "temperature_U2": {
+                "termType": "matrixTerm",
+                "evolvedVar": "T",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -2 / (3 * massRatio)},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["G_dual", "n_dual"],
+                    "requiredColVarPowers": [1.0, -2.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_wAdv": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["U_dual", "n_dual"],
+                    "requiredColVarPowers": [1.0, -1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_pAdv": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["T_dual"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_lorentzWork": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "E_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -2.0},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["G_dual"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_divq": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "q_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_divpiu": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["Pi_dual", "n_dual"],
+                    "requiredColVarPowers": [1.0, -1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "heatflux_identity": {
+                "termType": "matrixTerm",
+                "evolvedVar": "q_dual",
+                "implicitVar": "q_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "viscosity_identity": {
+                "termType": "matrixTerm",
+                "evolvedVar": "Pi",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": [],
+                    "requiredColVarPowers": [],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "diagonalStencil",
+                    "evolvedXCells": [],
+                    "evolvedHarmonics": [],
+                    "evolvedVCells": [],
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+        }
+    )
+
+    assert modelCharged.dict() == resultCharged
+
+    # Using charged species with viscosity limit
+    # Changes form of terms momentum_divpi and energy_divpiu
+
+    viscosityLimitMult, viscosityLimitMultDual = vc.varAndDual("PiLimit", grid)
+
+    modelWithViscosityLimit = cm.standardBaseFluid(
+        chargedSpecies,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        eField,
+        energyDensity,
+        heatflux,
+        viscosity,
+        viscosityLimitMult,
+    )
+
+    resultWithViscosityLimit = dict(resultCharged)
+
+    resultWithViscosityLimit.update(
+        {
+            "momentum_divpi": {
+                "termType": "matrixTerm",
+                "evolvedVar": "G_dual",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -massRatio / 2},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["PiLimit"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+            "energy_divpiu": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "G_dual",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["Pi_dual", "PiLimit_dual", "n_dual"],
+                    "requiredColVarPowers": [1.0, 1.0, -1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {"stencilType": "staggeredDifferenceStencil"},
+                "skipPattern": False,
+                "fixedMatrix": False,
+            },
+        }
+    )
+
+    assert modelWithViscosityLimit.dict() == resultWithViscosityLimit
+
+    # Bad cases
+
+    # Variable arguments should live on regular grid and have an associated dual grid Variable
+
+    # Loop over the list of Variable arguments, substitute one at a time for an invalid argument
+    # in this case, a dual variable with no regular grid equivalent
+
+    dummy_dual = vc.Variable("dummy_dual", grid, isOnDualGrid=True)
+
+    args = [
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        eField,
+        energyDensity,
+        heatflux,
+        viscosity,
+        viscosityLimitMult,
+    ]
+
+    argNames = [
+        "density",
+        "flux",
+        "flowSpeed",
+        "temperature",
+        "eField",
+        "energyDensity",
+        "heatflux",
+        "viscosity",
+        "viscosityLimitMult",
+    ]
+
+    for i, arg in enumerate(args):
+        badArgs = list(args)
+        badArgs[i] = dummy_dual
+
+        with pytest.raises(AssertionError) as e_info:
+            cm.standardBaseFluid(chargedSpecies, *badArgs)
+        assert (
+            e_info.value.args[0]
+            == f"standardBaseFluid model argument '{argNames[i]}' must live on the regular grid and have a .dual Variable on the dual grid"
+        )
+
+
+def test_bohm_boundary_fluid(grid: Grid):
+
+    species = dv.Species("s", +1)
+
+    density, density_dual = vc.varAndDual("n", grid)
+
+    flux_dual, flux = vc.varAndDual("G", grid, primaryOnDualGrid=True)
+
+    flowSpeed = vc.Variable("u", grid)
+
+    temperature, temperature_dual = vc.varAndDual("T", grid)
+
+    eField, eField_dual = vc.varAndDual("E", grid)
+
+    sonicSpeed = vc.Variable("cs", grid)
+
+    massRatio = elMass / (species.atomicA * amu)
+
+    newModel = cm.bohmBoundaryModel(
+        species, density, flux, flowSpeed, temperature, sonicSpeed
+    )
+
+    result = {
+        "type": "customModel",
+        "termTags": ["continuity_Bohm", "momentum_Bohm"],
+        "termGenerators": {"tags": []},
+        "continuity_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "n",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert newModel.dict() == result
+
+    # Using energyDensity
+
+    energyDensity, energyDensity_dual = vc.varAndDual("U", grid)
+
+    sheathGamma = vc.Variable("gammaRight", grid)
+
+    boundaryFlowSpeed = vc.Variable("cs_b", grid)
+
+    viscosity, viscosityDual = vc.varAndDual("Pi", grid)
+
+    modelWithEnergy = cm.bohmBoundaryModel(
+        species,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        sonicSpeed,
+        energyDensity,
+        sheathGamma,
+        boundaryFlowSpeed,
+        viscosity,
+    )
+
+    resultWithEnergy = {
+        "type": "customModel",
+        "termTags": [
+            "continuity_Bohm",
+            "momentum_Bohm",
+            "energy_BCGamma",
+            "energy_BCKin",
+            "energy_BCVisc",
+        ],
+        "termGenerators": {"tags": []},
+        "continuity_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "n",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "momentum_Bohm": {
+            "termType": "matrixTerm",
+            "evolvedVar": "G_dual",
+            "implicitVar": "G_dual",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCGamma": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1.0},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["gammaRight"],
+                "requiredRowVarPowers": [1.0],
+                "requiredColVarNames": ["T"],
+                "requiredColVarPowers": [1.0],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCKin": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "n",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -(massRatio ** (-1))},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": ["cs_b"],
+                "requiredRowVarPowers": [2.0],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+        "energy_BCVisc": {
+            "termType": "matrixTerm",
+            "evolvedVar": "U",
+            "implicitVar": "Pi",
+            "spatialProfile": [],
+            "harmonicProfile": [],
+            "velocityProfile": [],
+            "evaluatedTermGroup": 0,
+            "implicitGroups": [1],
+            "generalGroups": [],
+            "customNormConst": {"multConst": -1},
+            "timeSignalData": {
+                "timeSignalType": "none",
+                "timeSignalPeriod": 0.0,
+                "timeSignalParams": [],
+                "realTimePeriod": False,
+            },
+            "varData": {
+                "requiredRowVarNames": [],
+                "requiredRowVarPowers": [],
+                "requiredColVarNames": [],
+                "requiredColVarPowers": [],
+                "requiredMBRowVarNames": [],
+                "requiredMBRowVarPowers": [],
+                "requiredMBColVarNames": [],
+                "requiredMBColVarPowers": [],
+            },
+            "stencilData": {
+                "stencilType": "boundaryStencil",
+                "fluxJacVar": "u",
+                "leftBoundary": False,
+                "lowerBoundVar": "cs",
+            },
+            "skipPattern": False,
+            "fixedMatrix": False,
+        },
+    }
+
+    assert modelWithEnergy.dict() == resultWithEnergy
+
+    # Using energy density, viscosity and viscosity limiter
+
+    viscosityLimitMult, viscosityDual = vc.varAndDual("PiLimit", grid)
+
+    modelWithViscosityLimit = cm.bohmBoundaryModel(
+        species,
+        density,
+        flux,
+        flowSpeed,
+        temperature,
+        sonicSpeed,
+        energyDensity,
+        sheathGamma,
+        boundaryFlowSpeed,
+        viscosity,
+        viscosityLimitMult,
+    )
+
+    resultWithViscosityLimit = dict(resultWithEnergy)
+    resultWithViscosityLimit.update(
+        {
+            "energy_BCVisc": {
+                "termType": "matrixTerm",
+                "evolvedVar": "U",
+                "implicitVar": "Pi",
+                "spatialProfile": [],
+                "harmonicProfile": [],
+                "velocityProfile": [],
+                "evaluatedTermGroup": 0,
+                "implicitGroups": [1],
+                "generalGroups": [],
+                "customNormConst": {"multConst": -1},
+                "timeSignalData": {
+                    "timeSignalType": "none",
+                    "timeSignalPeriod": 0.0,
+                    "timeSignalParams": [],
+                    "realTimePeriod": False,
+                },
+                "varData": {
+                    "requiredRowVarNames": [],
+                    "requiredRowVarPowers": [],
+                    "requiredColVarNames": ["PiLimit"],
+                    "requiredColVarPowers": [1.0],
+                    "requiredMBRowVarNames": [],
+                    "requiredMBRowVarPowers": [],
+                    "requiredMBColVarNames": [],
+                    "requiredMBColVarPowers": [],
+                },
+                "stencilData": {
+                    "stencilType": "boundaryStencil",
+                    "fluxJacVar": "u",
+                    "leftBoundary": False,
+                    "lowerBoundVar": "cs",
+                },
+                "skipPattern": False,
+                "fixedMatrix": False,
+            }
+        }
+    )
+
+    assert modelWithViscosityLimit.dict() == resultWithViscosityLimit
+
+    # Bad case using energyDensity without providing sheathGamma
+
+    with pytest.raises(AssertionError) as e_info:
+        cm.bohmBoundaryModel(
+            species, density, flux, flowSpeed, temperature, sonicSpeed, energyDensity
+        )
+    assert (
+        e_info.value.args[0]
+        == "sheathGamma must be present in bohmBoundaryModel if energyDensity is evolved"
+    )

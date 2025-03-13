@@ -14,9 +14,12 @@ __pycache__
 *.xml
 *.tar*
 /docs/build
+RMK_support/tests/example_sources/*
 .venv
 build
 *.egg-info*
 *.tex
 *.json
+*.old*
 ignore
+*coverage

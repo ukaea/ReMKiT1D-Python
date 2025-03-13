@@ -1,16 +1,90 @@
-from typing import Union, List, Dict, cast
+from typing import Union, List, Dict, cast, Optional
+from typing_extensions import Self
 import numpy as np
 import csv
-import warnings
 from typing import Tuple
-from .simple_containers import TermGenerator
+from .derivations import Species, Textbook, DerivationClosure
+from .grid import Grid, Profile
+from .model_construction import ModelboundData, TermGenerator
+from .variable_container import Variable
+from abc import ABC, abstractmethod
+from .tex_parsing import numToScientificTex
+import pylatex as tex  # type: ignore
 
 
-class ModelboundCRMData:
+class Transition(ABC):
+    """Abstract transition class for use in CRM modelbound data"""
+
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        hasMomentumRate=False,
+    ):
+        """Abstract transition class
+
+        Args:
+            name (str): Name of the transition
+            inStates (List[Species]): Species corresponding to ingoing states
+            outStates (List[Species]): Species corresponding to outgoing states
+            hasMomentumRate (bool, optional): True if the transition has a momentum transfer rate associated to it. Defaults to False.
+        """
+        self.__name__ = name
+        self.__inStates__ = inStates
+        self.__outStates__ = outStates
+        self.__hasMomentumRate__ = hasMomentumRate
+
+    @property
+    def name(self):
+        return self.__name__
+
+    @name.setter
+    def name(self, name: str):
+        self.__name__ = name
+
+    @property
+    def inStates(self):
+        return self.__inStates__
+
+    @property
+    def outStates(self):
+        return self.__outStates__
+
+    @abstractmethod
+    def dict(self) -> Dict:
+        pass
+
+    def latex(self, **kwargs) -> str:
+        reactants = "+".join([species.latex() for species in self.inStates])
+        products = "+".join([species.latex() for species in self.outStates])
+        return "$" + reactants + "\\rightarrow" + products + "$"
+
+    def registerDerivs(self, container: Textbook):
+        pass
+
+    @property
+    def fixedEnergy(self) -> Optional[float]:
+        return None
+
+    @property
+    def hasMomentumRate(self):
+        return self.__hasMomentumRate__
+
+    def setFixedEnergyIndex(self, ind: int):
+        pass
+
+    @property
+    def fixedEnergyIndex(self):
+        return None
+
+
+class CRMModelboundData(ModelboundData):
     """Property container of modelbound CRM data"""
 
     def __init__(
         self,
+        grid: Grid,
         fixedTransitionEnergies=np.array([]),
         energyResolution: float = 1e-16,
         elState: int = 0,
@@ -18,11 +92,13 @@ class ModelboundCRMData:
         """ModelboundCRMData constructor
 
         Args:
-            fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to [].
-            energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-12.
+            grid (Grid): Grid object used in constructing modelbound variables
+            fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to []. This gets automatically filled when adding transitions.
+            energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-16.
             elState (int, optional): State ID to treat as the electrons. Defaults to 0.
         """
 
+        self.__grid__ = grid
         uniqueTransitionEnergies: List[float] = []
         for energy in fixedTransitionEnergies:
             assert all(
@@ -35,14 +111,12 @@ class ModelboundCRMData:
             "active": len(fixedTransitionEnergies) > 0,
             "fixedTransitionEnergies": fixedTransitionEnergies.tolist(),
         }
-        self.__transitionTags__: List[str] = []
-        self.__transitionProperties__: Dict[str, object] = {}
+        self.__transitions__: List[Transition] = []
         self.__energyResolution__ = energyResolution
         self.__elStateID__ = elState
 
     def addTransitionEnergy(self, transitionEnergy: float):
-        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within
-        energyResolution of another value, it is not added"
+        """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within energyResolution of another value, it is not added"
 
         Args:
             transitionEnergy (float): Value of the energy to be added.
@@ -62,16 +136,24 @@ class ModelboundCRMData:
                 }
             )
 
-    def addTransition(self, transitionTag: str, transitionProperties: dict):
-        """Add transition with given tag and properties.
+    def addTransition(self, transition: Transition):
+        """Add a transition to the CRM data, including its fixed transition energy if it has one
 
         Args:
-            transitionTag (str): Transition tag
-            transitionProperties (dict): Dictionary with transition properties
+            transition (Transition): Transition to be added
         """
+        assert (
+            transition.name not in self.transitionTags
+        ), "Duplicate transition tag in CRMModelboundData"
 
-        self.__transitionTags__.append(transitionTag)
-        self.__transitionProperties__[transitionTag] = transitionProperties
+        self.__transitions__.append(transition)
+        if transition.fixedEnergy is not None:
+            self.addTransitionEnergy(transition.fixedEnergy)
+            energyIndex, _ = min(
+                enumerate(self.__fixedTransitionEnergies__.tolist()),
+                key=lambda x: abs(x[1] - transition.fixedEnergy),
+            )
+            transition.setFixedEnergyIndex(energyIndex)
 
     @property
     def fixedTransitionEnergies(self):
@@ -79,11 +161,11 @@ class ModelboundCRMData:
 
     @property
     def transitionTags(self):
-        return self.__transitionTags__
+        return [t.name for t in self.__transitions__]
 
     @property
-    def transitionProperties(self):
-        return self.__transitionProperties__
+    def transitions(self):
+        return self.__transitions__
 
     @property
     def energyResolution(self):
@@ -97,440 +179,797 @@ class ModelboundCRMData:
         """
         mbData = {
             "modelboundDataType": "modelboundCRMData",
-            "transitionTags": self.__transitionTags__,
+            "transitionTags": self.transitionTags,
             "inelasticGridData": self.__inelGridData__,
             "transitions": {},
             "electronStateID": self.__elStateID__,
         }
 
-        mbData["transitions"].update(self.__transitionProperties__)
+        mbData["transitions"].update({t.name: t.dict() for t in self.__transitions__})
 
         return mbData
 
-    def getTransitionIndicesAndEnergies(
-        self, prefix: str
-    ) -> "Tuple[List[int],List[int]]":
-        """Return transition indices and corresponding fixed energy indices of transitions whose tags start with given prefix
+    def getTransitionIndices(self, prefix: str) -> List[int]:
+        """Return transition indices of transitions whose tags start with given prefix
 
         Args:
             prefix (str): Prefix used to search transition tags
 
         Returns:
-            Tuple[List[int],List[int]]: Tuple containing the list of transition indices and corresponding transition energies for all transitions starting with given prefix
+            List[int]:List of transition indices for all transitions starting with given prefix
         """
 
-        transitionIndices = [
+        return [
             i + 1 for i, x in enumerate(self.transitionTags) if x.startswith(prefix)
         ]
 
-        transitionEnergyIndices = [
-            (
-                self.transitionProperties[tag]["fixedEnergyIndex"]
-                if "fixedEnergyIndex" in self.transitionProperties[tag].keys()
-                else 0
+    @property
+    def varNames(self):
+        varNames = []
+        for i, t in enumerate(self.__transitions__):
+            varNames += (
+                [
+                    "rate0index" + str(i + 1),
+                    "rate1index" + str(i + 1),
+                    "rate2index" + str(i + 1),
+                ]
+                if t.hasMomentumRate
+                else ["rate0index" + str(i + 1), "rate2index" + str(i + 1)]
             )
-            for tag in [self.transitionTags[ind - 1] for ind in transitionIndices]
+
+        return varNames
+
+    def __getitem__(self, key):
+        if key not in self.varNames:
+            raise KeyError()
+        return Variable(key, self.__grid__, isDerived=True)
+
+    def getRate(self, transition: Union[str, Transition], moment: int = 0) -> Variable:
+        """Return rate associated with a given transition as a Variable
+
+        Args:
+            transition (Union[str, Transition]): Name of transition or transition object to get the associated rate of
+            moment (int, optional): Moment associated with the rate - 0 for particle/reaction rate, 1 for momentum, 2 for energy. Defaults to 0.
+
+        """
+        transitionName = ""
+        if isinstance(transition, Transition):
+            transitionName = transition.name
+        else:
+            transitionName = transition
+
+        assert transitionName in self.transitionTags, (
+            "getRate called with unregistered transition " + transitionName
+        )
+
+        return self[
+            "rate" + str(moment) + "index" + self.transitionTags.index(transitionName)
         ]
 
-        if 0 in transitionEnergyIndices:
-            warnings.warn(
-                "getTransitionIndicesAndEnergies was unable to find some transition energy indices"
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append("CRM Modelbound data")
+        with doc.create(tex.Subsubsection("Transitions")):
+            with doc.create(tex.Itemize()) as itemize:
+                for transition in self.transitions:
+                    itemize.add_item(
+                        tex.NoEscape(
+                            transition.name
+                            + ": "
+                            + transition.latex(latexRemap=latexRemap)
+                        )
+                    )
+
+    def registerDerivs(self, container):
+        for transition in self.transitions:
+            transition.registerDerivs(container)
+
+
+class SimpleTransition(Transition):
+    """A transition with a fixed rate and transition energy and a single ingoing and outgoing state"""
+
+    def __init__(
+        self,
+        name: str,
+        inState: Species,
+        outState: Species,
+        transitionEnergy: float,
+        transitionRate: float,
+    ):
+        """A transition with a fixed rate and transition energy and a single ingoing and outgoing state. The energy rate is obtainer using the fixed energy and transition rates.
+
+        Args:
+            name (str): Name of the transition
+            inState (Species): Species representing the ingoing state
+            outState (Species): Species representing the outgoing state
+            transitionEnergy (float): Fixed transition energy
+            transitionRate (float): Fixed transition rate
+        """
+        self.__transitionEnergy__ = transitionEnergy
+        assert (
+            transitionRate > 0
+        ), "Negative transition rate in SimpleTransition not allowed"
+        self.__transitionRate__ = transitionRate
+        super().__init__(name, [inState], [outState])
+
+    @property
+    def fixedEnergy(self):
+        return self.__transitionEnergy__
+
+    def dict(self):
+
+        return {
+            "type": "simpleTransition",
+            "ingoingState": self.inStates[0].speciesID,
+            "outgoingState": self.outStates[0].speciesID,
+            "fixedEnergy": self.fixedEnergy,
+            "rate": self.__transitionRate__,
+        }
+
+    def latex(self, **kwargs):
+        equation = super().latex(**kwargs)
+        equation += "\\newline "
+        equation += (
+            "Rate: $" + numToScientificTex(self.__transitionRate__) + "$\\newline "
+        )
+        equation += "Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
+        return equation
+
+
+class DerivedTransition(Transition):
+    """Transition where rates are calculated using derivation objects"""
+
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        rateDeriv: DerivationClosure,
+        **kwargs
+    ):
+        """Transition where rates are calculated using transition objects
+
+        Args:
+            name (str): Name of the transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            rateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction rate derivation rule
+
+        kwargs:
+
+            energyRateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction energy rate derivation rule. Must be present if transitionEnergy isn't
+
+            transitionEnergy (float): Fixed transition energy. Must be present if energyRateDeriv isn't (if both are present the derivation takes precedence in ReMMKiT1D)
+
+            momentumRateDeriv (DerivationClosure): Full derivation closure encapsulating the reaction momentum rate derivation rule.
+        """
+
+        self.__rateDeriv__ = rateDeriv
+        assert (
+            rateDeriv.numArgs == 0
+        ), "rateDeriv must be a full closure in DerivedTransition"
+        assert (
+            "energyRateDeriv" in kwargs or "transitionEnergy" in kwargs
+        ), "DerivedTransition must either have the energy rate derivation or a fixed energy"
+        self.__energyRateDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "energyRateDeriv", None
+        )
+        if self.__energyRateDeriv__ is not None:
+            assert (
+                self.__energyRateDeriv__.numArgs == 0
+            ), "energyRateDeriv must be a full closure in DerivedTransition"
+
+        self.__transitionEnergy__: Optional[float] = kwargs.get(
+            "transitionEnergy", None
+        )
+
+        self.__momentumRateDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "momentumRateDeriv", None
+        )
+        if self.__momentumRateDeriv__ is not None:
+            assert (
+                self.__momentumRateDeriv__.numArgs == 0
+            ), "momentumRateDeriv must be a full closure in DerivedTransition"
+        super().__init__(
+            name, inStates, outStates, self.__momentumRateDeriv__ is not None
+        )
+
+    def registerDerivs(self, container):
+        self.__rateDeriv__.registerComponents(container)
+        if self.__energyRateDeriv__ is not None:
+            self.__energyRateDeriv__.registerComponents(container)
+        if self.__momentumRateDeriv__ is not None:
+            self.__momentumRateDeriv__.registerComponents(container)
+
+    @property
+    def fixedEnergy(self):
+        return self.__transitionEnergy__
+
+    def dict(self):
+        return {
+            "type": "derivedTransition",
+            "ingoingStates": [species.speciesID for species in self.inStates],
+            "outgoingStates": [species.speciesID for species in self.outStates],
+            "fixedEnergy": self.fixedEnergy if self.fixedEnergy is not None else 0.0,
+            "ruleName": self.__rateDeriv__.name,
+            "requiredVarNames": self.__rateDeriv__.fillArgs(),
+            "momentumRateDerivationRule": (
+                self.__momentumRateDeriv__.name
+                if self.__momentumRateDeriv__ is not None
+                else "none"
+            ),
+            "momentumRateDerivationReqVarNames": (
+                self.__momentumRateDeriv__.fillArgs()
+                if self.__momentumRateDeriv__ is not None
+                else []
+            ),
+            "energyRateDerivationRule": (
+                self.__energyRateDeriv__.name
+                if self.__energyRateDeriv__ is not None
+                else "none"
+            ),
+            "energyRateDerivationReqVarNames": (
+                self.__energyRateDeriv__.fillArgs()
+                if self.__energyRateDeriv__ is not None
+                else []
+            ),
+        }
+
+    def latex(self: Self, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        equation = super().latex(**kwargs)
+        equation += "\\newline "
+        remappedArgs = (
+            (
+                latexRemap[arg]
+                if arg in latexRemap
+                else "\\text{" + arg.replace("_", r"\_") + "}"
+            )
+            for arg in self.__rateDeriv__.fillArgs()
+        )
+        equation += "Rate: $" + self.__rateDeriv__.latex(*remappedArgs) + "$\\newline "
+        if self.__momentumRateDeriv__ is not None:
+            remappedArgs = (
+                (
+                    latexRemap[arg]
+                    if arg in latexRemap
+                    else "\\text{" + arg.replace("_", r"\_") + "}"
+                )
+                for arg in self.__momentumRateDeriv__.fillArgs()
+            )
+            equation += (
+                "Momentum rate: $"
+                + self.__momentumRateDeriv__(*remappedArgs)
+                + "$\\newline "
+            )
+        if self.__energyRateDeriv__ is not None:
+            remappedArgs = (
+                (
+                    latexRemap[arg]
+                    if arg in latexRemap
+                    else "\\text{" + arg.replace("_", r"\_") + "}"
+                )
+                for arg in self.__energyRateDeriv__.fillArgs()
+            )
+            equation += "Energy rate: $" + self.__energyRateDeriv__(*remappedArgs) + "$"
+        else:
+            equation += "Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
+
+        return equation
+
+
+class FixedECSTransition(Transition):
+    """Electron-impact transition with fixed energy and cross-section"""
+
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        transitionEnergy: float,
+        csData: Dict[int, Profile],
+        electronDistribution: Variable,
+        takeMomentumMoment=False,
+    ):
+        """Electron-impact transition with fixed energy and cross-section
+
+        Args:
+            name (str): Name of transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            transitionEnergy (float): Fixed transition energy
+            csData (Dict[int, Profile]): Cross section data - a dictionary with (l-harmonic number, velocity space profile) key value pairs corresponding to the Legendre harmonic decomposition of the reaction cross-section
+            electronDistribution (Variable): Variable corresponding to the electron distribution
+            takeMomentumMoment (bool, optional): If true will take the momentum transfer harmonic and the transition will have a momentum transfer rate. Defaults to False.
+        """
+        self.__transitionEnergy__ = transitionEnergy
+        self.__csData__ = csData
+        assert all(
+            cs.dim == "V" for _, cs in csData.items()
+        ), "csData must be made up of velocity profiles"
+        self.__electronDistribution__ = electronDistribution
+        self.__energyIndex__: Optional[int] = None
+        assert (
+            electronDistribution.isDistribution
+        ), "electronDistribution variable in FixedECSTranstion must be a distribution variable"
+        super().__init__(name, inStates, outStates, takeMomentumMoment)
+
+    @property
+    def fixedEnergy(self):
+        return self.__transitionEnergy__
+
+    def setFixedEnergyIndex(self, ind):
+        self.__energyIndex__ = ind
+
+    @property
+    def fixedEnergyIndex(self):
+        return self.__energyIndex__
+
+    def dict(self):
+        presentCSHarmonics = list(self.__csData__.keys())
+
+        csDataDict = {
+            "presentHarmonics": presentCSHarmonics,
+        }
+
+        for l, cs in self.__csData__.items():
+            csDataDict["l=" + str(l)] = cs.data.tolist()
+
+        tProperties = {
+            "type": "fixedECSTransition",
+            "ingoingStates": [s.speciesID for s in self.inStates],
+            "outgoingStates": [s.speciesID for s in self.outStates],
+            "fixedEnergyIndex": self.__energyIndex__ + 1,
+            "distributionVarName": self.__electronDistribution__.name,
+            "takeMomentumMoment": self.__hasMomentumRate__,
+            "crossSectionData": csDataDict,
+        }
+
+        return tProperties
+
+    def latex(self, **kwargs):
+        expression = super().latex(**kwargs)
+        expression += "\\newline Fixed energy/cross-section transition"
+        expression += "\\newline Energy: $" + numToScientificTex(self.fixedEnergy) + "$"
+        return expression
+
+
+class VariableECSTransition(Transition):
+    """Electron-impact transition with variable energy and cross-section"""
+
+    def __init__(
+        self,
+        name: str,
+        inStates: List[Species],
+        outStates: List[Species],
+        csDerivs: Dict[int, DerivationClosure],
+        energyDeriv: DerivationClosure,
+        electronDistribution: Variable,
+        takeMomentumMoment=False,
+    ):
+        """Electron-impact transition with variable energy and cross-section
+
+        Args:
+            name (str): Name of transition
+            inStates (List[Species]): List of species representing ingoing states
+            outStates (List[Species]): List of species representing outgoing states
+            csDerivs (Dict[int, DerivationClosure]): Cross section data derivations - a dictionary with (l-harmonic number, single harmonic derivation closure) key value pairs corresponding to the Legendre harmonic decomposition of the reaction cross-section
+            energyDeriv (DerivationClosure): Full derivation closure corresponding to the reaction energy
+            electronDistribution (Variable): Variable corresponding to the electron distribution
+            takeMomentumMoment (bool, optional): If true will take the momentum transfer harmonic and the transition will have a momentum transfer rate. Defaults to False.
+        """
+        assert (
+            electronDistribution.isDistribution
+        ), "electronDistribution variable in FixedECSTranstion must be a distribution variable"
+
+        self.__electronDistribution__ = electronDistribution
+
+        self.__csDerivs__ = csDerivs
+        for l in csDerivs:
+            assert (
+                csDerivs[l].numArgs == 0
+            ), "All csDerivs in VariableECSTransition must be complete closures"
+        assert (
+            energyDeriv.numArgs == 0
+        ), "energyDeriv in VariableECSTransition must be complete closure"
+
+        self.__energyDeriv__ = energyDeriv
+
+        super().__init__(name, inStates, outStates, takeMomentumMoment)
+
+    def dict(self: Self):
+
+        presentCSHarmonics = list(self.__csDerivs__.keys())
+
+        csDataDict: Dict[str, object] = {
+            "crossSectionDerivationHarmonics": presentCSHarmonics,
+        }
+
+        for l, deriv in self.__csDerivs__.items():
+            csDataDict["l=" + str(l)] = {}
+            cast(Dict[str, object], csDataDict["l=" + str(l)]).update(
+                {"ruleName": deriv.name, "requiredVarNames": deriv.fillArgs()}
             )
 
-        return transitionIndices, transitionEnergyIndices
+        tProperties = {
+            "type": "variableECSTransition",
+            "ingoingStates": [s.speciesID for s in self.inStates],
+            "outgoingStates": [s.speciesID for s in self.outStates],
+            "distributionVarName": self.__electronDistribution__.name,
+            "takeMomentumMoment": self.hasMomentumRate,
+            "crossSectionDerivations": csDataDict,
+            "energyDerivationName": self.__energyDeriv__.name,
+            "energyDerivationReqVars": self.__energyDeriv__.fillArgs(),
+        }
 
+        return tProperties
 
-def simpleTransition(
-    inState: int, outState: int, transitionEnergy: float, transitionRate: float
-) -> dict:
-    """Return transition properties for a simple transition - single ingoing/outgoing state, and fixed transition energy and rate
-
-    Args:
-        inState (int): Single species ID corresponding to ingoing state
-        outState (int): Single species ID corresponding to outgoing state
-        transitionEnergy (float): Fixed transition energy
-        transitionRate (float): Fixed transition rate. Must be positive
-
-    Returns:
-        dict: Simple transition properties dictionary to be added to ModelboundCRMData object
-    """
-
-    assert (
-        transitionRate > 0
-    ), "Negative transition rate in simpleTransition not allowed"
-
-    tProperties = {
-        "type": "simpleTransition",
-        "ingoingState": inState,
-        "outgoingState": outState,
-        "fixedEnergy": transitionEnergy,
-        "rate": transitionRate,
-    }
-
-    return tProperties
-
-
-def derivedTransition(
-    inStates: List[int],
-    outStates: List[int],
-    transitionEnergy: float,
-    ruleName: str,
-    requiredVars: List[str],
-    momentumRuleName="none",
-    momentumRequiredVars: List[str] = [],
-    energyRuleName="none",
-    energyRequiredVars: List[str] = [],
-) -> dict:
-    """Return transition properties for a derived transition, where the rate is calculated using a derivation rule
-        Optionally can calculate momentum and energy rates using rules as well.
-
-    Args:
-        inStates (List[int]): List of ingoing species IDs
-        outStates (List[int]): List of outgoing species IDs
-        transitionEnergy (float): Fixed transition energy
-        ruleName (str): Derivation rule name used for transition rate calculation
-        requiredVars (List[str]): Names of required variables for transition rate calculation
-        momentumRuleName (str, optional): Derivation rule name used for transition momentum rate calculation. Defaults to "none"
-        momentumRequiredVars (List[str], optional): Names of required variables for transition momentum rate calculation. Defaults to []
-        energyRuleName (str, optional): Derivation rule name used for transition energy rate calculation. Defaults to "none"
-        energyRequiredVars (List[str], optional): Names of required variables for transition energy rate calculation. Defaults to []
-
-    Returns:
-        dict: Derived transition properties dictionary to be added to ModelboundCRMData object
-    """
-
-    tProperties = {
-        "type": "derivedTransition",
-        "ingoingStates": inStates,
-        "outgoingStates": outStates,
-        "fixedEnergy": transitionEnergy,
-        "ruleName": ruleName,
-        "requiredVarNames": requiredVars,
-        "momentumRateDerivationRule": momentumRuleName,
-        "momentumRateDerivationReqVarNames": momentumRequiredVars,
-        "energyRateDerivationRule": energyRuleName,
-        "energyRateDerivationReqVarNames": energyRequiredVars,
-    }
-
-    return tProperties
-
-
-def fixedECSTransition(
-    inStates: List[int],
-    outStates: List[int],
-    transitionEnergy: float,
-    fixedTransitionEnergies: np.ndarray,
-    csData: List[Tuple[int, np.ndarray]],
-    distributionVarName: str,
-    takeMomentumMoment=False,
-    energyResolution: float = 1e-16,
-) -> dict:
-    """Return fixed energy and cross-section transition properties
-
-    Args:
-        inStates (List[int]): List of ingoing species IDs
-        outStates (List[int]): List of outgoing species IDs
-        transitionEnergy (float): Fixed transition energy
-        fixedTransitionEnergies (np.array): Array of energies used to look up index of allowed transition energy closest to transitionEnergy
-        csData (List[Tuple[int,np.ndarray]]]): List of tuples of the form (l,crossSection), where l is the l harmonic number and crossSection is the corresponding cross section harmonic
-        distributionVarName (str): Name of the distribution function variables used to get rates with corresponding csData
-        takeMomentumMoment (bool, optional): If true, will calculate momentum rate based on l=1 harmonics of crossSection and distribution function. Defaults to False.
-        energyResolution (float, optional): Tolerance for finding transitionEnergy in fixedTransitionEnergies. Defaults to 1e-12.
-
-    Returns:
-        dict: Fixed energy/cross-section transition properties dictionary to be added to ModelboundCRMData object
-    """
-
-    energyIndex, usedTransitionEnergy = min(
-        enumerate(fixedTransitionEnergies), key=lambda x: abs(x[1] - transitionEnergy)
-    )
-    assert (
-        abs(usedTransitionEnergy - transitionEnergy) < energyResolution
-    ), "fixedECSTransition unable to find energy in fixedTransitionEnergies within energyResolution of passed transitionEnergy"
-
-    presentCSHarmonics = [x[0] for x in csData]
-
-    csDataDict = {
-        "presentHarmonics": presentCSHarmonics,
-    }
-
-    for data in csData:
-        csDataDict["l=" + str(data[0])] = data[1].tolist()
-
-    tProperties = {
-        "type": "fixedECSTransition",
-        "ingoingStates": inStates,
-        "outgoingStates": outStates,
-        "fixedEnergyIndex": energyIndex + 1,
-        "distributionVarName": distributionVarName,
-        "takeMomentumMoment": takeMomentumMoment,
-        "crossSectionData": csDataDict,
-    }
-
-    return tProperties
-
-
-def variableECSTransition(
-    inStates: List[int],
-    outStates: List[int],
-    csDerivs: List[Tuple[int, np.ndarray]],
-    energyDeriv: dict,
-    distributionVarName: str,
-    takeMomentumMoment=False,
-) -> dict:
-    """Return variable energy and cross-section transition properties
-
-    Args:
-        inStates (List[int]): List of ingoing species IDs
-        outStates (List[int]): List of outgoing species IDs
-        csDerivs (List[Tuple[int,np.ndarray]]]): List of tuples of the form (l,derivationRule), where l is the l harmonic number and derivationRule is the corresponding cross section derivation rule
-        energyDeriv (dict): derivationRule for the transition energy
-        distributionVarName (str): Name of the distribution function variables used to get rates
-        takeMomentumMoment (bool, optional): If true, will calculate momentum rate based on l=1 harmonics of crossSection and distribution function. Defaults to False.
-
-    Returns:
-        dict: Variable energy/cross-section transition properties dictionary to be added to ModelboundCRMData object
-    """
-
-    presentCSHarmonics = [x[0] for x in csDerivs]
-
-    csDataDict: Dict[str, object] = {
-        "crossSectionDerivationHarmonics": presentCSHarmonics,
-    }
-
-    for data in csDerivs:
-        csDataDict["l=" + str(data[0])] = {}
-        cast(Dict[str, object], csDataDict["l=" + str(data[0])]).update(data[1])
-
-    tProperties = {
-        "type": "variableECSTransition",
-        "ingoingStates": inStates,
-        "outgoingStates": outStates,
-        "distributionVarName": distributionVarName,
-        "takeMomentumMoment": takeMomentumMoment,
-        "crossSectionDerivations": csDataDict,
-        "energyDerivationName": energyDeriv["ruleName"],
-        "energyDerivationReqVars": energyDeriv["requiredVarNames"],
-    }
-
-    return tProperties
-
-
-def detailedBalanceTransition(
-    inStates: List[int],
-    outStates: List[int],
-    directTransitionEnergy: float,
-    fixedTransitionEnergies: np.ndarray,
-    directTransitionIndex: int,
-    maxResolvedCSHarmonic: int,
-    distributionVarName: str,
-    temperatureVarName: str,
-    degeneracyRatio: float,
-    degeneracyRule="none",
-    degeneracyRuleReqVars: List[str] = [],
-    takeMomentumMoment=False,
-    energyResolution: float = 1e-16,
-    csUpdatePriority=0,
-) -> dict:
-    """Return detailed balance transition property dictionary. Requires information on corresponding direct transition and is defined
-       for electron impact processes.
-
-    Args:
-        inStates (List[int]): List of ingoing species IDs (into this transition, not the corresponding direct transition)
-        outStates (List[int]): List of outgoing species IDs
-        directTransitionEnergy (float): Energy of the direct transition (the generated transition will have -1 times this)
-        fixedTransitionEnergies (np.array): Array of energies used to look up index of allowed transition energy closest to directTransitionEnergy
-        directTransitionIndex (int): Index of the direct transition in the host modelbound CRM data object (Fortran 1-indexing!)
-        maxResolvedCSHarmonic (int): Highest harmonic to be calculated (should not exceed highest present harmonic in direct transition)
-        distributionVarName (str): Name of the distribution function variable
-        temperatureVarName (str): Name of the temperature variable associated with the above distribution function (used to ensure numerical detailed balance)
-        degeneracyRatio (float): Degeneracy ratio of final and initial states in this transition
-        degeneracyRule (str, optional): Rule used to calculate any variable dependent part of the degeneracy ratio. Defaults to "none".
-        degeneracyRuleReqVars (List[str], optional): Variables used in degeneracyRule. Defaults to [].
-        takeMomentumMoment (bool, optional): If true, will calculate momentum rate based on l=1 harmonics of crossSection and distribution function. Defaults to False.
-        energyResolution (float, optional): Tolerance for finding transitionEnergy in fixedTransitionEnergies. Defaults to 1e-12.
-        csUpdatePriority (int, optional): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
-
-    Returns:
-        dict: Detailed balance transition property dictionary to be added into ModelboundCRMData object
-    """
-
-    dirTransitionEnergyIndex, usedTransitionEnergy = min(
-        enumerate(fixedTransitionEnergies),
-        key=lambda x: abs(x[1] - directTransitionEnergy),
-    )
-    transitionEnergyIndex, dummyVar = min(
-        enumerate(fixedTransitionEnergies),
-        key=lambda x: abs(x[1] + directTransitionEnergy),
-    )
-    assert (
-        abs(usedTransitionEnergy - directTransitionEnergy) < energyResolution
-    ), "fixedECSTransition unable to find energy in fixedTransitionEnergies within energyResolution of passed directTransitionEnergy"
-
-    tProperties = {
-        "type": "detailedBalanceTransition",
-        "ingoingStates": inStates,
-        "outgoingStates": outStates,
-        "directTransitionFixedEnergyIndex": dirTransitionEnergyIndex,
-        "fixedEnergyIndex": transitionEnergyIndex + 1,
-        "directTransitionIndex": directTransitionIndex + 1,
-        "distributionVarName": distributionVarName,
-        "electronTemperatureVar": temperatureVarName,
-        "fixedDegeneracyRatio": degeneracyRatio,
-        "degeneracyRuleName": degeneracyRule,
-        "degeneracyRuleReqVars": degeneracyRuleReqVars,
-        "takeMomentumMoment": takeMomentumMoment,
-        "maxCrossSectionL": maxResolvedCSHarmonic,
-        "crossSectionUpdatePriority": csUpdatePriority,
-    }
-
-    return tProperties
-
-
-def radRecombJanevTransition(endState: int, temperatureVarName: str) -> dict:
-    """Return transition property dictionary corresponding to radiative recombination transition into endState of hydrogen based on Janev fit.
-
-    Args:
-        endState (int): State into which hydrogenic ion recombines
-        temperatureVarName (str): Name of electron temperature variable
-
-    Returns:
-        dict: Radiative recombination transition property dictionary based on Janev fit to be added into ModelboundCRMData object
-    """
-
-    tProperties = {
-        "type": "JanevRadRecomb",
-        "endHState": endState,
-        "electronTemperatureVar": temperatureVarName,
-    }
-
-    return tProperties
-
-
-def collExIonJanevTransition(
-    startState: int,
-    endState: int,
-    energyNorm: float,
-    distributionVarName: str,
-    fixedTransitionEnergies: np.ndarray,
-    energyResolution: float = 1e-16,
-    lowestCellEnergy: float = 0,
-) -> dict:
-    """Return transition property dictionary corresponding to collisional excitation/ionization transition from startState into endState of hydrogen based on Janev fit.
-
-    Args:
-        startState (int): Starting state of hydrogen
-        endState (int): Final state of hydrogen (0 assumes ion)
-        energyNorm (float): Normalization constant in eV used for transition energy (in general same as temperature normalization)
-        distributionVarName (str): Name of the distribution funcion variable
-        fixedTransitionEnergies (np.array): Array of energies used to look up index of allowed transition energy closest to computed transition energy
-        energyResolution (float, optional): Tolerance for finding transitionEnergy in fixedTransitionEnergies. Defaults to 1e-12.
-        lowestCellEnergy (float, optional): Energy of lowest cell for secondary electron generation in normalized units. Defaults to 0 but should be supplied.
-
-    Returns:
-        dict: Collisional excitation/ionization transition property dictionary based on Janev fit to be added into ModelboundCRMData object
-    """
-
-    if endState > 0:
-        transitionEnergy = 13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
-    else:
-        transitionEnergy = 13.6 * (1 / startState**2) / energyNorm + lowestCellEnergy
-
-    transitionIndex, usedTransitionEnergy = min(
-        enumerate(fixedTransitionEnergies), key=lambda x: abs(x[1] - transitionEnergy)
-    )
-    assert (
-        abs(usedTransitionEnergy - transitionEnergy) < energyResolution
-    ), "collExIonJanevTransition unable to find energy in fixedTransitionEnergies within energyResolution of calculated transitionEnergy"
-
-    tProperties = {
-        "type": "JanevCollExIon",
-        "startHState": startState,
-        "endHState": endState,
-        "fixedEnergyIndex": transitionIndex + 1,
-        "distributionVarName": distributionVarName,
-    }
-
-    return tProperties
-
-
-def collDeexRecombJanevTransition(
-    startState: int,
-    endState: int,
-    energyNorm: float,
-    distributionVarName: str,
-    temperatureVarName: str,
-    directTransitionIndex: int,
-    fixedTransitionEnergies: np.ndarray,
-    energyResolution: float = 1e-16,
-    csUpdatePriority=0,
-    lowestCellEnergy: float = 0,
-) -> dict:
-    """Return transition property dictionary corresponding to collisional deexcitation/recombination transition from startState into endState of hydrogen based on Janev fit.
-
-    Args:
-        startState (int): Starting state of hydrogen
-        endState (int): Final state of hydrogen (0 assumes ion)
-        energyNorm (float): Normalization constant in eV used for transition energy (in general same as temperature normalization)
-        distributionVarName (str): Name of the distribution funcion variable
-        temperatureVarName (str): Name of the temperature variable associated with the above distribution function (used to ensure numerical detailed balance)
-        directTransitionIndex (int): Index of the direct transition in the host modelbound CRM data object (Fortran 1-indexing!)
-        fixedTransitionEnergies (np.array): Array of energies used to look up index of allowed transition energy closest to computed transition energy
-        energyResolution (float, optional): Tolerance for finding transitionEnergy in fixedTransitionEnergies. Defaults to 1e-12.
-        csUpdatePriority (int, optional): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
-        lowestCellEnergy (float, optional): Energy of lowest cell for secondary electron generation in normalized units. Defaults to 0 but should be supplied.
-
-    Returns:
-        dict: Collisional deexcitation/recombination transition property dictionary based on Janev fit to be added into ModelboundCRMData object
-    """
-
-    if startState > 0:
-        directTransitionEnergy = (
-            -13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
+    def latex(self: Self, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        equation = super().latex(**kwargs)
+        equation += "\\newline Variable energy/cross-section transition"
+        remappedArgs = (
+            (
+                latexRemap[arg]
+                if arg in latexRemap
+                else "\\text{" + arg.replace("_", r"\_") + "}"
+            )
+            for arg in self.__energyDeriv__.fillArgs()
         )
-    else:
-        directTransitionEnergy = (
-            13.6 * (1 / endState**2) / energyNorm + lowestCellEnergy
+        equation += "\\newline Energy: $" + self.__energyDeriv__(*remappedArgs) + "$"
+
+    def registerDerivs(self, container):
+        for _, deriv in self.__csDerivs__.items():
+            deriv.registerComponents(container)
+        self.__energyDeriv__.registerComponents(container)
+
+
+class DetailedBalanceTransition(Transition):
+    """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition"""
+
+    def __init__(
+        self,
+        name: str,
+        directTransitionName: str,
+        crmData: CRMModelboundData,
+        temperature: Variable,
+        electronDistribution: Variable,
+        degeneracyRatio: float,
+        maxResolvedCSHarmonic: int,
+        **kwargs
+    ):
+        """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition
+
+        Args:
+            name (str): Name of the transition
+            directTransitionName (str): Name of the direct transition which this one balances
+            crmData (CRMModelboundData): CRM modelbound data housing the direct transition
+            temperature (Variable): Variable corresponding to electron temperature
+            electronDistribution (Variable): Variable corresponding to the electron distribution function
+            degeneracyRatio (float): Degeneracy ratio of final and initial states in this transition
+            maxResolvedCSHarmonic (int): Highest harmonic to be calculated (should not exceed highest present harmonic in direct transition)
+
+        kwargs:
+
+            takeMomentumMoment (bool): If true, will calculate momentum rate based on l=1 harmonics of cross section and distribution function. Defaults to False.
+
+            csUpdatePriority (int): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
+
+            degeneracyDeriv (DerivationClosure): Full derivation rule corresponding to the part of the degeneracy ratio that depends on variables. Defaults to None
+        """
+
+        self.__takeMomentumMoment__ = kwargs.get("takeMomentumMoment", False)
+        self.__directTransition__ = crmData.transitions[
+            crmData.transitionTags.index(directTransitionName)
+        ]
+        self.__temperature__ = temperature
+        self.__electronDistribution__ = electronDistribution
+        self.__degeneracyRatio__ = degeneracyRatio
+        self.__maxResolvedCSHarmonics__ = maxResolvedCSHarmonic
+        self.__csUpdatePriority__: int = kwargs.get("csUpdatePriority", 0)
+        self.__degeneracyDeriv__: Optional[DerivationClosure] = kwargs.get(
+            "degeneracyDeriv", None
+        )
+        self.__fixedEnergy__ = -self.__directTransition__.fixedEnergy
+        self.__directTransitionIndex__ = crmData.transitionTags.index(
+            directTransitionName
+        )
+        self.__directTransitionEnergyIndex__ = (
+            self.__directTransition__.fixedEnergyIndex
+        )
+        self.__energyIndex__: Optional[int] = None
+        super().__init__(
+            name,
+            self.__directTransition__.outStates,
+            self.__directTransition__.inStates,
+            self.__takeMomentumMoment__,
         )
 
-    dirTransitionEnergyIndex, usedTransitionEnergy = min(
-        enumerate(fixedTransitionEnergies),
-        key=lambda x: abs(x[1] - directTransitionEnergy),
-    )
-    transitionEnergyIndex, dummyVar = min(
-        enumerate(fixedTransitionEnergies),
-        key=lambda x: abs(x[1] + directTransitionEnergy),
-    )
-    assert (
-        abs(usedTransitionEnergy - directTransitionEnergy) < energyResolution
-    ), "collDeexRecombJanevTransition unable to find energy in fixedTransitionEnergies within energyResolution of calculated directTransitionEnergy"
+    @property
+    def fixedEnergy(self):
+        return self.__fixedEnergy__
 
-    tProperties = {
-        "type": "JanevCollDeexRecomb",
-        "startHState": startState,
-        "endHState": endState,
-        "directTransitionFixedEnergyIndex": dirTransitionEnergyIndex + 1,
-        "directTransitionIndex": directTransitionIndex,
-        "fixedEnergyIndex": transitionEnergyIndex + 1,
-        "distributionVarName": distributionVarName,
-        "electronTemperatureVar": temperatureVarName,
-        "crossSectionUpdatePriority": csUpdatePriority,
-    }
+    def setFixedEnergyIndex(self, ind):
+        self.__energyIndex__ = ind
 
-    return tProperties
+    @property
+    def fixedEnergyIndex(self):
+        return self.__energyIndex__
+
+    def dict(self):
+        return {
+            "type": "detailedBalanceTransition",
+            "ingoingStates": [s.speciesID for s in self.inStates],
+            "outgoingStates": [s.speciesID for s in self.outStates],
+            "directTransitionFixedEnergyIndex": self.__directTransitionEnergyIndex__,
+            "fixedEnergyIndex": self.fixedEnergyIndex + 1,
+            "directTransitionIndex": self.__directTransitionIndex__ + 1,
+            "distributionVarName": self.__electronDistribution__.name,
+            "electronTemperatureVar": self.__temperature__.name,
+            "fixedDegeneracyRatio": self.__degeneracyRatio__,
+            "degeneracyRuleName": (
+                self.__degeneracyDeriv__.name
+                if self.__degeneracyDeriv__ is not None
+                else ""
+            ),
+            "degeneracyRuleReqVars": (
+                self.__degeneracyDeriv__.fillArgs()
+                if self.__degeneracyDeriv__ is not None
+                else []
+            ),
+            "takeMomentumMoment": self.hasMomentumRate,
+            "maxCrossSectionL": self.__maxResolvedCSHarmonics__,
+            "crossSectionUpdatePriority": self.__csUpdatePriority__,
+        }
+
+    def latex(self, **kwargs):
+        equation = super().latex(**kwargs)
+        equation += (
+            "\\newline Detailed balance transition with direct transition "
+            + self.__directTransition__.name
+        )
+        return equation
+
+
+class RadRecombJanevTransition(Transition):
+    """Radiative recombination transition for hydrogen based on Janev rate fit"""
+
+    def __init__(self, name: str, endState: int, temperature: Variable):
+        """Radiative recombination transition for hydrogen based on Janev rate fit
+
+        Args:
+            name (str): Name of this transition
+            endState (int): Principal quantum number of final state
+            temperature (Variable): Electron temperature variable
+        """
+        self.__endState__ = endState
+        self.__temperature__ = temperature
+        super().__init__(name, [], [])
+
+    def dict(self):
+        return {
+            "type": "JanevRadRecomb",
+            "endHState": self.__endState__,
+            "electronTemperatureVar": self.__temperature__.name,
+        }
+
+    def latex(self, **kwargs):
+        expression = (
+            "$\\text{H}^{+} + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + h\\nu$"
+        )
+        expression += "\\newline Janev radiative recombination transition"
+        return expression
+
+
+class CollExIonJanevTransition(Transition):
+    """Electron-impact excitation/ionisation transition for hydrogen based on Janev cross-section fits"""
+
+    def __init__(
+        self,
+        name: str,
+        startState: int,
+        endState: int,
+        energyNorm: float,
+        electronDistribution: Variable,
+        lowestCellEnergy: float = 0,
+    ):
+        """Electron-impact excitation/ionisation transition based on Janev cross-section fits
+
+        Args:
+            name (str): Name of this transition
+            startState (int): Initial state principle quantum number
+            endState (int): Final state principle quantum number (if 0 assumes ionisation)
+            energyNorm (float): Normalisation of energy in eV
+            electronDistribution (Variable): Electron distribution variable
+            lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0.
+        """
+        self.__startState__ = startState
+        self.__endState__ = endState
+        self.__energyNorm__ = energyNorm
+        self.__electronDistribution__ = electronDistribution
+        self.__lowestCellEnergy__ = lowestCellEnergy
+        self.__energyIndex__: Optional[int] = None
+        if endState > 0:
+            self.__transitionEnergy__ = (
+                13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
+            )
+        else:
+            self.__transitionEnergy__ = (
+                13.6 * (1 / startState**2) / energyNorm + lowestCellEnergy
+            )
+        super().__init__(name, [], [])
+
+    @property
+    def fixedEnergy(self):
+        return self.__transitionEnergy__
+
+    def setFixedEnergyIndex(self, ind):
+        self.__energyIndex__ = ind
+
+    @property
+    def fixedEnergyIndex(self):
+        return self.__energyIndex__
+
+    def dict(self):
+        return {
+            "type": "JanevCollExIon",
+            "startHState": self.__startState__,
+            "endHState": self.__endState__,
+            "fixedEnergyIndex": self.fixedEnergyIndex + 1,
+            "distributionVarName": self.__electronDistribution__.name,
+        }
+
+    def latex(self, **kwargs):
+        if self.__endState__ == 0:
+
+            expression = (
+                "$\\text{H}(n="
+                + str(self.__startState__)
+                + ") + e^{-} \\rightarrow \\text{H}^{+} + e^{-}  + e^{-} $"
+            )
+            expression += "\\newline Janev ionization transition"
+            return expression
+
+        expression = (
+            "$\\text{H}(n="
+            + str(self.__startState__)
+            + ") + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + e^{-}  $"
+        )
+        expression += "\\newline Janev excitation transition"
+        return expression
+
+
+class CollDeexRecombJanevTransition(Transition):
+    """Electron-impact de-excitation/recombination transition for hydrogen based on Janev cross-section fits"""
+
+    def __init__(
+        self,
+        name: str,
+        startState: int,
+        endState: int,
+        energyNorm: float,
+        electronDistribution: Variable,
+        temperature: Variable,
+        directTransitionName: str,
+        crmData: CRMModelboundData,
+        lowestCellEnergy: float = 0,
+        csUpdatePriority: int = 0,
+    ):
+        """Electron-impact de-excitation/recombination transition for hydrogen based on Janev cross-section fits and detailed balance
+
+        Args:
+            name (str): Name of this transition
+            startState (int): Initial state principle quantum number (if 0 assumes this is a recombination reaction)
+            endState (int): Final state principle quantum number
+            energyNorm (float): Energy normalisation in eV
+            electronDistribution (Variable): Electron distribution function variable
+            temperature (Variable): Electron temperature variable
+            directTransitionName (str): Name of the direct transition to which this transition is the inverse
+            crmData (CRMModelboundData): CRM modelbound data containing the direct transition
+            lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0.
+            csUpdatePriority (int, optional): Update priority of the detailed balance cross-section. Defaults to 0 (highest priority)
+        """
+        self.__startState__ = startState
+        self.__endState__ = endState
+        self.__energyNorm__ = energyNorm
+        self.__electronDistribution__ = electronDistribution
+        self.__lowestCellEnergy__ = lowestCellEnergy
+        self.__temperature__ = temperature
+        self.__directTransition__ = crmData.transitions[
+            crmData.transitionTags.index(directTransitionName)
+        ]
+        self.__directTransitionIndex__ = crmData.transitionTags.index(
+            directTransitionName
+        )
+        self.__directTransitionEnergyIndex__ = (
+            self.__directTransition__.fixedEnergyIndex
+        )
+        self.__energyIndex__: Optional[int] = None
+        self.__csUpdatePriority__: int = csUpdatePriority
+        if startState > 0:
+            self.__transitionEnergy__ = (
+                13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
+            )
+        else:
+            self.__transitionEnergy__ = (
+                -13.6 * (1 / endState**2) / energyNorm - lowestCellEnergy
+            )
+        super().__init__(name, [], [])
+
+    @property
+    def fixedEnergy(self):
+        return self.__transitionEnergy__
+
+    def setFixedEnergyIndex(self, ind):
+        self.__energyIndex__ = ind
+
+    @property
+    def fixedEnergyIndex(self):
+        return self.__energyIndex__
+
+    def dict(self):
+        return {
+            "type": "JanevCollDeexRecomb",
+            "startHState": self.__startState__,
+            "endHState": self.__endState__,
+            "directTransitionFixedEnergyIndex": self.__directTransitionEnergyIndex__
+            + 1,
+            "directTransitionIndex": self.__directTransitionIndex__ + 1,
+            "fixedEnergyIndex": self.fixedEnergyIndex + 1,
+            "distributionVarName": self.__electronDistribution__.name,
+            "electronTemperatureVar": self.__temperature__.name,
+            "crossSectionUpdatePriority": self.__csUpdatePriority__,
+        }
+
+    def latex(self, **kwargs):
+        if self.__startState__ == 0:
+
+            expression = (
+                "$\\text{H}^{+} + e^{-}  + e^{-}   \\rightarrow  \\text{H}(n="
+                + str(self.__endState__)
+                + ") + e^{-}$"
+            )
+            expression += "\\newline Janev three-body recombination transition"
+            return expression
+
+        expression = (
+            "$\\text{H}(n="
+            + str(self.__startState__)
+            + ") + e^{-} \\rightarrow \\text{H}(n="
+            + str(self.__endState__)
+            + ") + e^{-}  $"
+        )
+        expression += "\\newline Janev de-excitation transition"
+        return expression
 
 
 def addJanevTransitionsToCRMData(
-    mbData: ModelboundCRMData,
+    mbData: CRMModelboundData,
     maxState: int,
     energyNorm: float,
-    distributionVarName: Union[str, None] = None,
-    temperatureVarName: Union[str, None] = None,
+    electronDistribution: Optional[Variable] = None,
+    temperature: Optional[Variable] = None,
     detailedBalanceCSPriority=0,
-    processes=["ex", "deex", "ion", "recomb3b", "recombRad"],
+    processes: List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"],
     lowestCellEnergy: float = 0,
 ) -> None:
-    allowedProcesses = ["ex", "deex", "ion", "recomb3b", "recombRad"]
+    """Add Janev transitions to CRM modelbound data
+
+    Args:
+        mbData (CRMModelboundData): CRM modelbound data to add transitions to
+        maxState (int): Highest principle quantum number to add transitions for
+        energyNorm (float): Energy normalisation in eV
+        electronDistribution (Optional[Variable], optional): Electron distribution function variable used for adding some of the transitions. Defaults to None.
+        temperature (Optional[Variable], optional): Electron temperature variable used when adding some of the transitions. Defaults to None.
+        detailedBalanceCSPriority (int, optional): Update priority of the detailed balance cross-section for detailed balance transitions if those are added. Defaults to 0.
+        processes (List[str], optional): List of processes to add. Defaults to ["ex", "deex", "ion", "recomb3b", "recombRad"] - which are all of the allowed processes.
+        lowestCellEnergy (float, optional): Energy associated to the lowest velocity space cell (in normalised units) used to account for finite secondary electron energies. Defaults to 0. Defaults to 0.
+    """
+    allowedProcesses: List[str] = ["ex", "deex", "ion", "recomb3b", "recombRad"]
 
     for process in processes:
         assert (
@@ -539,53 +978,43 @@ def addJanevTransitionsToCRMData(
 
         if process == "ex":
             assert (
-                distributionVarName is not None
-            ), "distributionVarName must be specified if excitation is added using addJanevTransitionsToCRMData"
+                electronDistribution is not None
+            ), "electronDistribution must be specified if excitation is added using addJanevTransitionsToCRMData"
 
             for startState in range(1, maxState + 1):
                 for endState in range(startState + 1, maxState + 1):
-                    transitionEnergy = (
-                        13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
-                    )
-                    mbData.addTransitionEnergy(transitionEnergy)
                     transitionTag = "JanevEx" + str(startState) + "-" + str(endState)
-                    transitionProperties = collExIonJanevTransition(
-                        startState,
-                        endState,
-                        energyNorm,
-                        distributionVarName,
-                        mbData.fixedTransitionEnergies,
-                        mbData.energyResolution,
-                    )
+
                     mbData.addTransition(
-                        transitionTag=transitionTag,
-                        transitionProperties=transitionProperties,
+                        CollExIonJanevTransition(
+                            transitionTag,
+                            startState,
+                            endState,
+                            energyNorm,
+                            electronDistribution,
+                            lowestCellEnergy,
+                        )
                     )
 
         if process == "ion":
             assert (
-                distributionVarName is not None
-            ), "distributionVarName must be specified if ionization is added using addJanevTransitionsToCRMData"
+                electronDistribution is not None
+            ), "electronDistribution must be specified if ionization is added using addJanevTransitionsToCRMData"
 
             for startState in range(1, maxState + 1):
-                transitionEnergy = (
-                    13.6 * (1 / startState**2) / energyNorm + lowestCellEnergy
-                )
-                mbData.addTransitionEnergy(transitionEnergy)
+
                 transitionTag = "JanevIon" + str(startState)
-                transitionProperties = collExIonJanevTransition(
-                    startState,
-                    0,
-                    energyNorm,
-                    distributionVarName,
-                    mbData.fixedTransitionEnergies,
-                    mbData.energyResolution,
-                    lowestCellEnergy=lowestCellEnergy,
-                )
                 mbData.addTransition(
-                    transitionTag=transitionTag,
-                    transitionProperties=transitionProperties,
+                    CollExIonJanevTransition(
+                        transitionTag,
+                        startState,
+                        0,
+                        energyNorm,
+                        electronDistribution,
+                        lowestCellEnergy,
+                    )
                 )
+
         if process == "deex":
             assert (
                 "ex" in processes
@@ -594,39 +1023,32 @@ def addJanevTransitionsToCRMData(
                 "ex"
             ), "ex must be before deex in processes list"
             assert (
-                distributionVarName is not None
-            ), "distributionVarName must be specified if deexcitation is added using addJanevTransitionsToCRMData"
+                electronDistribution is not None
+            ), "electronDistribution must be specified if deexcitation is added using addJanevTransitionsToCRMData"
             assert (
-                temperatureVarName is not None
-            ), "temperatureVarName must be specified if deexcitation is added using addJanevTransitionsToCRMData"
+                temperature is not None
+            ), "temperature must be specified if deexcitation is added using addJanevTransitionsToCRMData"
 
             for endState in range(1, maxState + 1):
                 for startState in range(endState + 1, maxState + 1):
-                    transitionEnergy = (
-                        13.6 * (1 / startState**2 - 1 / endState**2) / energyNorm
-                    )
-                    mbData.addTransitionEnergy(transitionEnergy)
                     transitionTag = "JanevDeex" + str(startState) + "-" + str(endState)
                     directTransitionTag = (
                         "JanevEx" + str(endState) + "-" + str(startState)
                     )
-                    transitionProperties = collDeexRecombJanevTransition(
-                        startState,
-                        endState,
-                        energyNorm,
-                        distributionVarName,
-                        temperatureVarName,
-                        directTransitionIndex=mbData.transitionTags.index(
-                            directTransitionTag
-                        )
-                        + 1,
-                        fixedTransitionEnergies=mbData.fixedTransitionEnergies,
-                        energyResolution=mbData.energyResolution,
-                        csUpdatePriority=detailedBalanceCSPriority,
-                    )
+
                     mbData.addTransition(
-                        transitionTag=transitionTag,
-                        transitionProperties=transitionProperties,
+                        CollDeexRecombJanevTransition(
+                            transitionTag,
+                            startState,
+                            endState,
+                            energyNorm,
+                            electronDistribution,
+                            temperature,
+                            directTransitionTag,
+                            mbData,
+                            lowestCellEnergy,
+                            csUpdatePriority=detailedBalanceCSPriority,
+                        )
                     )
 
         if process == "recomb3b":
@@ -637,58 +1059,45 @@ def addJanevTransitionsToCRMData(
                 "ion"
             ), "ion must be before recomb3b in processes list"
             assert (
-                distributionVarName is not None
-            ), "distributionVarName must be specified if recomb3b is added using addJanevTransitionsToCRMData"
+                electronDistribution is not None
+            ), "electronDistribution must be specified if recomb3b is added using addJanevTransitionsToCRMData"
             assert (
-                temperatureVarName is not None
-            ), "temperatureVarName must be specified if recomb3b is added using addJanevTransitionsToCRMData"
+                temperature is not None
+            ), "temperature must be specified if recomb3b is added using addJanevTransitionsToCRMData"
 
             for endState in range(1, maxState + 1):
-                transitionEnergy = (
-                    -13.6 * (1 / endState**2) / energyNorm - lowestCellEnergy
-                )
-                mbData.addTransitionEnergy(transitionEnergy)
                 transitionTag = "JanevRecomb3b" + str(endState)
                 directTransitionTag = "JanevIon" + str(endState)
-                transitionProperties = collDeexRecombJanevTransition(
-                    0,
-                    endState,
-                    energyNorm,
-                    distributionVarName,
-                    temperatureVarName,
-                    directTransitionIndex=mbData.transitionTags.index(
-                        directTransitionTag
-                    )
-                    + 1,
-                    fixedTransitionEnergies=mbData.fixedTransitionEnergies,
-                    energyResolution=mbData.energyResolution,
-                    csUpdatePriority=detailedBalanceCSPriority,
-                    lowestCellEnergy=lowestCellEnergy,
-                )
                 mbData.addTransition(
-                    transitionTag=transitionTag,
-                    transitionProperties=transitionProperties,
+                    CollDeexRecombJanevTransition(
+                        transitionTag,
+                        0,
+                        endState,
+                        energyNorm,
+                        electronDistribution,
+                        temperature,
+                        directTransitionTag,
+                        mbData,
+                        lowestCellEnergy,
+                        csUpdatePriority=detailedBalanceCSPriority,
+                    )
                 )
 
         if process == "recombRad":
             assert (
-                temperatureVarName is not None
-            ), "temperatureVarName must be specified if radiative recombination is added using addJanevTransitionsToCRMData"
+                temperature is not None
+            ), "temperature must be specified if radiative recombination is added using addJanevTransitionsToCRMData"
 
             for endState in range(1, maxState + 1):
                 transitionTag = "JanevRecombRad" + str(endState)
-                transitionProperties = radRecombJanevTransition(
-                    endState, temperatureVarName
-                )
                 mbData.addTransition(
-                    transitionTag=transitionTag,
-                    transitionProperties=transitionProperties,
+                    RadRecombJanevTransition(transitionTag, endState, temperature)
                 )
 
 
 def addHSpontaneousEmissionToCRMData(
-    mbData: ModelboundCRMData,
-    transitionData: dict,
+    mbData: CRMModelboundData,
+    transitionData: Dict[Tuple[int, int], float],
     maxStartState: int,
     maxEndState: int,
     timeNorm: float,
@@ -700,8 +1109,8 @@ def addHSpontaneousEmissionToCRMData(
         transitionData (dict): Dictionary with keys of form (startState,endState), and with values in (s^-1)
         maxStartState (int): Highest starting state to add
         maxEndState (int): Highest final state to add
-        timeNorm (float): Time normalization in s
-        energyNorm (float): Energy normalization in eV
+        timeNorm (float): Time normalisation in s
+        energyNorm (float): Energy normalisation in eV
     """
 
     for endState in range(1, maxEndState + 1):
@@ -710,20 +1119,33 @@ def addHSpontaneousEmissionToCRMData(
             assert (
                 startState,
                 endState,
-            ) in transitionData.keys(), "(startState,endState) pair not found in transitionData keys for spontaneous emission"
+            ) in transitionData, "(startState,endState) pair not found in transitionData keys for spontaneous emission"
             transitionTag = "SpontEmissionH" + str(startState) + "-" + str(endState)
-            transitionProperties = simpleTransition(
-                startState,
-                endState,
-                transitionEnergy,
-                transitionData[(startState, endState)] * timeNorm,
-            )
             mbData.addTransition(
-                transitionTag=transitionTag, transitionProperties=transitionProperties
+                SimpleTransition(
+                    transitionTag,
+                    Species(
+                        "H" + str(startState),
+                        startState,
+                        latexName="\\text{H}(n=" + str(startState) + ")",
+                    ),
+                    Species(
+                        "H" + str(endState),
+                        endState,
+                        latexName="\\text{H}(n=" + str(endState) + ")",
+                    ),
+                    transitionEnergy,
+                    transitionData[(startState, endState)] * timeNorm,
+                )
             )
 
 
-def readNISTAkiCSV(filename: str) -> dict:
+def readNISTAkiCSV(filename: str) -> Dict[Tuple[int, int], float]:
+    """Read NIST hydrogen Einstein coefficients from csv file
+
+    Args:
+        filename (str): Name of the file containing the coefficients
+    """
     res = {}
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
@@ -744,7 +1166,7 @@ def hydrogenSahaBoltzmann(
     numStates: int,
     temperature: float,
     totDens: float,
-    fixedIonizationDegree: Union[None, float] = None,
+    fixedIonizationDegree: Optional[float] = None,
 ):
     """Return density distribution of electrons and atomic hydrogen states based on Saha-Boltzmann
 
@@ -752,7 +1174,7 @@ def hydrogenSahaBoltzmann(
         numStates (int): Number of atomic hydrogen states
         temperature (float): Electron temperature in eV
         totDens (float): Total density (neutrals+plasma)
-        fixedIonizationDegree (Union[None,float], optional): Optional ionization degree. Defaults to None, which calculate Saha equilibrium
+        fixedIonizationDegree (float, optional): Optional ionization degree. Defaults to None, which calculate Saha equilibrium
     """
     hPlanck = 6.62607004e-34
     elMass = 9.10938e-31
@@ -761,10 +1183,8 @@ def hydrogenSahaBoltzmann(
 
     vPlanck = (hPlanck**2 / (2 * np.pi * elMass * elCharge * temperature)) ** (-3 / 2)
     g = sum(
-        [
-            i**2 * np.exp(-hydrogenIonPot * (1 - 1 / i**2) / temperature)
-            for i in range(1, numStates + 1)
-        ]
+        i**2 * np.exp(-hydrogenIonPot * (1 - 1 / i**2) / temperature)
+        for i in range(1, numStates + 1)
     )
 
     A1 = vPlanck * np.exp(-hydrogenIonPot / temperature) / g
@@ -788,158 +1208,364 @@ def hydrogenSahaBoltzmann(
     return densDist
 
 
-def termGeneratorCRM(
-    implicitTermGroups: List[int] = [1],
-    evolvedSpeciesIDs: List[int] = [],
-    includedTransitionIndices: List[int] = [],
-) -> TermGenerator:
-    """Return dictionary with implicit CRM density evolution term generator properties. The term generator must be added to a model
-        which has a CRM modelbound data object
+class CRMTermGenerator(TermGenerator):
+    """Term generator for CRM contributions to density equations"""
 
-    Args:
-        implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
-        evolvedSpeciesIDs (List[int], optional): List of species IDs whose density evolution terms should be added. Defaults to [], which is
-                                                interpreted as all species.
-        includedTransitionIndices (List[int], optional): List of transition indices in modelbound CRM which should be included in rate calculations
-                                                        by this generator. Defaults to [], which is interpreted as all transitions.
-    Returns:
-        TermGenerator: CRM term generator ready to be added to custom model
-    """
+    def __init__(
+        self,
+        name: str,
+        evolvedSpecies: List[Species],
+        implicitGroups: Optional[List[int]] = None,
+        includedTransitionIndices: Optional[List[int]] = None,
+    ) -> None:
+        """Term generator for CRM contributions to density equations - matrix terms
 
-    crmTermGeneratorOptions: Dict[str, object] = {
-        "type": "CRMDensityEvolution",
-        "evolvedSpeciesIDs": evolvedSpeciesIDs,
-        "includedTransitionIndices": includedTransitionIndices,
-    }
+        Args:
+            name (str): Name of the generator
+            evolvedSpecies (List[Species]): Evolved species - the first associated variable should be the density
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put the generated terms into. Defaults to None, using [1].
+            includedTransitionIndices (Optional[List[int]], optional): Included transition indices in the CRM modelbound data. Defaults to None - including all transitions.
+        """
+        self.__evolvedSpecies__ = evolvedSpecies
 
-    return TermGenerator(implicitTermGroups, [], crmTermGeneratorOptions)
+        for species in evolvedSpecies:
+            assert len(species.associatedVarNames) > 0, (
+                "Species "
+                + species.name
+                + " does not have any associated variables - the first variable is interpreted as the density by CRMTermGenerator"
+            )
+        self.__includedTransitionIndices__ = includedTransitionIndices
+        super().__init__(name, implicitGroups if implicitGroups is not None else [1])
 
+    def dict(self) -> Dict:
+        tg = super().dict()
 
-def termGeneratorCRMElEnergy(
-    electronEnergyDensVar: str,
-    implicitTermGroups: List[int] = [1],
-    includedTransitionIndices: List[int] = [],
-) -> TermGenerator:
-    """Return dictionary with implicit CRM electron energy evolution term generator properties. The term generator must be added to a model
-        which has a CRM modelbound data object
+        tg.update(
+            {
+                "type": "CRMDensityEvolution",
+                "evolvedSpeciesIDs": [
+                    species.speciesID for species in self.__evolvedSpecies__
+                ],
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
 
-    Args:
-        electronEnergyDensVar (str): Name of the evolved electron energy variable
-        implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
-        includedTransitionIndices (List[int], optional): List of transition indices in modelbound CRM which should be included in rate calculations
-                                                        by this generator. Defaults to [], which is interpreted as all transitions.
+        return tg
 
-    Returns:
-         TermGenerator: CRM electron energy evolution term generator ready to be added to custom model
-    """
+    @property
+    def evolvedVars(self):
+        return [sp.associatedVarNames[0] for sp in self.__evolvedSpecies__]
 
-    crmElEnergyTermGeneratorOptions: Dict[str, object] = {
-        "type": "CRMElectronEnergyEvolution",
-        "electronEnergyDensity": electronEnergyDensVar,
-        "includedTransitionIndices": includedTransitionIndices,
-    }
+    def onlyEvolving(self, *args: Variable) -> Self:
+        evolvedVarNames = [arg.name for arg in args]
+        newSpecies: List[Species] = []
+        for sp in self.__evolvedSpecies__:
+            if sp.associatedVarNames[0] in evolvedVarNames:
+                newSpecies.append(sp)
+        return cast(
+            Self,
+            CRMTermGenerator(
+                self.name,
+                newSpecies,
+                self.implicitGroups,
+                self.__includedTransitionIndices__,
+            ),
+        )
 
-    return TermGenerator(implicitTermGroups, [], crmElEnergyTermGeneratorOptions)
-
-
-def termGeneratorCRMBoltz(
-    distributionVarName: str,
-    evolvedHarmonic: int,
-    includedTransitionIndices: List[int],
-    fixedEnergyIndices: List[int],
-    implicitTermGroups: List[int] = [1],
-    associatedVarIndex=1,
-    absorptionTerms=False,
-    detailedBalanceTerms=False,
-) -> TermGenerator:
-    """Return dictionary with term generator for Boltzmann collision terms based on CRM modelbound data
-
-    Args:
-        distributionVarName (str): Name of the electorn distribution variable
-        evolvedHarmonic (int): Harmonic evolved by these terms
-        includedTransitionIndices (List[int]): Included transition indices (should be either fixed ECS or detailed balance transitions)
-        fixedEnergyIndices (List[int]): Fixed energy indices corresponding to included transition indices
-        implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
-        associatedVarIndex (int, optional): Index of required density variables in species associated variables. Defaults to 1.
-        absorptionTerms (bool, optional): Set to true if the generated terms are absorption terms. Defaults to False.
-        detailedBalanceTerms (bool, optional): Set to true if the generated terms are detailed balance terms. Defaults to False.
-
-    Returns:
-        TermGenerator: CRM Boltzmann term generator
-    """
-
-    crmBoltzGeneratorOptions: Dict[str, object] = {
-        "type": "CRMFixedBoltzmannCollInt",
-        "evolvedHarmonic": evolvedHarmonic,
-        "distributionVarName": distributionVarName,
-        "includedTransitionIndices": includedTransitionIndices,
-        "fixedEnergyIndices": fixedEnergyIndices,
-        "absorptionTerm": absorptionTerms,
-        "detailedBalanceTerm": detailedBalanceTerms,
-        "associatedVarIndex": associatedVarIndex,
-    }
-
-    return TermGenerator(implicitTermGroups, [], crmBoltzGeneratorOptions)
-
-
-def termGeneratorCRMSecEl(
-    distributionVarName: str,
-    includedTransitionIndices: List[int] = [],
-    implicitTermGroups: List[int] = [1],
-) -> TermGenerator:
-    """Return term generator property dictionary for secondary electron kinetic term generators, which put secondary electrons generated
-    in given transitions into the lowest energy cell
-
-    Args:
-        distributionVarName (str): Name of the evolved electron distribution variable
-        includedTransitionIndices (List[int], optional): Included transition indices. Defaults to [], resulting in all transitions.
-        implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
-
-    Returns:
-        TermGenerator: CRM term generator for kinetic secondary electron generation terms
-    """
-
-    secElGeneratorOptions: Dict[str, object] = {
-        "type": "CRMSecondaryElectronTerms",
-        "distributionVarName": distributionVarName,
-        "includedTransitionIndices": includedTransitionIndices,
-    }
-
-    return TermGenerator(implicitTermGroups, [], secElGeneratorOptions)
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        varNames = ", ".join(
+            (
+                "$" + latexRemap[var] + "$"
+                if var in latexRemap
+                else "$\\text{" + var.replace("_", r"\_") + "}$"
+            )
+            for var in self.evolvedVars
+        )
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", r"\_")
+                + ": \\newline CRM density evolution term generator"
+            )
+        )
+        doc.append(tex.NoEscape("\\newline Evolved densities: " + varNames))
+        doc.append(
+            tex.NoEscape(
+                "\\newline $$\\frac{\\partial \\vec{n}}{\\partial t} = M \\cdot \\vec{n}$$"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
 
 
-def termGeneratorVarCRMBoltz(
-    distributionVarName: str,
-    evolvedHarmonic: int,
-    includedTransitionIndices: List[int],
-    implicitTermGroups: List[int] = [1],
-    associatedVarIndex=1,
-    absorptionTerms=False,
-    superelasticTerms=False,
-) -> TermGenerator:
-    """Return dictionary with term generator for variable mapping Boltzmann collision terms based on CRM modelbound data
+class CRMElEnergyTermGenerator(TermGenerator):
+    """Term generator of electron energy sinks from CRM contributions"""
 
-    Args:
-        distributionVarName (str): Name of the electorn distribution variable
-        evolvedHarmonic (int): Harmonic evolved by these terms
-        includedTransitionIndices (List[int]): Included transition indices (should all be variable ECS transitions)
-        implicitTermGroups (List[int], optional): Implicit term group of host model to which the generator should add terms. Defaults to [1].
-        associatedVarIndex (int, optional): Index of required density variables in species associated variables. Defaults to 1.
-        absorptionTerms (bool, optional): Set to true if the generated terms are absorption terms. Defaults to False.
-        superelasticTerms (bool, optional): Set to true if the generated terms are superelastic terms. Defaults to False.
+    def __init__(
+        self,
+        name: str,
+        electronEnergyDens: Variable,
+        implicitGroups: Optional[List[int]] = None,
+        includedTransitionIndices: Optional[List[int]] = None,
+    ) -> None:
+        """Term generator of electron energy sinks from CRM contributions
 
-    Returns:
-        TermGenerator: CRM Boltzmann term generator
-    """
+        Args:
+            name (str): Name of the generator
+            electronEnergyDens (Variable): Electron energy density variable evolved by terms generated by this generator
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put generated terms into. Defaults to None using [1].
+            includedTransitionIndices (Optional[List[int]], optional): Included transition indices in the CRM modelbound data. Defaults to None - including all transitions.
+        """
+        self.__electronEnergyDens__ = electronEnergyDens
+        self.__includedTransitionIndices__ = includedTransitionIndices
+        super().__init__(name, implicitGroups if implicitGroups is not None else [1])
 
-    crmBoltzGeneratorOptions: Dict[str, object] = {
-        "type": "CRMFixedBoltzmannCollInt",
-        "evolvedHarmonic": evolvedHarmonic,
-        "distributionVarName": distributionVarName,
-        "includedTransitionIndices": includedTransitionIndices,
-        "absorptionTerm": absorptionTerms,
-        "superelasticTerm": superelasticTerms,
-        "associatedVarIndex": associatedVarIndex,
-    }
+    def dict(self) -> Dict:
+        tg = super().dict()
 
-    return TermGenerator(implicitTermGroups, [], crmBoltzGeneratorOptions)
+        tg.update(
+            {
+                "type": "CRMElectronEnergyEvolution",
+                "electronEnergyDensity": self.__electronEnergyDens__.name,
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
+
+        return tg
+
+    @property
+    def evolvedVars(self):
+        return [self.__electronEnergyDens__.name]
+
+    def onlyEvolving(self, *args: Variable) -> Self:
+        return self
+
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", r"\_")
+                + ": \\newline CRM Electron energy evolution term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved energy variable: $"
+                + self.__electronEnergyDens__.latex(latexRemap)
+                + "$"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
+
+
+class CRMBoltzTermGenerator(TermGenerator):
+    """Generator of Boltzmann collision terms with fixed cross-sections/energies using CRM modelbound data"""
+
+    def __init__(
+        self,
+        name: str,
+        distribution: Variable,
+        evolvedHarmonic: int,
+        includedTransitionIndices: List[int],
+        mbData: CRMModelboundData,
+        associatedVarIndex: int = 1,
+        absorptionTerms=False,
+        implicitGroups: Optional[List[int]] = None,
+    ) -> None:
+        """Generator of Boltzmann collision terms with fixed cross-sections/energies using CRM modelbound data
+
+        Args:
+            name (str): Name of the generator
+            distribution (Variable): Electron distribution function variable
+            evolvedHarmonic (int): Evolved harmonic index (Fortran 1-indexing)
+            includedTransitionIndices (List[int]): Included transition indices (should be fixed energy/cross-section transitions)
+            mbData (CRMModelboundData): Modelbound data containing the transitions
+            associatedVarIndex (int, optional): Index of density in species associated variable list. Defaults to 1 (Fortran 1-indexing).
+            absorptionTerms (bool, optional): If true will generate the Boltzmann absorption terms, otherwise generates the emission terms. Defaults to False.
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put the generated terms into. Defaults to None - using [1].
+        """
+        assert all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (FixedECSTransition, CollExIonJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        ) or all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (DetailedBalanceTransition, CollDeexRecombJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        ), "CRMBoltzTermGenerator can only be called with transition indices all corresponding to FixedECSTransitions or DetailedBalanceTransitions"
+
+        self.__detailedBalanceTerms__ = all(
+            isinstance(
+                mbData.transitions[ind - 1],
+                (DetailedBalanceTransition, CollDeexRecombJanevTransition),
+            )
+            for ind in includedTransitionIndices
+        )
+        self.__distribution__ = distribution
+        self.__evolvedHarmonic__ = evolvedHarmonic
+        self.__associatedVarIndex__ = associatedVarIndex
+        self.__absorptionTerms__ = absorptionTerms
+        self.__includedTransitionIndices__ = includedTransitionIndices
+        self.__fixedEnergyIndices__ = [
+            mbData.transitions[ind - 1].fixedEnergyIndex + 1
+            for ind in includedTransitionIndices
+        ]
+        super().__init__(name, implicitGroups if implicitGroups is not None else [1])
+
+    def dict(self) -> Dict:
+        tg = super().dict()
+
+        tg.update(
+            {
+                "type": "CRMFixedBoltzmannCollInt",
+                "evolvedHarmonic": self.__evolvedHarmonic__,
+                "distributionVarName": self.__distribution__.name,
+                "includedTransitionIndices": self.__includedTransitionIndices__,
+                "fixedEnergyIndices": self.__fixedEnergyIndices__,
+                "absorptionTerm": self.__absorptionTerms__,
+                "detailedBalanceTerm": self.__detailedBalanceTerms__,
+                "associatedVarIndex": self.__associatedVarIndex__,
+            }
+        )
+
+        return tg
+
+    @property
+    def evolvedVars(self):
+        return [self.__distribution__.name]
+
+    def onlyEvolving(self, *args: Variable) -> Self:
+        return self
+
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", r"\_")
+                + ": \\newline CRM Boltzmann collision operator "
+                + ("absorption" if self.__absorptionTerms__ else "emission")
+                + " term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved distribution: "
+                + self.__distribution__.latex(latexRemap)
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )
+
+
+class CRMSecElTermGenerator(TermGenerator):
+    """Generator for secondary electrons for the electron kinetic equation due to CRM contributions"""
+
+    def __init__(
+        self,
+        name: str,
+        distribution: Variable,
+        includedTransitionIndices: Optional[List[int]] = None,
+        implicitGroups: Optional[List[int]] = None,
+    ) -> None:
+        """Generator for secondary electrons for the electron kinetic equation due to CRM contributions. The electrons are all put into the lowest energy cell.
+
+        Args:
+            name (str): Name of the generator
+            distribution (Variable): Electron distribution function variable
+            includedTransitionIndices (Optional[List[int]], optional): List of included transition indices. Defaults to None - including all transitions.
+            implicitGroups (Optional[List[int]], optional): Implicit groups to put generated terms into. Defaults to None - using [1].
+        """
+
+        self.__distribution__ = distribution
+        self.__includedTransitionIndices__ = includedTransitionIndices
+        super().__init__(name, implicitGroups if implicitGroups is not None else [1])
+
+    def dict(self) -> Dict:
+        tg = super().dict()
+
+        tg.update(
+            {
+                "type": "CRMSecondaryElectronTerms",
+                "distributionVarName": self.__distribution__.name,
+                "includedTransitionIndices": (
+                    self.__includedTransitionIndices__
+                    if self.__includedTransitionIndices__ is not None
+                    else []
+                ),
+            }
+        )
+
+        return tg
+
+    @property
+    def evolvedVars(self):
+        return [self.__distribution__.name]
+
+    def onlyEvolving(self, *args: Variable) -> Self:
+        return self
+
+    def addLatexToDoc(self, doc: tex.Document, **kwargs):
+        latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        doc.append(
+            tex.NoEscape(
+                self.name.replace("_", r"\_")
+                + ": \\newline CRM secondary electron source term generator"
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Evolved distribution: "
+                + self.__distribution__.latex(latexRemap)
+            )
+        )
+        doc.append(
+            tex.NoEscape(
+                "\\newline Transitions included: "
+                + (
+                    ", ".join(str(i) for i in self.__includedTransitionIndices__)
+                    + " \\newline"
+                    if self.__includedTransitionIndices__ is not None
+                    else "all \\newline"
+                )
+            )
+        )

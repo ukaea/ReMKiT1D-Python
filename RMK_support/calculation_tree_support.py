@@ -1,9 +1,9 @@
-# %%
 from typing import Union, List, cast, Dict, Callable
 import copy
 from itertools import accumulate
 import numpy as np
 from scipy import special  # type: ignore
+from .tex_parsing import numToScientificTex
 
 
 class Node:
@@ -292,6 +292,53 @@ class Node:
 
         return self.unaryTransform.evaluate(childrenResult)
 
+    def latex(self, latexRemap: Dict[str, str] = {}) -> str:
+        """Generate LaTeX representation of the Node
+
+        Args:
+            latexRemap (Dict[str,str], optional): Variable name remap dictionary. Defaults to {}.
+
+        Returns:
+            str: LaTeX-parsable node representation
+        """
+
+        const = (
+            ""
+            if self.constant is None
+            else numToScientificTex(self.constant, removeUnity=not self.additiveMode)
+        )
+
+        if not self.additiveMode and const == "-1.00":
+            const = "-"
+
+        if self.leafVar != "none":
+            childrenResult: str = (
+                const + "\\text{" + self.leafVar + "}"
+                if self.leafVar not in latexRemap
+                else const + latexRemap[self.leafVar]
+            )
+
+        else:
+            if self.additiveMode:
+                childrenResult = "+".join(
+                    child.latex(latexRemap) for child in self.children
+                )
+
+            else:
+                childrenResult = const + "".join(
+                    (
+                        "\\left(" + child.latex(latexRemap) + "\\right)"
+                        if child.additiveMode
+                        else child.latex(latexRemap)
+                    )
+                    for child in self.children
+                )
+
+        if self.unaryTransform is None:
+            return childrenResult.replace("+-", "-")
+
+        return self.unaryTransform.latex(childrenResult).replace("+-", "-")
+
 
 class UnaryTransform:
     """Representation of ReMKiT1D's unary transformations. Should only ever be directly created for parameterized transformations."""
@@ -305,12 +352,29 @@ class UnaryTransform:
         unaryCallable: Union[
             Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray], None
         ] = None,
+        latexTemplate: Union[str, None] = None,
     ) -> None:
+        """UnaryTransform constructor
+
+        Args:
+            tag (str): Transform tag
+            realParams (List[float], optional): Real parameter list to pass to Fortran transform object. Defaults to [].
+            intParams (List[int], optional): Integer parameter list to pass to Fortran transform object. Defaults to [].
+            logicalParams (List[bool], optional): Logical parameter list to pass to Fortran transform object.. Defaults to [].
+            unaryCallable (Union[ Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray], None ], optional): Associated function for use in evaluation. Defaults to None - disabling evaluations of nodes with this transform.
+            latexTemplate (Union[str,None], optional): Latex template for non-default representations (should contain $0 where the node representation goes, and $1, $2 and so on for all of the params, starting with the real params. For example '($0)^{$1})' with a single integer parameter would replace $1 with that integer value). Defaults to None - LaTeX representation of '\\text{tag}($0)'
+        """
         self.__tag__ = tag
         self.__realParams__ = realParams
         self.__intParams__ = intParams
         self.__logicalParams__ = logicalParams
         self.__unaryCallable__ = unaryCallable
+        if latexTemplate is not None:
+            self.__numArgs__ = 1 + len(realParams) + len(intParams) + len(logicalParams)
+            for i in range(self.__numArgs__):
+                assert f"${i}" in latexTemplate, f"${i} not in latexTemplate"
+        self.__latexTemplate__ = latexTemplate
+        self.__latexTemplate__ = latexTemplate
 
     def evaluate(self, array: np.ndarray) -> np.ndarray:
         """Evaluate the unary transform on given array if the callable is defined, otherwise throw error
@@ -331,6 +395,32 @@ class UnaryTransform:
         return self.__unaryCallable__(
             self.__realParams__, self.__intParams__, self.__logicalParams__, array
         )
+
+    def latex(self, nodeLatex: str) -> str:
+        """Wraps node LaTeX string with the transform's represenation
+
+        Args:
+            nodeLatex (str): LaTeX representation of node the transform acts on
+
+        Returns:
+            str: LaTeX-parsable representation of transform acting on node
+        """
+        if self.__latexTemplate__ is not None:
+            expression = self.__latexTemplate__.replace("$0", nodeLatex)
+            for i, param in enumerate(self.__realParams__):
+                expression = expression.replace(f"${i+1}", f"{param:.2f}")
+            for i, param in enumerate(self.__intParams__):
+                expression = expression.replace(
+                    f"${i+1+len(self.__realParams__)}", str(param)
+                )
+            for i, param in enumerate(self.__logicalParams__):
+                expression = expression.replace(
+                    f"${i+1+len(self.__realParams__)}", str(param)
+                )
+
+            return expression
+        else:
+            return "\\text{" + self.__tag__ + "}(" + nodeLatex + ")"
 
     def dict(self) -> dict:
         """Return unary transformation properties as ReMKiT1D dictionary
@@ -448,10 +538,21 @@ def powUnary(power: Union[int, float]) -> UnaryTransform:
         func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
             lambda floats, ints, bools, arg: arg ** ints[0]
         )
-        transform = UnaryTransform("ipow", intParams=[power], unaryCallable=func)
-    else:
-        func = lambda floats, ints, bools, arg: arg ** floats[0]
-        transform = UnaryTransform("rpow", realParams=[power], unaryCallable=func)
+        transform = UnaryTransform(
+            "ipow",
+            intParams=[power],
+            unaryCallable=func,
+            latexTemplate="\\left($0\\right)^{$1}",
+        )
+        return transform
+
+    func = lambda floats, ints, bools, arg: arg ** floats[0]
+    transform = UnaryTransform(
+        "rpow",
+        realParams=[power],
+        unaryCallable=func,
+        latexTemplate="\\left($0\\right)^{$1}",
+    )
     return transform
 
 
@@ -464,10 +565,10 @@ def log(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("log", unaryCallable=func)
+    return newNode
 
 
 def exp(node: Node) -> Node:
@@ -479,10 +580,10 @@ def exp(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("exp", unaryCallable=func)
+    return newNode
 
 
 def sin(node: Node) -> Node:
@@ -494,10 +595,10 @@ def sin(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("sin", unaryCallable=func)
+    return newNode
 
 
 def cos(node: Node) -> Node:
@@ -509,10 +610,10 @@ def cos(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("cos", unaryCallable=func)
+    return newNode
 
 
 def abs(node: Node) -> Node:
@@ -524,10 +625,10 @@ def abs(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("abs", unaryCallable=func)
+    return newNode
 
 
 def sign(node: Node) -> Node:
@@ -539,10 +640,10 @@ def sign(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("sign", unaryCallable=func)
+    return newNode
 
 
 def tan(node: Node) -> Node:
@@ -554,10 +655,10 @@ def tan(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("tan", unaryCallable=func)
+    return newNode
 
 
 def atan(node: Node) -> Node:
@@ -569,10 +670,10 @@ def atan(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("atan", unaryCallable=func)
+    return newNode
 
 
 def asin(node: Node) -> Node:
@@ -584,10 +685,10 @@ def asin(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("asin", unaryCallable=func)
+    return newNode
 
 
 def acos(node: Node) -> Node:
@@ -599,10 +700,10 @@ def acos(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("acos", unaryCallable=func)
+    return newNode
 
 
 def erf(node: Node) -> Node:
@@ -614,10 +715,10 @@ def erf(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
-        return newNode
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("erf", unaryCallable=func)
+    return newNode
 
 
 def erfc(node: Node) -> Node:
@@ -629,10 +730,172 @@ def erfc(node: Node) -> Node:
         newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)
         newNode.children = [copy.deepcopy(node)]
         return newNode
-    else:
-        newNode = copy.deepcopy(node)
-        newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)
+
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("erfc", unaryCallable=func)
+    return newNode
+
+
+def shift(node: Node, shiftAmount: int) -> Node:
+    """Shift the flattened node data by a set amount. Assumes data is already flat.
+
+    Args:
+        node (Node): Node to have shifted
+        shiftAmount (int): The amount to shift by. Negative is left shift.
+
+    Returns:
+        Node: Shifted node
+    """
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.roll(arg, ints[0])
+    )
+
+    if node.unaryTransform is not None:
+        newNode = Node("none")
+        newNode.unaryTransform = UnaryTransform(
+            "shift", intParams=[shiftAmount], unaryCallable=func
+        )
+        newNode.children = [copy.deepcopy(node)]
         return newNode
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform(
+        "shift", intParams=[shiftAmount], unaryCallable=func
+    )
+    return newNode
 
 
-# %%
+def step(node: Node) -> Node:
+    """Step function 1 if node values > 0, else 0
+
+    Args:
+        node (Node): Argument node
+
+    Returns:
+        Node: Step result
+    """
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.where(arg > 0, 1, 0)
+    )
+
+    if node.unaryTransform is not None:
+        newNode = Node("none")
+        newNode.unaryTransform = UnaryTransform("step", unaryCallable=func)
+        newNode.children = [copy.deepcopy(node)]
+        return newNode
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform("step", unaryCallable=func)
+    return newNode
+
+
+def absFloor(node: Node, floorVal: float) -> Node:
+    """Floors node value while maintaining the sign
+
+    Args:
+        node (Node): Node argument
+        floorVal (float): Floor value, anything smaller in abs value than this is set to this. Must be positive.
+
+    Returns:
+        Node: Result node
+    """
+    assert floorVal > 0, "floorVal must be positive in absFloor"
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.where(
+            np.abs(arg) < floats[0], np.sign(arg) * floats[0], arg
+        )
+    )
+
+    if node.unaryTransform is not None:
+        newNode = Node("none")
+        newNode.unaryTransform = UnaryTransform(
+            "absFloor", realParams=[floorVal], unaryCallable=func
+        )
+        newNode.children = [copy.deepcopy(node)]
+        return newNode
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform(
+        "absFloor", realParams=[floorVal], unaryCallable=func
+    )
+    return newNode
+
+
+def expand(node: Node, expandVals: np.ndarray, numCopies: int = 1) -> Node:
+    """Direct product of node values and expandVals, i.e. given a node with values [a,b,c], the result will be a node with values a*expandVals,b*expandVals,c*expandVals
+
+    Args:
+        node (Node): Unary argument
+        expandVals (np.ndarray): Array to take the direct product with (for example a velocity profile in order to construct a single harmonic variable from a fluid variable)
+        numCopies (int, optional): Number of copies of the result (appended in sequence). Defaults to 1.
+    """
+
+    def expandFun(
+        floats: List[float], ints: List[int], bools: List[bool], arg: np.ndarray
+    ):
+        realArray = np.array(floats)
+        numCopies = ints[0]
+        result = realArray * arg[0]
+        for _ in range(numCopies):
+            for val in arg[1:]:
+                result = np.append(result, val * realArray)
+        return result
+
+    if node.unaryTransform is not None:
+        newNode = Node("none")
+        newNode.unaryTransform = UnaryTransform(
+            "expand",
+            realParams=expandVals.tolist(),
+            intParams=[numCopies],
+            unaryCallable=expandFun,
+        )
+        newNode.children = [copy.deepcopy(node)]
+        return newNode
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform(
+        "expand",
+        realParams=expandVals.tolist(),
+        intParams=[numCopies],
+        unaryCallable=expandFun,
+    )
+    return newNode
+
+
+def contract(
+    node: Node, contractVals: np.ndarray, resultLen: int, resultIndex: int = 1
+):
+    """Dot product of the node with contractVals. Useful for contracting distributions with velocity profiles.
+
+    Args:
+        node (Node): Node argument
+        contractVals (np.ndarray): Vector to contract the node values with (should in practice be velocity space profile)
+        resultLen (int): Expected result length (should be the spatial dimension size)
+        resultIndex (int, optional): In case of contracting a full distribution this corresponds to the harmonics index to return. Defaults to 1.
+    """
+
+    def contFun(
+        floats: List[float], ints: List[int], bools: List[bool], arg: np.ndarray
+    ):
+        realArray = np.array(floats)
+        reshaped = arg.reshape((-1, len(realArray)))
+        resIndex = ints[1]
+        resLen = ints[0]
+        result = np.dot(reshaped, realArray)
+        result = result.reshape((resLen, -1))
+        return result[:, resIndex - 1]
+
+    if node.unaryTransform is not None:
+        newNode = Node("none")
+        newNode.unaryTransform = UnaryTransform(
+            "cont",
+            realParams=contractVals.tolist(),
+            intParams=[resultLen, resultIndex],
+            unaryCallable=contFun,
+        )
+        newNode.children = [copy.deepcopy(node)]
+        return newNode
+    newNode = copy.deepcopy(node)
+    newNode.unaryTransform = UnaryTransform(
+        "cont",
+        realParams=contractVals.tolist(),
+        intParams=[resultLen, resultIndex],
+        unaryCallable=contFun,
+    )
+    return newNode

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages  # type: ignore
 
 setup(
     name="RMK_support",
-    version="1.2.1",
+    version="2.0.0-beta.1",
     packages=["RMK_support"],
     install_requires=[
         "numpy",
@@ -12,6 +12,7 @@ setup(
         "matplotlib",
         "h5py",
         "scipy",
+        "pylatex"
     ],
     author="UK Atomic Energy Authority",
     maintainer="Stefan Mijin",

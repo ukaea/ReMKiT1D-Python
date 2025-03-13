@@ -2,6 +2,7 @@ import RMK_support.calculation_tree_support as ct
 import pytest
 import numpy as np
 from scipy import special  # type: ignore
+from functools import partial
 
 
 @pytest.fixture
@@ -256,7 +257,8 @@ def test_unaryTransformation_sub():
     assert nodes[0].constant == 2.0
 
 
-def test_funs(varDict):
+def test_funs():
+
     funs = [
         ct.log,
         ct.exp,
@@ -270,6 +272,11 @@ def test_funs(varDict):
         ct.atan,
         ct.erf,
         ct.erfc,
+        partial(ct.shift, shiftAmount=1),
+        ct.step,
+        partial(ct.absFloor, floorVal=0.1),
+        partial(ct.expand, expandVals=np.array([2.0, 1.0])),
+        partial(ct.contract, contractVals=np.array([2.0, 1.0]), resultLen=2),
     ]
 
     funTags = [
@@ -285,6 +292,11 @@ def test_funs(varDict):
         "atan",
         "erf",
         "erfc",
+        "shift",
+        "step",
+        "absFloor",
+        "expand",
+        "cont",
     ]
 
     numFuns = [
@@ -300,16 +312,26 @@ def test_funs(varDict):
         np.arctan,
         special.erf,
         special.erfc,
+        lambda arg: np.roll(arg, 1),
+        lambda arg: np.where(arg > 0, 1, 0),
+        lambda arg: np.where(np.abs(arg) < 0.1, np.sign(arg) * 0.1, arg),
+        lambda arg: np.outer(arg, np.array([2.0, 1.0])).flatten(),
+        lambda arg: np.dot(np.reshape(arg, (2, 2)), np.array([2.0, 1.0])),
     ]
 
     for i, fun in enumerate(funs):
         a = ct.Node("a")
         b = fun(a)
-        assert all(b.evaluate(varDict) == numFuns[i](np.ones(3)))
+        assert all(
+            np.isclose(
+                b.evaluate({"a": np.array([0.1, 1, 0.05, 0.2])}),
+                numFuns[i](np.array([0.1, 1, 0.05, 0.2])),
+            )
+        )
 
         b = fun(b)
 
-        nodes, parents, children = ct.flattenTree(b)
+        nodes, _, _ = ct.flattenTree(b)
 
         assert len(nodes) == 2
 

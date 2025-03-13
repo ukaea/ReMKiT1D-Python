@@ -1,6 +1,38 @@
 import numpy as np
 import json
-from typing import List
+from typing import List, Dict, Union, cast, Optional
+from itertools import accumulate
+from numpy.polynomial.polynomial import polyval, polyfit
+
+
+class Profile:
+    """Wrapper for profiles in x,h,v spaces in ReMKiT1D"""
+
+    def __init__(
+        self, data: np.ndarray, dim: str = "X", latexName: Optional[str] = None
+    ):
+        """Wrapper for profiles in one of ReMKiT1D's dimensions
+
+        Args:
+            data (np.ndarray): Data - should conform to the dimension
+            dim (str, optional): Profile dimension - of of ["X","H","V"]. Defaults to "X".
+            latexName (Optiona[s], optional): Latex representation of the profile. Defaults to None, using dim.
+        """
+        self.__data__ = data
+        assert dim in ["X", "H", "V"], "Profile can only be in X, H, or V dimensions"
+        self.__dim__ = dim
+        self.__latexName__ = latexName
+
+    @property
+    def data(self):
+        return self.__data__
+
+    @property
+    def dim(self):
+        return self.__dim__
+
+    def latex(self) -> str:
+        return self.__latexName__ if self.__latexName__ is not None else self.__dim__
 
 
 class Grid:
@@ -27,7 +59,7 @@ class Grid:
             interpretXGridAsWidths (bool, optional): If True interprets xGrid as cell widths. Defaults to False.
             interpretVGridAsWidths (bool, optional): If True interprets vGrid as cell widths. Defaults to False.
             isPeriodic (bool, optional): If True the x grid is set to be periodic. This means that the right boundary of the rightmost cell is the left boundary of the leftmost cell. Defaults to False.
-            isLenghtInMeters (bool, optional): If True will instruct ReMKiT1D to use the built-in normalization to deduce the normalized coordinates of the spatial grid. CAUTION: This can lead to issues if the default normalization is not used in the rest of the simulation. Defaults to False.
+            isLengthInMeters (bool, optional): If True will instruct ReMKiT1D to use the built-in normalization to deduce the normalized coordinates of the spatial grid. CAUTION: This can lead to issues if the default normalization is not used in the rest of the simulation. Defaults to False.
         """
 
         # Assertions
@@ -54,7 +86,7 @@ class Grid:
             dx.append(2 * (x - sum(dx)))
 
         self.__xWidths__ = np.array(dx)
-
+        self.__dualXGrid__ = np.array(list(accumulate(self.xWidths)))
         # Initialize v grid
         if interpretVGridAsWidths:
             self.__vGrid__ = np.zeros(len(vGrid))
@@ -95,6 +127,10 @@ class Grid:
     @property
     def xGrid(self):
         return self.__xGrid__
+
+    @property
+    def xGridDual(self):
+        return self.__dualXGrid__
 
     @property
     def xWidths(self):
@@ -155,6 +191,7 @@ class Grid:
 
         self.__xJacobian__ = values
 
+    @property
     def numX(self) -> int:
         """Get number of spatial cells in grid
 
@@ -163,6 +200,7 @@ class Grid:
         """
         return len(self.__xGrid__)
 
+    @property
     def numV(self) -> int:
         """Get number of velocity cells in grid
 
@@ -171,6 +209,7 @@ class Grid:
         """
         return len(self.__vGrid__)
 
+    @property
     def numH(self) -> int:
         """Get total number of harmonics
 
@@ -309,11 +348,11 @@ class Grid:
             len(np.shape(distFun)) < 4
         ), "Unsupported dimensionality of distFun in velocityMoment"
         assert (
-            np.shape(distFun)[-1] == self.numV()
+            np.shape(distFun)[-1] == self.numV
         ), "The velocity dimension of distFun does not conform to size of velocity grid"
         if len(np.shape(distFun)) == 3:
             assert (
-                momentHarmonic <= self.numH()
+                momentHarmonic <= self.numH
             ), "momentHarmonic out of bounds in velocityMoment"
             moment = (
                 4
@@ -335,9 +374,17 @@ class Grid:
     def domainIntegral(
         self, data: np.ndarray, isOnDualGrid: bool = False
     ) -> np.ndarray:
+        """Return the integral of data along the x dimension, assuming it is the first dimension of the data passed
 
+        Args:
+            data (np.ndarray): Data to be integrated along the x direction
+            isOnDualGrid (bool, optional): True if the data is on the dual grid. Defaults to False.
+
+        Returns:
+            np.ndarray: Data integrated along x
+        """
         assert (
-            data.shape[0] == self.numX()
+            data.shape[0] == self.numX
         ), "data passed to domainIntegral must have its first dimension conform to the spatial grid"
 
         dV = (
@@ -350,3 +397,165 @@ class Grid:
             dV[-1] = 0
 
         return np.transpose(np.dot(data.transpose(), dV))
+
+    def gridToDual(self, data: np.ndarray) -> np.ndarray:
+        """Linearly interpolate 1D data from regular to dual grid. Linearly extrapolates to right boundary if the grid is not periodic
+
+        Args:
+            data (np.ndarray): Data to be interpolated
+
+        Returns:
+            np.ndarray: Interpolated data on dual grid
+        """
+        assert data.shape == (
+            self.numX,
+        ), "data passed to gridToDual must be 1D and on the x grid"
+
+        x = self.xGridDual
+        xp = self.xGrid
+
+        if self.isPeriodic:
+            return np.interp(x, xp, data, period=x[-1])
+
+        return np.piecewise(
+            x,
+            [x <= xp[-1], x > xp[-1]],
+            [
+                lambda xi: np.interp(xi, xp, data),
+                lambda xi: polyval(xi, polyfit(xp[-2:], data[-2:], 1)),
+            ],
+        )
+
+    def dualToGrid(self, data: np.ndarray) -> np.ndarray:
+        """Linearly interpolate 1D data from dual to regular grid. Linearly extrapolates to first and last point if the grid is not periodic.
+
+        Args:
+            data (np.ndarray): Data to be interpolated
+
+        Returns:
+            np.ndarray: Interpolated data on regular grid
+        """
+        assert data.shape == (
+            self.numX,
+        ), "data passed to gridToDual must be 1D and on the x grid"
+
+        xp = self.xGridDual
+        x = self.xGrid
+
+        if self.isPeriodic:
+            return np.interp(x, xp, data, period=xp[-1])
+
+        return np.piecewise(
+            x,
+            [x < xp[0], (x >= xp[0]) & (x <= xp[-2]), x > xp[-2]],
+            [
+                lambda xi: polyval(xi, polyfit(xp[:2], data[:2], 1)),
+                lambda xi: np.interp(xi, xp, data),
+                lambda xi: polyval(xi, polyfit(xp[-3:-1], data[-3:-1], 1)),
+            ],
+        )
+
+    def staggeredDistToGrid(self, data: np.ndarray) -> np.ndarray:
+        """Interpolate odd harmonics of a distribution variable onto the regular grid while keeping even harmonics unchanged
+
+        Args:
+            data (np.ndarray): Distribution data to be interpolated
+
+        Returns:
+            np.ndarray: Distribution data where all harmonics live on the regular grid
+        """
+        assert data.shape == (
+            self.numX,
+            self.numH,
+            self.numV,
+        ), "data passed to staggeredDistToGrid must be 3D and on the x,h,v grids"
+
+        result: np.ndarray = np.copy(data)
+        for h, l in enumerate(self.lGrid):
+            if l % 2 == 1:
+                for v in range(self.numV):
+                    result[:, h, v] = self.dualToGrid(data[:, h, v])
+
+        return result
+
+    def staggeredDistToDual(self, data: np.ndarray) -> np.ndarray:
+        """Interpolate even harmonics of a distribution variable to the dual grid while keeping odd harmonics unchanged
+
+        Args:
+            data (np.ndarray): Distribution data to be interpolated
+
+        Returns:
+            np.ndarray: Distribution with all harmonics living on the dual grid
+        """
+        assert data.shape == (
+            self.numX,
+            self.numH,
+            self.numV,
+        ), "data passed to staggeredDistToGrid must be 3D and on the x,h,v grids"
+
+        result: np.ndarray = np.copy(data)
+        for h, l in enumerate(self.lGrid):
+            if l % 2 == 0:
+                for v in range(self.numV):
+                    result[:, h, v] = self.gridToDual(data[:, h, v])
+
+        return result
+
+    def distFullInterp(self, data: np.ndarray) -> np.ndarray:
+        """Interpolate a distribution function so that the odd harmonics live on the regular grid and even harmonics on the dual grid
+
+        Args:
+            data (np.ndarray): Distribution data to be interpolated
+
+        Returns:
+            np.ndarray: Interpolated distribution
+        """
+
+        return self.staggeredDistToGrid(self.staggeredDistToDual(data))
+
+    def profile(
+        self, data: np.ndarray, dim: str = "X", latexName: Union[str, None] = None
+    ) -> Profile:
+        """Wrapped Profile constructor with bounds checking
+
+        Args:
+            data (np.ndarray): Profile values
+            dim (str, optional): Dimension profile corresponds to. Must be one of "X","H","V". Defaults to "X".
+            latexName (Union[str,None], optional): Latex name of the profile used in generating run summaries. Defaults to None.
+
+        Returns:
+            Profile: Bounds-checked Profile
+        """
+        assert dim in ["X", "H", "V"], "Profile can only be in X, H, or V dimensions"
+        dims = {"X": self.numX, "H": self.numH, "V": self.numV}
+        assert (
+            dims[dim],
+        ) == data.shape, (
+            "data passed to profile does not conform to the appropriate dimension size"
+        )
+
+        return Profile(data, dim, latexName)
+
+
+def gridFromDict(gridDict: Dict[str, object]) -> Grid:
+    """Initialise the grid from a dictionary object
+
+    Args:
+        gridDict (Dict[str,object]): Dictionary to initialise from
+
+    Returns:
+        Grid: Grid object loaded from dictionary representation
+    """
+    grid = Grid(
+        np.array(cast(Dict[str, object], gridDict["xGrid"])["cellCentreCoords"]),
+        np.array(cast(Dict[str, object], gridDict["vGrid"])["cellCentreCoords"]),
+        cast(Dict[str, object], gridDict["vGrid"])["maxL"],
+        cast(Dict[str, object], gridDict["vGrid"])["maxM"],
+        isPeriodic=cast(Dict[str, object], gridDict["xGrid"])["isPeriodic"],
+        isLengthInMeters=cast(Dict[str, object], gridDict["xGrid"])["isLengthInMeters"],
+    )
+
+    grid.xJacobian = np.array(
+        cast(Dict[str, object], gridDict["xGrid"])["faceJacobians"]
+    )
+    return grid
