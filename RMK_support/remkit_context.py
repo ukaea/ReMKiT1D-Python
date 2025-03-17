@@ -728,6 +728,9 @@ class RMKContext:
 
         doc = tex.Document()
 
+        usedRemap = cast(VariableContainer, self.__variables__).getDefaultLatexRemap()
+        usedRemap.update(latexRemap)
+
         doc.preamble.append(tex.NoEscape("\\usepackage{amsmath}"))
         doc.preamble.append(tex.NoEscape("\\usepackage{enumitem}"))
         with doc.create(tex.MiniPage(align="c")):
@@ -735,19 +738,19 @@ class RMKContext:
             doc.append(tex.LineBreak())
 
         cast(VariableContainer, self.__variables__).addLatexToDoc(
-            doc, latexRemap=latexRemap
+            doc, latexRemap=usedRemap
         )
         cast(dv.Textbook, self.__textbook__).addLatexToDoc(doc)
-        self.__species__.addLatexToDoc(doc, latexRemap=latexRemap)
+        self.__species__.addLatexToDoc(doc, latexRemap=usedRemap)
         cast(mc.ModelCollection, self.__models__).addLatexToDoc(
-            doc, latexRemap=latexRemap
+            doc, latexRemap=usedRemap
         )
         cast(ManipulatorCollection, self.__manipulators__).addLatexToDoc(
-            doc, latexRemap=latexRemap
+            doc, latexRemap=usedRemap
         )
         implicitGroups, _ = cast(mc.ModelCollection, self.__models__).numGroups()
         cast(it.IntegrationScheme, self.__integrationScheme__).addLatexToDoc(
-            doc, implicitGroups, latexRemap=latexRemap, models=self.models
+            doc, implicitGroups, latexRemap=usedRemap, models=self.models
         )
 
         doc.generate_pdf(latexFilename.replace(" ", "_"), clean_tex=cleanTex)

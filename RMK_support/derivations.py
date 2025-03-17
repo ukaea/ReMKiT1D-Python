@@ -156,7 +156,7 @@ class Species:
         )
         assert (
             var.name in self.associatedVarNames
-        ), "If setting subtype variable manually on species it must already be associated t"
+        ), "If setting subtype variable manually on species it must already be associated"
         self.__varsByType__[key] = var
 
     def dict(self) -> dict:
@@ -176,7 +176,7 @@ class Species:
         return speciesData
 
     def latex(self) -> str:
-        """LaTeX represenation of the species
+        """LaTeX representation of the species
 
         Returns:
             str: LaTeX-compatible string representing the species

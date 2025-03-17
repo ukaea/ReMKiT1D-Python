@@ -284,7 +284,12 @@ class StandardFluidVariables(VariableFactory):
         Returns:
             Variable: Standard density variable
         """
-        n = density("n" + self.species.name, self.__context__, data=initVals).withDual()
+        n = density(
+            "n" + self.species.name,
+            self.__context__,
+            data=initVals,
+            defaultLatex="n_{" + self.species.latex() + "}",
+        ).withDual()
         if self.__associateOnCreation__:
             if n.name not in self.species.associatedVarNames:
                 self.species.associateVar(n, n.dual)
@@ -308,7 +313,10 @@ class StandardFluidVariables(VariableFactory):
             self.__context__,
             isOnDualGrid=True,
             data=initVals,
-        ).withDual("G" + self.species.name)
+            defaultLatex="\\vec{\\Gamma}_{" + self.species.name + "}^{dual}",
+        ).withDual(
+            "G" + self.species.name, "\\vec{\\Gamma}_{" + self.species.latex() + "}"
+        )
         if self.__associateOnCreation__:
             if G.name not in self.species.associatedVarNames:
                 self.species.associateVar(G, G.dual)
@@ -328,7 +336,10 @@ class StandardFluidVariables(VariableFactory):
             Variable: Standard energy density variable
         """
         W = energyDensity(
-            "W" + self.species.name, self.__context__, data=initVals
+            "W" + self.species.name,
+            self.__context__,
+            data=initVals,
+            defaultLatex="W_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if W.name not in self.species.associatedVarNames:
@@ -349,7 +360,11 @@ class StandardFluidVariables(VariableFactory):
             Variable: Standard temperature variable
         """
         T = temperature(
-            "T" + self.species.name, self.__context__, data=initVals, isStationary=True
+            "T" + self.species.name,
+            self.__context__,
+            data=initVals,
+            isStationary=True,
+            defaultLatex="T_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if T.name not in self.species.associatedVarNames:
@@ -379,7 +394,8 @@ class StandardFluidVariables(VariableFactory):
                 "n" + self.species.name + "_dual",
             ],
             isOnDualGrid=True,
-        ).withDual("u" + self.species.name)
+            defaultLatex="\\vec{u}_{" + self.species.latex() + "}^{dual}",
+        ).withDual("u" + self.species.name, "\\vec{u}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
                 self.species.associateVar(u, u.dual)
@@ -405,7 +421,8 @@ class StandardFluidVariables(VariableFactory):
             isStationary=True,
             isOnDualGrid=True,
             subtype="heatflux",
-        ).withDual("q" + self.species.name)
+            defaultLatex="\\vec{q}_{" + self.species.latex() + "}^{dual}",
+        ).withDual("q" + self.species.name, "\\vec{q}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:
                 self.species.associateVar(q, q.dual)
@@ -433,6 +450,7 @@ class StandardFluidVariables(VariableFactory):
                 node=node(self.density()) * node(self.temperature()),
             ),
             subtype="pressure",
+            defaultLatex="p_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if p.name not in self.species.associatedVarNames:
@@ -458,6 +476,7 @@ class StandardFluidVariables(VariableFactory):
             data=initVals,
             isStationary=True,
             subtype="viscosity",
+            defaultLatex="\\Pi_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if pi.name not in self.species.associatedVarNames:

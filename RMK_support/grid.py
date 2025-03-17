@@ -31,6 +31,10 @@ class Profile:
     def dim(self):
         return self.__dim__
 
+    @property
+    def latexName(self):
+        return self.__latexName__
+
     def latex(self) -> str:
         return self.__latexName__ if self.__latexName__ is not None else self.__dim__
 
