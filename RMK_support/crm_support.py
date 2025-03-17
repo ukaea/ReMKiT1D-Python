@@ -219,6 +219,17 @@ class CRMModelboundData(ModelboundData):
 
         return varNames
 
+    def getDefaultLatexRemap(self):
+        remap = {}
+
+        for i, t in enumerate(self.__transitions__):
+            remap["rate0index" + str(i + 1)] = "C_{n,\\text{" + t.name + "}}"
+            remap["rate2index" + str(i + 1)] = "C_{E,\\text{" + t.name + "}}"
+            if t.hasMomentumRate:
+                remap["rate1index" + str(i + 1)] = "C_{\\Gamma,\\text{" + t.name + "}}"
+
+        return remap
+
     def __getitem__(self, key):
         if key not in self.varNames:
             raise KeyError()
@@ -248,6 +259,8 @@ class CRMModelboundData(ModelboundData):
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        usedRemap = self.getDefaultLatexRemap()
+        usedRemap.update(latexRemap)
         doc.append("CRM Modelbound data")
         with doc.create(tex.Subsubsection("Transitions")):
             with doc.create(tex.Itemize()) as itemize:
@@ -256,7 +269,7 @@ class CRMModelboundData(ModelboundData):
                         tex.NoEscape(
                             transition.name
                             + ": "
-                            + transition.latex(latexRemap=latexRemap)
+                            + transition.latex(latexRemap=usedRemap)
                         )
                     )
 

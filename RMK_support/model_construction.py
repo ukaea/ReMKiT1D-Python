@@ -30,6 +30,9 @@ class ModelboundData(ABC):
     def varNames(self) -> List[str]:
         pass
 
+    def getDefaultLatexRemap(self) -> Dict[str, str]:
+        return {}
+
     def registerDerivs(self, container: Textbook):
         pass
 
@@ -657,7 +660,7 @@ class MatrixTerm(Term):
     def constLatex(self, expression: str):
         self.__constLatex__ = expression
 
-    def withLatexConst(self,remap:str):
+    def withLatexConst(self, remap: str):
         """Return a copy of this term with the multiplicative constant LaTeX representation set.
 
         Args:
@@ -1341,6 +1344,10 @@ class Model:
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        usedRemap = (
+            self.mbData.getDefaultLatexRemap() if self.mbData is not None else {}
+        )
+        usedRemap.update(latexRemap)
         with doc.create(tex.Subsection(tex.NoEscape("$" + self.__latexName__ + "$"))):
             with doc.create(tex.Subsubsection("Equation contributions")):
                 for tc in self.ddt.__termCollections__:
@@ -1348,7 +1355,7 @@ class Model:
                         with doc.create(
                             tex.Alignat(numbering=False, escape=False)
                         ) as agn:
-                            tc.addLatexToDoc(agn, latexRemap)
+                            tc.addLatexToDoc(agn, usedRemap)
 
             if self.__modelboundData__ is not None:
                 with doc.create(tex.Subsubsection("Modelbound data")):
@@ -1521,6 +1528,15 @@ class VarlikeModelboundData(ModelboundData):
             raise KeyError()
         return self.__variables__[self.varNames.index(key)]
 
+    def getDefaultLatexRemap(self) -> Dict[str, str]:
+        remap: Dict[str, str] = {}
+
+        for var in self.__variables__:
+            if var.defaultLatex is not None:
+                remap[var.name] = var.defaultLatex
+
+        return remap
+
     def addVar(
         self,
         *args: Variable,
@@ -1574,9 +1590,11 @@ class VarlikeModelboundData(ModelboundData):
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        usedRemap = self.getDefaultLatexRemap()
+        usedRemap.update(latexRemap)
         with doc.create(tex.Itemize()) as itemize:
             for var in self.__variables__:
-                itemize.add_item(tex.NoEscape(f"${var.latex(latexRemap)}$"))
+                itemize.add_item(tex.NoEscape(f"${var.latex(usedRemap)}$"))
 
     def registerDerivs(self, container: Textbook):
         for var in self.__variables__:
@@ -1683,6 +1701,14 @@ class LBCModelboundData(ModelboundData):
     def varNames(self):
         return ["gamma", "potential", "coVel", "shTemp"]
 
+    def getDefaultLatexRemap(self):
+        return {
+            "gamma": "\\gamma_{sh}",
+            "potential": "\\varphi",
+            "coVel": "v_{cutoff}",
+            "shTemp": "T_{sh}",
+        }
+
     def __getitem__(self, key):
         if key not in self.varNames:
             raise KeyError()
@@ -1690,6 +1716,8 @@ class LBCModelboundData(ModelboundData):
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        usedRemap = self.getDefaultLatexRemap()
+        usedRemap.update(latexRemap)
         doc.append(
             "Logical boundary condition data on "
             + ("left" if self.__leftBoundary__ else "right")
@@ -1697,7 +1725,7 @@ class LBCModelboundData(ModelboundData):
         )
         with doc.create(tex.Itemize()) as itemize:
             for var in self.varNames:
-                itemize.add_item(tex.NoEscape(f"${self[var].latex(latexRemap)}$"))
+                itemize.add_item(tex.NoEscape(f"${self[var].latex(usedRemap)}$"))
 
     def registerDerivs(self, container: Textbook):
         container.register(self.__deriv__, ignoreDuplicates=True)
