@@ -657,6 +657,11 @@ class MatrixTerm(Term):
     def constLatex(self, expression: str):
         self.__constLatex__ = expression
 
+    def withLatexConst(self,remap:str):
+        newTerm = deepcopy(self)
+        newTerm.constLatex = remap
+        return newTerm
+
     @property
     def fixedMatrix(self):
         """Return true if this term has a fixed matrix - i.e. it does not evolve"""
