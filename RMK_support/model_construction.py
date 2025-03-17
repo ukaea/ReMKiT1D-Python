@@ -1516,8 +1516,14 @@ class ModelCollection:
 class VarlikeModelboundData(ModelboundData):
     """Variable-like modelbound data"""
 
-    def __init__(self) -> None:
+    def __init__(self, autoAddDuals=True) -> None:
+        """Variable-like modelbound data
+
+        Args:
+            autoAddDuals (bool, optional): If true will automatically add dual variables if associated at time of adding. Defaults to True.
+        """
         self.__variables__: List[Variable] = []
+        self.__autoAddDuals__ = autoAddDuals
 
     @property
     def varNames(self):
@@ -1561,6 +1567,17 @@ class VarlikeModelboundData(ModelboundData):
             )
 
             self.__variables__.append(var)
+
+            if self.__autoAddDuals__ and var.dual is not None:
+                if var.dual.name in self.varNames:
+                    warnings.warn(
+                        "Variable "
+                        + var.dual.name
+                        + " already in VarlikeModelboundData. Overwriting."
+                    )
+                    self.__variables__[self.varNames.index(var.dual.name)] = var.dual
+                else:
+                    self.__variables__.append(var.dual)
 
     def dict(self) -> dict:
         properties = {

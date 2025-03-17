@@ -191,7 +191,7 @@ def test_varlike_mb_data(grid):
             grid,
             derivation=dv.SimpleDerivation("a", 1.0, [1.0]),
             derivationArgs=["c"],
-        )
+        ).withDual()
         for name in "ab"
     )
 
@@ -199,10 +199,10 @@ def test_varlike_mb_data(grid):
 
     model = mc.Model("model")
     model.setModelboundData(mbData)
-    assert mbData.varNames == ["a", "b"]
+    assert mbData.varNames == ["a", "a_dual", "b", "b_dual"]
     assert model.mbData.dict() == {
         "modelboundDataType": "varlikeData",
-        "dataNames": ["a", "b"],
+        "dataNames": ["a", "a_dual", "b", "b_dual"],
         "a": {
             "isDistribution": False,
             "isScalar": False,
@@ -220,6 +220,24 @@ def test_varlike_mb_data(grid):
             "derivationPriority": 0,
             "ruleName": "a",
             "requiredVarNames": ["c"],
+        },
+        "a_dual": {
+            "isDistribution": False,
+            "isScalar": False,
+            "isSingleHarmonic": False,
+            "isDerivedFromOtherData": True,
+            "derivationPriority": 0,
+            "ruleName": "gridToDual",
+            "requiredVarNames": ["a"],
+        },
+        "b_dual": {
+            "isDistribution": False,
+            "isScalar": False,
+            "isSingleHarmonic": False,
+            "isDerivedFromOtherData": True,
+            "derivationPriority": 0,
+            "ruleName": "gridToDual",
+            "requiredVarNames": ["b"],
         },
     }
 
