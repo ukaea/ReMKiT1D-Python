@@ -70,6 +70,14 @@ common\_models submodule
    :undoc-members:
    :show-inheritance:
 
+common\_variables submodule
+------------------------
+
+.. automodule:: RMK_support.common_variables
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 calculation\_tree\_support submodule
 ------------------------------------
 
