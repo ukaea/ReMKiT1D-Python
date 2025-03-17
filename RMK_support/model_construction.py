@@ -1228,6 +1228,7 @@ class Model:
     def rename(self, name: str, latexName: Optional[str] = None):
         newModel = deepcopy(self)
         newModel.__name__ = name
+        newModel.__latexName__ = "\\text{" + name.replace("_", r"\_") + "}"
         if latexName is not None:
             newModel.__latexName__ = latexName
         return newModel
@@ -1295,7 +1296,7 @@ class Model:
 
         newModel.setModelboundData(self.mbData)
 
-        return cast(Self, newModel)
+        return cast(Self, deepcopy(newModel))
 
     def filterByGroup(
         self, groups: Optional[List[int]] = None, general: bool = False
