@@ -658,6 +658,11 @@ class MatrixTerm(Term):
         self.__constLatex__ = expression
 
     def withLatexConst(self,remap:str):
+        """Return a copy of this term with the multiplicative constant LaTeX representation set.
+
+        Args:
+            remap (str): Multiplicative constant LaTeX representation to use
+        """
         newTerm = deepcopy(self)
         newTerm.constLatex = remap
         return newTerm
