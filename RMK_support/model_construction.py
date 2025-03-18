@@ -1612,7 +1612,7 @@ class VarlikeModelboundData(ModelboundData):
         usedRemap.update(latexRemap)
         with doc.create(tex.Itemize()) as itemize:
             for var in self.__variables__:
-                itemize.add_item(tex.NoEscape(f"${var.latex(usedRemap)}$"))
+                itemize.add_item(tex.NoEscape(var.latex(usedRemap)))
 
     def registerDerivs(self, container: Textbook):
         for var in self.__variables__:
@@ -1743,7 +1743,7 @@ class LBCModelboundData(ModelboundData):
         )
         with doc.create(tex.Itemize()) as itemize:
             for var in self.varNames:
-                itemize.add_item(tex.NoEscape(f"${self[var].latex(usedRemap)}$"))
+                itemize.add_item(tex.NoEscape(self[var].latex(usedRemap)))
 
     def registerDerivs(self, container: Textbook):
         container.register(self.__deriv__, ignoreDuplicates=True)

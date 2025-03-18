@@ -17,6 +17,7 @@ from typing_extensions import Self
 from copy import copy, deepcopy
 from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose
+from .tex_parsing import numToScientificTex
 
 
 class MultiplicativeArgument:
@@ -686,7 +687,7 @@ class Variable(DerivationArgument):
         Returns:
             str: LaTeX-compatible string
         """
-        result = (
+        result = "$" + (
             "\\text{" + self.name.replace("_", r"\_") + "}"
             if self.name not in latexRemap
             else latexRemap[self.name]
@@ -701,6 +702,26 @@ class Variable(DerivationArgument):
                 for arg in self.__derivationArgs__
             )
             result += "= " + cast(Derivation, self.__derivation__).latex(*remappedArgs)
+
+        result += "$"
+        if len(self.unitsNorm) > 0:
+            result += "\\newline Units: " + self.unitsNorm
+        if len(self.unitsSI) > 0:
+            result += "\\newline SI: " + self.unitsSI
+            result += (
+                "\\newline Normalisation: $" + numToScientificTex(self.normSI) + "$ "
+            )
+        result += "\\newline Properties: "
+        if self.isFluid:
+            result += "fluid, "
+        if self.isScalar:
+            result += "scalar, "
+        if self.isDistribution:
+            result += "distribution, "
+        if self.isSingleHarmonic:
+            result += "single harmonic, "
+        if self.isStationary:
+            result += "stationary"
 
         return result
 
@@ -1038,11 +1059,11 @@ class VariableContainer:
             with doc.create(Subsection("Implicit variables")):
                 with doc.create(Itemize()) as itemize:
                     for var in implicitVars:
-                        itemize.add_item(NoEscape(f"${var.latex(latexRemap)}$"))
+                        itemize.add_item(NoEscape(var.latex(latexRemap)))
             with doc.create(Subsection("Derived variables")):
                 with doc.create(Itemize()) as itemize:
                     for var in derivedVars:
-                        itemize.add_item(NoEscape(f"${var.latex(latexRemap)}$"))
+                        itemize.add_item(NoEscape(var.latex(latexRemap)))
 
     def registerDerivs(self, textbook: Textbook):
         """Register any derivations on derived variables in given textbook
