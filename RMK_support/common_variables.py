@@ -313,7 +313,9 @@ class StandardFluidVariables(VariableFactory):
             self.__context__,
             isOnDualGrid=True,
             data=initVals,
-            defaultLatex="\\left(\\vec{\\Gamma}_{" + self.species.name + "}\\right)_{dual}",
+            defaultLatex="\\left(\\vec{\\Gamma}_{"
+            + self.species.name
+            + "}\\right)_{dual}",
         ).withDual(
             "G" + self.species.name, "\\vec{\\Gamma}_{" + self.species.latex() + "}"
         )
@@ -394,7 +396,9 @@ class StandardFluidVariables(VariableFactory):
                 "n" + self.species.name + "_dual",
             ],
             isOnDualGrid=True,
-            defaultLatex="\\left(\\vec{u}_{" + self.species.latex() + "}\\right)_{dual}",
+            defaultLatex="\\left(\\vec{u}_{"
+            + self.species.latex()
+            + "}\\right)_{dual}",
         ).withDual("u" + self.species.name, "\\vec{u}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
@@ -421,7 +425,9 @@ class StandardFluidVariables(VariableFactory):
             isStationary=True,
             isOnDualGrid=True,
             subtype="heatflux",
-            defaultLatex="\\left(\\vec{q}_{" + self.species.latex() + "}\\right)_{dual}",
+            defaultLatex="\\left(\\vec{q}_{"
+            + self.species.latex()
+            + "}\\right)_{dual}",
         ).withDual("q" + self.species.name, "\\vec{q}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:

@@ -394,7 +394,7 @@ class Variable(DerivationArgument):
                 else (
                     None
                     if self.__defaultLatex__ is None
-                    else "\\left("+self.__defaultLatex__ + "\\right)_{dual}"
+                    else "\\left(" + self.__defaultLatex__ + "\\right)_{dual}"
                 )
             ),
         )
@@ -820,7 +820,9 @@ def varAndDual(
 
     remap = kwargs.get("defaultRemap", None)
     if remap is not None and primaryOnDualGrid:
-        kwargs["defaultRemap"] ="\\left("+kwargs["defaultRemap"]+")"+ dualLatexSuffix
+        kwargs["defaultRemap"] = (
+            "\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix
+        )
     isDistribution = kwargs.get("isDistribution", False)
 
     primary = Variable(
@@ -829,7 +831,8 @@ def varAndDual(
 
     if remap is not None and not primaryOnDualGrid:
         secondary = primary.makeDual(
-            name=secondaryName, latex="\\left("+kwargs["defaultRemap"]+")"+ dualLatexSuffix
+            name=secondaryName,
+            latex="\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix,
         )
     else:
         secondary = primary.makeDual(name=secondaryName)
