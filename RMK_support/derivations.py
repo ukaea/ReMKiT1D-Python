@@ -113,6 +113,10 @@ class Species:
         return self.__charge__
 
     @property
+    def varsByType(self):
+        return self.__varsByType__
+
+    @property
     def associatedVarNames(self):
         return [var.name for var in self.__associatedVars__]
 
@@ -227,7 +231,7 @@ class SpeciesContainer:
                                 + species.latex()
                                 + "$"
                                 + f": ID: {species.speciesID}; A: {species.atomicA:.4e}; Z: {species.charge:.2f}; Associated vars: "
-                                + ",".join(associatedVarNames)
+                                + ", ".join(associatedVarNames)
                             )
                         )
 

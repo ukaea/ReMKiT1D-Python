@@ -357,7 +357,7 @@ class Variable(DerivationArgument):
 
         Args:
             name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
-            latex (Optional[str], optional): Default latex remap for the dual variable. Defaults to None, adding '^{dual}' to the remap of this variable if it exists.
+            latex (Optional[str], optional): Default latex remap for the dual variable. Defaults to None, adding '_{dual}' to the remap of this variable if it exists and wrapping the name in brackets.
         """
         if self.dual is not None:
             return self.dual
@@ -394,7 +394,7 @@ class Variable(DerivationArgument):
                 else (
                     None
                     if self.__defaultLatex__ is None
-                    else self.__defaultLatex__ + "^{dual}"
+                    else "\\left("+self.__defaultLatex__ + "\\right)_{dual}"
                 )
             ),
         )
@@ -408,7 +408,7 @@ class Variable(DerivationArgument):
 
         Args:
             name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
-            latex (Optional[str], optional): Default latex remapping of the dual variable. Defaults to None, setting the remap to the remap of this variable with the "^{dual}" suffix if present.
+            latex (Optional[str], optional): Default latex remapping of the dual variable. Defaults to None, setting the remap to the remap of this variable with the "_{dual}" suffix if present.
         """
 
         _ = self.makeDual(name, latex)
@@ -796,10 +796,10 @@ def varAndDual(
     gridObj: Grid,
     primaryOnDualGrid=False,
     dualSuffix="_dual",
-    dualLatexSuffix="^{dual}",
+    dualLatexSuffix="_{dual}",
     **kwargs,
 ) -> Tuple[Variable, Variable]:
-    """Return variable and its dual, making sure that the correct derivations are set. Takes in all of the same kwargs as the Variable constructor, and they refer to the primary variable. **NOTE**: The default latex remap, if present, will be treated similarly to the name, i.e. a '^{dual}' suffix will be used for the dual variable.
+    """Return variable and its dual, making sure that the correct derivations are set. Takes in all of the same kwargs as the Variable constructor, and they refer to the primary variable. **NOTE**: The default latex remap, if present, will be treated similarly to the name, i.e. a '_{dual}' suffix will be used for the dual variable.
 
     Args:
         name (str): Name of the regular grid variable
@@ -820,7 +820,7 @@ def varAndDual(
 
     remap = kwargs.get("defaultRemap", None)
     if remap is not None and primaryOnDualGrid:
-        kwargs["defaultRemap"] += dualLatexSuffix
+        kwargs["defaultRemap"] ="\\left("+kwargs["defaultRemap"]+")"+ dualLatexSuffix
     isDistribution = kwargs.get("isDistribution", False)
 
     primary = Variable(
@@ -829,7 +829,7 @@ def varAndDual(
 
     if remap is not None and not primaryOnDualGrid:
         secondary = primary.makeDual(
-            name=secondaryName, latex=kwargs["defaultRemap"] + dualLatexSuffix
+            name=secondaryName, latex="\\left("+kwargs["defaultRemap"]+")"+ dualLatexSuffix
         )
     else:
         secondary = primary.makeDual(name=secondaryName)
