@@ -713,15 +713,15 @@ class Variable(DerivationArgument):
             )
         result += "\\newline Properties: "
         if self.isFluid:
-            result += "fluid, "
+            result += "fluid"
         if self.isScalar:
-            result += "scalar, "
+            result += "scalar"
         if self.isDistribution:
-            result += "distribution, "
+            result += "distribution"
         if self.isSingleHarmonic:
-            result += "single harmonic, "
+            result += "single harmonic"
         if self.isStationary:
-            result += "stationary"
+            result += ", stationary"
 
         return result
 
