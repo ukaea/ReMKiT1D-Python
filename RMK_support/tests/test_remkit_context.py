@@ -397,7 +397,9 @@ def test_wrapper(grid: Grid):
 
     # Modelbound data extractor
 
-    mbExtract = MBDataExtractor("mbExtract", model, dModelbound, priority=1).dict()
+    rk.extractMBVar(model, dModelbound, dModelbound.name, priority=1)
+
+    mbExtract = rk.manipulators[dModelbound.name].dict()
 
     assert mbExtract == {
         "type": "modelboundDataExtractor",

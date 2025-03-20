@@ -848,3 +848,27 @@ class RMKContext:
                         model + "_" + term, [pair], self.variables[model + "_" + term]
                     )
                 )
+
+    def extractMBVar(
+        self, model: mc.Model, mbVar: Variable, resultVarName: str, priority=4
+    ):
+        """Extract a modelbound variable from a model and add it to the context
+
+        Args:
+            model (mc.Model): Model to extract from
+            mbVar (Variable): Variable to extract
+            resultVarName (str): Variable name to extract to
+            priority (int, optional): Manipulator priority. Defaults to 4.
+        """
+        kwargs = mbVar.kwargs
+        if "derivation" in kwargs:
+            del kwargs["derivation"]
+        if "derivationArgs" in kwargs:
+            del kwargs["derivationArgs"]
+        kwargs["isDerived"] = True
+        newVar = Variable(resultVarName, mbVar.grid, **kwargs)
+
+        self.manipulators.add(
+            MBDataExtractor(resultVarName, model, mbVar, newVar, priority)
+        )
+        self.variables.add(newVar)
