@@ -62,6 +62,8 @@ def test_crm_mbdata(grid: Grid):
 
     transition = crm.SimpleTransition("trans", a, b, transitionEnergy, transitionRate)
 
+    assert transition.getPopulationChange() == {"a": -1, "b": 1}
+
     mbData = crm.CRMModelboundData(grid)
 
     mbData.addTransition(transition)

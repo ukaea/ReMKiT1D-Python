@@ -51,6 +51,27 @@ class Transition(ABC):
     def outStates(self):
         return self.__outStates__
 
+    def getPopulationChange(self) -> Dict[str, int]:
+        """Return a dictionary of population change coefficients for the involved species
+
+        Returns:
+            Dict[str, int]: Species.name - population change dictionary
+        """
+        inStates = self.inStates
+        outStates = self.outStates
+
+        inStateNames = [st.name for st in inStates]
+        outStateNames = [st.name for st in outStates]
+
+        involvedSpecies = set(inStateNames + outStateNames)
+
+        popChange = {
+            sp: outStateNames.count(sp) - inStateNames.count(sp)
+            for sp in involvedSpecies
+        }
+
+        return popChange
+
     @abstractmethod
     def dict(self) -> Dict:
         pass
