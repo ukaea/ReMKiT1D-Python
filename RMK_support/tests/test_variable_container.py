@@ -66,6 +66,15 @@ def test_fluid_nonzero_var(grid):
             unitSI="a",
         )
 
+    kwargs = var.kwargs
+    del kwargs["data"]
+    assert kwargs == {
+        "isDerived": True,
+        "units": "arb",
+        "isOnDualGrid": True,
+        "normSI": 2.0,
+        "unitSI": "a",
+    }
     assert all(var.dataArr.data == np.ones(grid.numX))
     assert var.properties == {
         "isDerived": True,

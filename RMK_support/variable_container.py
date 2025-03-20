@@ -334,6 +334,12 @@ class Variable(DerivationArgument):
 
         self.__defaultLatex__: Optional[str] = kwargs.get("defaultLatex", None)
 
+        self.__usedKwargs__ = kwargs
+
+    @property
+    def kwargs(self):
+        return self.__usedKwargs__
+
     @property
     def dual(self) -> Optional[Self]:
         """The dual variable to this variable. If no dual returns None."""
