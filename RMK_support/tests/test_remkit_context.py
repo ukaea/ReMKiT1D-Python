@@ -219,7 +219,7 @@ def test_wrapper(grid: Grid):
     a, b = (Variable(name, rk.grid) for name in "ab")
 
     cDeriv = dv.NodeDerivation("cDeriv", node=vc.node(a) + vc.node(b))
-    c = Variable("c", rk.grid, isDerived=True, derivation=cDeriv)
+    c = Variable("c", rk.grid, isDerived=True, derivation=cDeriv, unitSI="$c$")
 
     rk.variables.add(a, b, c)
 
@@ -350,7 +350,8 @@ def test_wrapper(grid: Grid):
     # Now add term diagnostic manipulators for the model terms
 
     # Terms with evolved variables can have term diagnostics
-    rk.addTermDiagnostics(*[a, b])
+    with pytest.warns(UserWarning):
+        rk.addTermDiagnostics(*[a, b])
 
     # Adding a term diagnostic for a non-evolved term should raise a warning
     with pytest.warns(

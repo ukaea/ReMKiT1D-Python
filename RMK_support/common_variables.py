@@ -4,8 +4,58 @@ import numpy as np
 from .variable_container import Variable, node
 from .derivations import Species
 from . import derivations
-from .remkit_context import RMKContext
 from abc import ABC, abstractmethod
+
+
+def timeDerivative(
+    name: str, timeNorm: float, variable: Variable, **kwargs
+) -> Variable:
+    """Generate a time derivative of a given variable as a variable, making sure units and grids are correct.
+
+    Args:
+        name (str): Variable name for the time derivative
+        timeNorm (float): Time normalisation
+        variable (Variable): Variable whose derivative should be taken
+
+    Returns:
+        Variable: Variable with correct time derivative units
+    """
+
+    for key in [
+        "units",
+        "unitSI",
+        "normSI",
+        "isOnDualGrid",
+        "isDistribution",
+        "isSingleHarmonic",
+        "isScalar",
+        "subtype",
+    ]:
+        assert key not in kwargs, key + " not allowed in time derivative variable call"
+
+    latexWrapped = "$" in variable.unitsSI
+    unitSI = variable.unitsSI.replace("$", "") + "/s"
+    if latexWrapped:
+        unitSI = "$" + unitSI + "$"
+    var = Variable(
+        name,
+        variable.grid,
+        **kwargs,
+        units=variable.unitsNorm + " / time norm.",
+        unitSI=unitSI,
+        normSI=variable.normSI / timeNorm,
+        isOnDualGrid=variable.isOnDualGrid,
+        isScalar=variable.isScalar,
+        isDistribution=variable.isDistribution,
+        isSingleHarmonics=variable.isSingleHarmonic,
+        subtype=variable.subtype + "_time_derivative"
+    )
+
+    return var
+
+
+# cyclic import workaround
+from .remkit_context import RMKContext
 
 
 def density(name: str, context: RMKContext, **kwargs) -> Variable:

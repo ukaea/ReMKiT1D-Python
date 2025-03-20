@@ -230,7 +230,7 @@ class SpeciesContainer:
                                 "$"
                                 + species.latex()
                                 + "$"
-                                + f": ID: {species.speciesID}; A: {species.atomicA:.4e}; Z: {species.charge:.2f}; Associated vars: "
+                                + f": ID: {species.speciesID}; A: {species.atomicA:.4e}; Z: {species.charge:.2f} \\newline Associated vars: "
                                 + ", ".join(associatedVarNames)
                             )
                         )

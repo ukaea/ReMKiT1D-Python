@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Type, ClassVar
 from typing_extensions import Self
 import param  # type: ignore
 from warnings import warn
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # type: ignore
 
 
 def fluidVarX(var: Variable, time: int) -> hv.Curve:
@@ -603,18 +603,20 @@ class DistExplorer(DashboardElement):
 
         return pn.Row(pn.Column(self.param, pos, t, h), pn.panel(dmap))
 
-def quickDash(vars:VariableContainer,runPaths: Dict[str, str]):
 
-    hv.extension('matplotlib')
-    plt.rcParams['figure.dpi'] = 150
-    hv.output(size=150,dpi=150)
+def quickDash(vars: VariableContainer, runPaths: Dict[str, str]):
 
-    loader = LazyLoader(vars,runPaths)
+    hv.extension("matplotlib")
+    plt.rcParams["figure.dpi"] = 150
+    hv.output(size=150, dpi=150)
+
+    loader = LazyLoader(vars, runPaths)
 
     element1 = ElementDisplay(loader)
     element2 = ElementDisplay(loader)
 
-    return pn.Row(element1.layout,element2.layout)
+    return pn.Row(element1.layout, element2.layout)
+
 
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):

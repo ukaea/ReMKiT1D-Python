@@ -722,6 +722,7 @@ class Variable(DerivationArgument):
             result += "single harmonic"
         if self.isStationary:
             result += ", stationary"
+        result += "\\newline Subtype: " + self.subtype.replace("_", r"\_")
 
         return result
 
