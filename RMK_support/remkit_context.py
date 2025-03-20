@@ -668,6 +668,9 @@ class RMKContext:
         self.__models__.checkModels(self.variables)
         self.__models__.registerDerivs(self.__textbook__)
 
+        self.__variables__["time"].unitsSI = "$s$"
+        self.__variables__["time"].normSI = self.norms["time"]
+
     def dict(self) -> dict:
 
         self.checkAll()
