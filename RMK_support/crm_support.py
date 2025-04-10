@@ -275,7 +275,7 @@ class CRMModelboundData(ModelboundData):
         )
 
         return self[
-            "rate" + str(moment) + "index" + self.transitionTags.index(transitionName)
+            "rate" + str(moment) + "index" + str(self.transitionTags.index(transitionName))
         ]
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
