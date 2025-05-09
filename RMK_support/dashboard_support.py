@@ -56,6 +56,40 @@ def fluidVarT(var: Variable, x: int, time: Variable) -> hv.Curve:
     )
 
 
+def fluidXIntegralT(var: Variable, time: Variable) -> hv.Curve:
+    """Produce a holoviews time profile of a variable's domain integral in x.
+
+    Args:
+        var (Variable): Fluid variable to plot
+        time (Variable): Scalar time variable corresponding to the time values
+
+    Returns:
+        hv.Curve: Holoviews curve of fluid variable x-integral timetrace
+    """
+    assert var.isFluid, "fluidVarT accepts only fluid variables"
+    assert time.isScalar, "The time variable in fluidVarT must be a scalar"
+
+    integralArr = xr.DataArray(
+        data=np.array(
+            [
+                var.grid.domainIntegral(
+                    var.dataArr[t, :].values, isOnDualGrid=var.isOnDualGrid
+                )
+                for t in range(len(time.dataArr.values))
+            ]
+        ),
+        dims=["t"],
+        coords=dict(
+            t=time.dataArr.values,
+        ),
+        attrs=var.dataArr.attrs,
+    )
+
+    return hv.Curve(
+        (time.dataArr, integralArr[:]), "$t[t_0]$", var.units, label=var.name
+    )
+
+
 def distVarV(
     var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False
 ) -> hv.Curve:
@@ -502,6 +536,58 @@ class ScalarMultiRunPlot(DashboardElement):
                 self.__loader__[("time", run)],
             )
             for run in self.runs
+        }
+
+        return pn.Row(
+            pn.Column(pn.Param(self.param)),
+            pn.panel(
+                hv.NdOverlay(curves).opts(
+                    xlim=(self.x_lower_limit, self.x_upper_limit),
+                    ylim=(self.y_lower_limit, self.y_upper_limit),
+                    title="",
+                )
+            ),
+        )
+
+
+class IntegralsPlot(DashboardElement):
+
+    alias = "Spatial Integrals Plot"
+    variables = param.ListSelector(default=[])
+    run = param.Selector()
+    x_lower_limit = param.Number()
+    x_upper_limit = param.Number()
+    y_lower_limit = param.Number()
+    y_upper_limit = param.Number()
+
+    def __init__(self, loader: LazyLoader, **params):
+        super().__init__(loader, **params)
+        self.param["variables"].objects = [
+            name
+            for name in loader.__variables__.varNames
+            if loader.__variables__[name].isFluid
+        ]
+        self.param["run"].objects = list(loader.__runPaths__.keys())
+
+    def view(self):
+        if self.run is None:
+            self.run = self.param["run"].objects[0]
+        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
+            self.variables = [self.param["variables"].objects[0]]
+
+        if len(self.variables) > 0:
+            for var in self.variables:
+                self.__loader__.load(var, self.run)
+
+        else:
+            return pn.Column(pn.Param(self.param))
+
+        curves = {
+            var: fluidXIntegralT(
+                self.__loader__[(var, self.run)],
+                self.__loader__[("time", self.run)],
+            )
+            for var in self.variables
         }
 
         return pn.Row(
