@@ -555,6 +555,7 @@ class IntegralsPlot(DashboardElement):
     alias = "Spatial Integrals Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
+    diagram = param.Selector(objects=["Line Plot", "Stacked Area Plot"])
     x_lower_limit = param.Number()
     x_upper_limit = param.Number()
     y_lower_limit = param.Number()
@@ -590,16 +591,33 @@ class IntegralsPlot(DashboardElement):
             for var in self.variables
         }
 
-        return pn.Row(
-            pn.Column(pn.Param(self.param)),
-            pn.panel(
-                hv.NdOverlay(curves).opts(
-                    xlim=(self.x_lower_limit, self.x_upper_limit),
-                    ylim=(self.y_lower_limit, self.y_upper_limit),
-                    title="",
-                )
-            ),
-        )
+        if self.diagram == "Line Plot":
+            return pn.Row(
+                pn.Column(pn.Param(self.param)),
+                pn.panel(
+                    hv.NdOverlay(curves).opts(
+                        xlim=(self.x_lower_limit, self.x_upper_limit),
+                        ylim=(self.y_lower_limit, self.y_upper_limit),
+                        title="",
+                    )
+                ),
+            )
+
+        elif self.diagram == "Stacked Area Plot":
+            areas = {var: hv.Area(curve) for var, curve in curves.items()}
+
+            overlay = hv.NdOverlay(areas).opts(
+                xlim=(self.x_lower_limit, self.x_upper_limit),
+                ylim=(self.y_lower_limit, self.y_upper_limit),
+                title="",
+            )
+
+            overlay = hv.Area.stack(overlay)
+
+            return pn.Row(
+                pn.Column(pn.Param(self.param)),
+                pn.panel(overlay),
+            )
 
 
 class DistExplorer(DashboardElement):
