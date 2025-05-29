@@ -147,6 +147,9 @@ class Species:
                             + "] element of this species."
                         )
 
+    def hasVarType(self, key:str):
+        return key in self.__varsByType__
+
     def __getitem__(self, key: str):
         return self.__varsByType__[key]
 
