@@ -644,13 +644,13 @@ class BDEIntegrator(Integrator):
 
         stepMultiplier (int): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
 
-        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.2.2
+        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.3.0
 
-        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 3. NOTE: From ReMKiT1D v1.2.2 this handles consolidation
+        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 3. NOTE: From ReMKiT1D v1.3.0 this handles consolidation
 
         maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
 
-        consolidationInterval (int): After how many steps the integrator should attempt to reduce the number of substeps to one. Defaults to 50. NOTE: Deprecated from ReMKiT1D v1.2.2 - consolidation happens at every step now based on MinNolinIters
+        consolidationInterval (int): After how many steps the integrator should attempt to reduce the number of substeps to one. Defaults to 50. NOTE: Deprecated from ReMKiT1D v1.3.0 - consolidation happens at every step now based on MinNolinIters
 
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
 
