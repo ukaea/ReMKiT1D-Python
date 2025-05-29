@@ -646,9 +646,11 @@ class BDEIntegrator(Integrator):
 
         stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.2.2
 
-        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 3. NOTE: From ReMKiT1D v1.2.2 this handles consolidation
 
         maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
+
+        consolidationInterval (int): After how many steps the integrator should attempt to reduce the number of substeps to one. Defaults to 50. NOTE: Deprecated from ReMKiT1D v1.2.2 - consolidation happens at every step now based on MinNolinIters
 
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
 
@@ -667,7 +669,7 @@ class BDEIntegrator(Integrator):
         self.__initialNumInternalSteps__: int = kwargs.get("initialNumInternalSteps", 1)
         self.__stepMultiplier__: int = kwargs.get("stepMultiplier", 2)
         self.__stepDecrament__ = kwargs.get("stepDecrament", 1)
-        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 5)
+        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 3)
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
         self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 3)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
