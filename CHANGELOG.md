@@ -1,4 +1,28 @@
 # CHANGELOG
+## v2.0.0-beta.2, 2025-05-29
+
+- See beta.1 notes
+- Support for v1.2.2 BDE integrator rewrite 
+
+### Breaking Changes
+
+- See beta.1 notes
+
+### Deprecations
+
+- See beta.1 notes
+
+### New Features
+
+- See beta.1 notes
+
+### Bug Fixes
+
+- N/A
+
+### New Notebooks 
+
+- See beta.1 notes
 
 ## v2.0.0-beta.1, 2025-03-13
 

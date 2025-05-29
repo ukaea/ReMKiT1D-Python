@@ -640,17 +640,19 @@ class BDEIntegrator(Integrator):
 
         internalStepControl (bool): True if integrator is allowed to control its internal steps based on convergence. Defaults to False.
 
-        initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1.
+        initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.2.2
 
         stepMultiplier (int): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
 
-        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
+        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.2.2
 
         minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
 
         maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
 
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+
+        allowLazyEval (bool): Allow lazy evaluation in internal step control. This will cause the solver to stop evolving everything except for time when it detects that nonlinear iterations drop to 1 on a first integration attempt (signalling no change within tolerance). Defaults to False
         """
         super().__init__(name)
         self.__maxNonlinIters__: int = kwargs.get("maxNonlinIters", 100)
@@ -669,6 +671,7 @@ class BDEIntegrator(Integrator):
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
         self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 3)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
+        self.__allowLazyEval__:bool = kwargs.get("allowLazyEval", False)
 
     def dict(self) -> dict:
 
@@ -689,6 +692,7 @@ class BDEIntegrator(Integrator):
                 "minNumNonlinIters": self.__minNonlinIters__,
                 "maxBDERestarts": self.__maxBDERestarts__,
                 "BDEConsolidationInterval": self.__consolidationInterval__,
+                "BDEAllowLazyEval": self.__allowLazyEval__
             },
         }
 
