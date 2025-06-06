@@ -1,4 +1,5 @@
 import xarray as xr
+import pandas as pd
 import holoviews as hv  # type: ignore
 import panel as pn
 import numpy as np
@@ -56,20 +57,21 @@ def fluidVarT(var: Variable, x: int, time: Variable) -> hv.Curve:
     )
 
 
-def fluidXIntegralT(var: Variable, time: Variable) -> hv.Curve:
-    """Produce a holoviews time profile of a variable's domain integral in x.
+def fluidXIntegralTData(var: Variable, time: Variable) -> xr.DataArray:
+    """Returns data for the time profile of a variable's domain integral in x.
 
     Args:
         var (Variable): Fluid variable to plot
         time (Variable): Scalar time variable corresponding to the time values
 
     Returns:
-        hv.Curve: Holoviews curve of fluid variable x-integral timetrace
+        xr.DataArray: 1D data for the timetrace of the x-integral of a variable
     """
     assert var.isFluid, "fluidVarT accepts only fluid variables"
     assert time.isScalar, "The time variable in fluidVarT must be a scalar"
 
-    integralArr = xr.DataArray(
+    return xr.DataArray(
+        name=var.name,
         data=np.array(
             [
                 var.grid.domainIntegral(
@@ -83,10 +85,6 @@ def fluidXIntegralT(var: Variable, time: Variable) -> hv.Curve:
             t=time.dataArr.values,
         ),
         attrs=var.dataArr.attrs,
-    )
-
-    return hv.Curve(
-        (time.dataArr, integralArr[:]), "$t[t_0]$", var.units, label=var.name
     )
 
 
@@ -583,15 +581,29 @@ class IntegralsPlot(DashboardElement):
         else:
             return pn.Column(pn.Param(self.param))
 
-        curves = {
-            var: fluidXIntegralT(
-                self.__loader__[(var, self.run)],
-                self.__loader__[("time", self.run)],
-            )
-            for var in self.variables
-        }
+        # Time array
+        time = self.__loader__[("time", self.run)].dataArr
 
         if self.diagram == "Line Plot":
+
+            # Generate dictionary of holoviews Curves for each x-integral time profile
+
+            curves = {
+                var: hv.Curve(
+                    (
+                        time.values,
+                        fluidXIntegralTData(
+                            self.__loader__[(var, self.run)],
+                            self.__loader__[("time", self.run)],
+                        )[:],
+                    ),
+                    "$t[t_0]$",
+                    self.__loader__[(var, self.run)].units,
+                    label=var,
+                )
+                for var in self.variables
+            }
+
             return pn.Row(
                 pn.Column(pn.Param(self.param)),
                 pn.panel(
@@ -604,19 +616,70 @@ class IntegralsPlot(DashboardElement):
             )
 
         elif self.diagram == "Stacked Area Plot":
-            areas = {var: hv.Area(curve) for var, curve in curves.items()}
 
-            overlay = hv.NdOverlay(areas).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
-                title="",
+            # Split data into positive and negative components, which will be plotted together either side of y=0
+
+            def splitPosNeg(y: np.ndarray):
+                pos = np.where(y > 0, y, 0)
+                neg = np.where(y < 0, y, 0)
+                return pos, neg
+
+            # Create pandas dataframes for positive and negative components - to interface with hv.Area
+
+            dfPositive = pd.DataFrame({"time": time.values})
+            dfNegative = pd.DataFrame({"time": time.values})
+
+            for var in self.variables:
+                dfPositive[var], dfNegative[var] = splitPosNeg(
+                    fluidXIntegralTData(
+                        self.__loader__[(var, self.run)],
+                        self.__loader__[("time", self.run)],
+                    )[:]
+                )
+
+            # Get the default colour cycle from matplotlib rcParams so that both components use the same colour
+
+            color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+            # Generate area plots for each variable - only show one of the two components in the legend
+
+            areasPositive = []
+            areasNegative = []
+
+            for i, var in enumerate(self.variables):
+                areasPositive.append(
+                    hv.Area(dfPositive, kdims=["time"], vdims=[var], label=var).opts(
+                        color=color_cycle[i], show_legend=True
+                    )
+                )
+                areasNegative.append(
+                    hv.Area(dfNegative, kdims=["time"], vdims=[var]).opts(
+                        color=color_cycle[i], show_legend=False
+                    )
+                )
+
+            # Combine positive, negative components of all variables into overlays and plot in same panel
+
+            overlayPositive = hv.Area.stack(
+                hv.Overlay(areasPositive).opts(
+                    xlim=(self.x_lower_limit, self.x_upper_limit),
+                    ylim=(self.y_lower_limit, self.y_upper_limit),
+                    title="",
+                )
+            )
+            overlayNegative = hv.Area.stack(
+                hv.Overlay(areasNegative).opts(
+                    xlim=(self.x_lower_limit, self.x_upper_limit),
+                    ylim=(self.y_lower_limit, self.y_upper_limit),
+                    title="",
+                )
             )
 
-            overlay = hv.Area.stack(overlay)
+            combined_overlay = overlayPositive * overlayNegative
 
             return pn.Row(
                 pn.Column(pn.Param(self.param)),
-                pn.panel(overlay),
+                pn.panel(combined_overlay),
             )
 
 
