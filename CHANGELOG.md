@@ -2,8 +2,8 @@
 ## v2.0.0-beta.2, 2025-06-23
 
 - See beta.1 notes
-- Support for v1.2.2 BDE integrator rewrite 
-- Support for v1.2.2 distribution divergence stencil
+- Support for v1.3 BDE integrator rewrite 
+- Support for v1.3 distribution divergence stencil
 
 ### Breaking Changes
 
