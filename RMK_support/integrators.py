@@ -673,7 +673,7 @@ class BDEIntegrator(Integrator):
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
         self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 3)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
-        self.__allowLazyEval__:bool = kwargs.get("allowLazyEval", False)
+        self.__allowLazyEval__: bool = kwargs.get("allowLazyEval", False)
 
     def dict(self) -> dict:
 
@@ -694,7 +694,7 @@ class BDEIntegrator(Integrator):
                 "minNumNonlinIters": self.__minNonlinIters__,
                 "maxBDERestarts": self.__maxBDERestarts__,
                 "BDEConsolidationInterval": self.__consolidationInterval__,
-                "BDEAllowLazyEval": self.__allowLazyEval__
+                "BDEAllowLazyEval": self.__allowLazyEval__,
             },
         }
 

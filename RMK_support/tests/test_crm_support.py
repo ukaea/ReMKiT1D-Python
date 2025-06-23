@@ -70,7 +70,7 @@ def test_crm_mbdata(grid: Grid):
 
     assert mbData.getTransitionIndices(transition.name) == [1]
 
-    assert mbData.getRate(transition,0).name == "rate0index1"
+    assert mbData.getRate(transition, 0).name == "rate0index1"
 
     assert mbData.dict() == {
         "modelboundDataType": "modelboundCRMData",
