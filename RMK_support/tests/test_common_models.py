@@ -1283,6 +1283,7 @@ def test_stationaryIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": evolvedHarmonics,
                 "evolvedVCells": [],
@@ -1677,6 +1678,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1713,6 +1715,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1749,6 +1752,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1785,6 +1789,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1821,6 +1826,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1857,6 +1863,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1893,6 +1900,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1929,6 +1937,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -1965,6 +1974,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -2692,6 +2702,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -2839,6 +2850,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
             },
             "stencilData": {
                 "stencilType": "diagonalStencil",
+                "harmonicOffset": 0,
                 "evolvedXCells": [],
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
@@ -3882,6 +3894,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -3949,6 +3962,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -3985,6 +3999,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -4021,6 +4036,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -4119,6 +4135,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -4217,6 +4234,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
@@ -4253,6 +4271,7 @@ def test_standard_base_fluid(grid: Grid):
                 },
                 "stencilData": {
                     "stencilType": "diagonalStencil",
+                    "harmonicOffset": 0,
                     "evolvedXCells": [],
                     "evolvedHarmonics": [],
                     "evolvedVCells": [],
