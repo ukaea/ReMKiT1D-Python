@@ -79,7 +79,7 @@ class Transition(ABC):
     def latex(self, **kwargs) -> str:
         reactants = "+".join([species.latex() for species in self.inStates])
         products = "+".join([species.latex() for species in self.outStates])
-        return "$" + reactants + "\\rightarrow" + products + "$"
+        return "$" + reactants + "\\rightarrow " + products + "$"
 
     def registerDerivs(self, container: Textbook):
         pass
@@ -244,10 +244,16 @@ class CRMModelboundData(ModelboundData):
         remap = {}
 
         for i, t in enumerate(self.__transitions__):
-            remap["rate0index" + str(i + 1)] = "C_{n,\\text{" + t.name + "}}"
-            remap["rate2index" + str(i + 1)] = "C_{E,\\text{" + t.name + "}}"
+            remap["rate0index" + str(i + 1)] = (
+                "C_{n,\\text{" + t.name.replace("_", r"\_") + "}}"
+            )
+            remap["rate2index" + str(i + 1)] = (
+                "C_{E,\\text{" + t.name.replace("_", r"\_") + "}}"
+            )
             if t.hasMomentumRate:
-                remap["rate1index" + str(i + 1)] = "C_{\\Gamma,\\text{" + t.name + "}}"
+                remap["rate1index" + str(i + 1)] = (
+                    "C_{\\Gamma,\\text{" + t.name.replace("_", r"\_") + "}}"
+                )
 
         return remap
 
@@ -291,7 +297,7 @@ class CRMModelboundData(ModelboundData):
                 for transition in self.transitions:
                     itemize.add_item(
                         tex.NoEscape(
-                            transition.name
+                            transition.name.replace("_", r"\_")
                             + ": "
                             + transition.latex(latexRemap=usedRemap)
                         )
