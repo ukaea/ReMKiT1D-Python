@@ -954,6 +954,7 @@ class DiagonalStencil(Stencil):
         evolvedXCells: Optional[List[int]] = None,
         evolvedHarmonics: Optional[List[int]] = None,
         evolvedVCells: Optional[List[int]] = None,
+        harmonicOffset: int = 0,
     ):
         """Diagonal stencil allowing for evolving only specific grid points. If row and column variables are on different grids this stencil will perform linear interpolation/extrapolation.
 
@@ -961,14 +962,17 @@ class DiagonalStencil(Stencil):
             evolvedXCells (Optional[List[int]], optional): List of evolved spatial cells (Fortran 1-indexing). Defaults to None, evolving all cells.
             evolvedHarmonics (Optional[List[int]], optional): List of evolved harmonics (Fortran 1-indexing). Defaults to None, evolving all harmonics.
             evolvedVCells (Optional[List[int]], optional): List of evolved velocity cells. Defaults to None, evolving all cells.
+            harmonicOffset (int, optional): Harmonic offset in case of kinetic stencil, for example if the offset is -1, this is equivalent to having f_{l-1} on the RHS instead of f_l. Defaults to 0.
         """
         properties: Dict[str, object] = {
             "stencilType": "diagonalStencil",
+            "harmonicOffset": 0,
             "evolvedXCells": evolvedXCells if evolvedXCells is not None else [],
             "evolvedHarmonics": (
                 evolvedHarmonics if evolvedHarmonics is not None else []
             ),
             "evolvedVCells": evolvedVCells if evolvedVCells is not None else [],
+            "harmonicOffset": harmonicOffset,
         }
         super().__init__("$0", properties)
 

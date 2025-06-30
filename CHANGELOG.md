@@ -1,9 +1,10 @@
 # CHANGELOG
-## v2.0.0-beta.2, 2025-06-23
+## v2.0.0-beta.2, 2025-06-24
 
 - See beta.1 notes
 - Support for v1.3 BDE integrator rewrite 
 - Support for v1.3 distribution divergence stencil
+- Support for v1.3 diagonal kinetic stencil upgrade
 
 ### Breaking Changes
 
@@ -18,6 +19,7 @@
 - See beta.1 notes
 - Updated BDE integrator options 
 - New DistDivStencil class that includes the Jacobian in d/dx operator for distributions
+- New harmonicOffset argument for diagonal stencil to allow for direct harmonic coupling
 
 ### Bug Fixes
 

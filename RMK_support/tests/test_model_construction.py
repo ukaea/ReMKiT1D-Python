@@ -60,6 +60,7 @@ def test_matrix_term_arithmetic(grid):
         },
         "stencilData": {
             "stencilType": "diagonalStencil",
+            "harmonicOffset": 0,
             "evolvedXCells": [],
             "evolvedHarmonics": [],
             "evolvedVCells": [],
