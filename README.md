@@ -12,7 +12,7 @@ RMK_support is a collection of tools designed to configure and analyze ReMKiT1D 
 
 ReMKiT1D runs use JSON files to configure the models and methods used by the code, and RMK_support provides convenient Python routines for the generation of these config files, while also providing features that enable analysis of data using obtained from ReMKiT1D runs.
 
-For a high level overview of the framework and the (pre-v2.0.0) Python interface see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188). For detailed documentation of the Python package see [here](https://readthedocs.org/projects/remkit1d-python/).
+For a high level overview of the framework and the (pre-v2.0.0) Python interface see the [code paper](https://www.sciencedirect.com/science/article/pii/S0010465524001188). For detailed documentation of the Python package see [here](https://remkit1d-python.readthedocs.io/en/latest/).
 
 ## Prerequisites 
 
@@ -189,11 +189,11 @@ For a high level explanation of both the framework and the interface the user is
 
 The examples in the examples directory supplement the code paper, in particular the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) example partly reproduced in this readme. 
 
-A collection of simplified tutorials which are meant to showcase the syntax without producing runnable scripts are available in the tutorials directory.
+A collection of simplified tutorials which are meant to showcase the syntax without necessarily producing runnable scripts are available in the tutorials directory.
 
 For the list of the newest example notebooks, where new features are covered, see the CHANGELOG.
 
-Further code documentation is available [here](https://readthedocs.org/projects/remkit1d-python/), where more detailed resources can be found.
+Further code documentation is available [here](https://remkit1d-python.readthedocs.io/en/latest/), where more detailed resources can be found.
 
 ## Licence
 
