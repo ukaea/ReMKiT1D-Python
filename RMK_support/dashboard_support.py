@@ -604,6 +604,16 @@ class IntegralsPlot(DashboardElement):
                 for var in self.variables
             }
 
+            total = sum(
+                curves[var].data[str(self.__loader__[(var, self.run)].units)].values
+                for var in self.variables
+            )
+
+            # Always plot the total first as a black dotted line
+            curves["Total"] = hv.Curve(
+                (time.values, total), "$t[t_0]$", "x Integral", label="Total"
+            ).opts(color="k", line_dash="dotted")
+
             return pn.Row(
                 pn.Column(pn.Param(self.param)),
                 pn.panel(
@@ -676,6 +686,11 @@ class IntegralsPlot(DashboardElement):
             )
 
             combined_overlay = overlayPositive * overlayNegative
+
+            # Always plot the total first as a black dotted line
+            hv.Curve(
+                (time.values, total), "$t[t_0]$", "x Integral", label="Total"
+            ).opts(color="k", line_dash="dotted")
 
             return pn.Row(
                 pn.Column(pn.Param(self.param)),
