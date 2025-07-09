@@ -118,17 +118,25 @@ class Term(ABC):
         pass
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
+        self,
+        varCont: VariableContainer,
+        mbData: Optional[ModelboundData] = None,
+        modelTag: str = "unknown_model",
     ):
 
+        locationPrefix: str = "In term " + self.name + " in model " + modelTag + ": "
+
         assert len(self.implicitGroups) or len(self.generalGroups), (
-            "Both implicit and general groups empty in term " + self.name
+            locationPrefix + "Both implicit and general groups empty"
         )
 
-        assert self.__evolvedVar__ is not None, "Term evolvedVar not set"
+        assert self.__evolvedVar__ is not None, (
+            locationPrefix + "Term evolvedVar not set"
+        )
 
         assert self.__evolvedVar__.name in varCont.varNames, (
-            "Evolved variable "
+            locationPrefix
+            + "Evolved variable "
             + self.__evolvedVar__.name
             + " not registered in used variable container"
         )
@@ -352,12 +360,15 @@ class TermCollection:
         return cast(Self, newCollection)
 
     def checkTerms(
-        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
+        self,
+        varCont: VariableContainer,
+        mbData: Optional[ModelboundData] = None,
+        modelTag: str = "unknown_model",
     ):
 
         for term in self.__terms__:
             print("   Checking term " + term.name)
-            term.checkTerm(varCont, mbData)
+            term.checkTerm(varCont, mbData, modelTag)
 
     def registerDerivs(self, container: Textbook):
         for term in self.__terms__:
@@ -403,17 +414,21 @@ class VarData:
         rowVarOnDual=False,
         colVarOnDual=False,
         mbData: Optional[ModelboundData] = None,
+        locationPrefix: str = "Unknown model/term",
     ):
-
         for var in self.__reqRowVars___:
             assert var in varCont.varNames, (
-                "Required row variable " + var + " not found in used variable container"
+                locationPrefix
+                + "Required row variable "
+                + var
+                + " not found in used variable container"
             )
 
             if not varCont[var].isScalar:
                 if varCont[var].isOnDualGrid is not rowVarOnDual:
                     warnings.warn(
-                        "Variable "
+                        locationPrefix
+                        + "Variable "
                         + var
                         + " appears in required row variables for evolved variable on "
                         + ("dual" if rowVarOnDual else "regular")
@@ -422,18 +437,23 @@ class VarData:
 
         for var in self.__reqColVars___:
             assert var in varCont.varNames, (
-                "Required column variable "
+                locationPrefix
+                + "Required column variable "
                 + var
                 + " not found in used variable container"
             )
 
             assert not varCont[var].isScalar, (
-                "Error: Required column variable " + var + " is a scalar"
+                locationPrefix
+                + "Error - Required column variable "
+                + var
+                + " is a scalar"
             )
 
             if varCont[var].isOnDualGrid is not colVarOnDual:
                 warnings.warn(
-                    "Variable "
+                    locationPrefix
+                    + "Variable "
                     + var
                     + " appears in required column variables for implicit variable on "
                     + ("dual" if colVarOnDual else "regular")
@@ -441,13 +461,15 @@ class VarData:
                 )
 
         if len(self.__reqMBColVars___) or len(self.__reqMBRowVars___):
-            assert (
-                mbData is not None
-            ), "No modelbound data available when modelbound variables required by a term"
+            assert mbData is not None, (
+                locationPrefix
+                + "No modelbound data available when modelbound variables required by a term"
+            )
 
             for var in self.__reqMBRowVars___:
                 assert var in mbData.varNames, (
-                    "Required row variable "
+                    locationPrefix
+                    + "Required row variable "
                     + var
                     + " not found in used modelbound data"
                 )
@@ -455,7 +477,8 @@ class VarData:
                 if not mbData[var].isScalar:
                     if mbData[var].isOnDualGrid is not rowVarOnDual:
                         warnings.warn(
-                            "Variable "
+                            locationPrefix
+                            + "Variable "
                             + var
                             + " appears in modelbound required row variables for evolved variable on "
                             + ("dual" if rowVarOnDual else "regular")
@@ -464,16 +487,23 @@ class VarData:
 
             for var in self.__reqMBColVars___:
                 assert var in mbData.varNames, (
-                    "Required column variable " + var + " not found in used modelbound"
+                    locationPrefix
+                    + "Required column variable "
+                    + var
+                    + " not found in used modelbound"
                 )
 
                 assert not mbData[var].isScalar, (
-                    "Error: Required modelbound column variable " + var + " is a scalar"
+                    locationPrefix
+                    + "Error: Required modelbound column variable "
+                    + var
+                    + " is a scalar"
                 )
 
                 if mbData[var].isOnDualGrid is not colVarOnDual:
                     warnings.warn(
-                        "Variable "
+                        locationPrefix
+                        + "Variable "
                         + var
                         + " appears in required modelbound column variables for implicit variable on "
                         + ("dual" if colVarOnDual else "regular")
@@ -724,7 +754,10 @@ class MatrixTerm(Term):
         return self.__R__.scalar * self.__modelboundR__.scalar
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
+        self,
+        varCont: VariableContainer,
+        mbData: Optional[ModelboundData] = None,
+        modelTag: str = "unknown_model",
     ):
         """Perform consistency check on term
 
@@ -735,12 +768,17 @@ class MatrixTerm(Term):
 
         super().checkTerm(varCont)
 
-        assert self.__implicitVar__ is not None, "MatrixTerm implicitVar not set"
+        locationPrefix: str = "In term " + self.name + " in model " + modelTag + ": "
+
+        assert self.__implicitVar__ is not None, (
+            locationPrefix + "MatrixTerm implicitVar not set"
+        )
 
         rowVarOnDual = self.evolvedVar.isOnDualGrid
 
         assert self.__implicitVar__.name in [v.name for v in varCont.implicitVars], (
-            "Implicit variable "
+            locationPrefix
+            + "Implicit variable "
             + self.__implicitVar__.name
             + " not registered in used variable container"
         )
@@ -751,7 +789,9 @@ class MatrixTerm(Term):
             self.__R__, self.__C__, self.__modelboundR__, self.__modelboundC__
         )
 
-        vData.checkRowColVars(varCont, rowVarOnDual, colVarOnDual, mbData)
+        vData.checkRowColVars(
+            varCont, rowVarOnDual, colVarOnDual, mbData, locationPrefix
+        )
 
     def dict(self):
 
@@ -1006,7 +1046,10 @@ class DerivationTerm(Term):
         self.__mbVar__ = mbVar
 
     def checkTerm(
-        self, varCont: VariableContainer, mbData: Optional[ModelboundData] = None
+        self,
+        varCont: VariableContainer,
+        mbData: Optional[ModelboundData] = None,
+        modelTag: str = "unknown_model",
     ):
         """Perform consistency check on term, including the required variables
 
@@ -1014,27 +1057,35 @@ class DerivationTerm(Term):
             varCont (VariableContainer): Variable container to be used with this term
         """
 
+        locationPrefix: str = "In term " + self.name + " in model " + modelTag + ": "
+
         super().checkTerm(varCont)
 
         derivArgs = self.__derivation__.fillArgs()
         for name in derivArgs:
             assert name in varCont.varNames, (
-                "Required derivation variable "
+                locationPrefix
+                + "Required derivation variable "
                 + name
                 + " not registered in used variable container"
             )
 
         if self.__mbVar__ is not None:
-            assert (
-                mbData is not None
-            ), "Modelbound variable present in derivation term when no mbData passed"
+            assert mbData is not None, (
+                locationPrefix
+                + "Modelbound variable present in derivation term when no mbData passed"
+            )
             assert self.__mbVar__.name in mbData.varNames, (
-                "Variable " + self.__mbVar__.name + " not in modelbound data"
+                locationPrefix
+                + "Variable "
+                + self.__mbVar__.name
+                + " not in modelbound data"
             )
 
             if self.__mbVar__.isOnDualGrid is not self.evolvedVar.isOnDualGrid:
                 warnings.warn(
-                    "Variable "
+                    locationPrefix
+                    + "Variable "
                     + self.__mbVar__.name
                     + " appears in required row variables for evolved variable on "
                     + ("dual" if self.evolvedVar.isOnDualGrid else "regular")
@@ -1379,7 +1430,7 @@ class Model:
         """
         print("Checking terms in model " + self.name + ":")
         for tc in self.ddt.__termCollections__:
-            tc.checkTerms(varCont, self.mbData)
+            tc.checkTerms(varCont, self.mbData, self.name)
 
     def dict(self):
 

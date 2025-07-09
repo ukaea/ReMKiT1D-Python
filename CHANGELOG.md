@@ -1,5 +1,5 @@
 # CHANGELOG
-## v2.0.0-beta.2, 2025-06-24
+## v2.0.0-beta.2, 2025-07-09
 
 - See beta.1 notes
 - Support for v1.3 BDE integrator rewrite 
@@ -20,6 +20,7 @@
 - Updated BDE integrator options 
 - New DistDivStencil class that includes the Jacobian in d/dx operator for distributions
 - New harmonicOffset argument for diagonal stencil to allow for direct harmonic coupling
+- Added option to have the first moment modelbound variables (rate1*) in CRMModelboundData living on the dual grid
 
 ### Bug Fixes
 

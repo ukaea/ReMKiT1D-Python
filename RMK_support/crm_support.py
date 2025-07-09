@@ -109,6 +109,7 @@ class CRMModelboundData(ModelboundData):
         fixedTransitionEnergies=np.array([]),
         energyResolution: float = 1e-16,
         elState: int = 0,
+        staggeredFirstMoment=True,
     ) -> None:
         """ModelboundCRMData constructor
 
@@ -117,6 +118,7 @@ class CRMModelboundData(ModelboundData):
             fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to []. This gets automatically filled when adding transitions.
             energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-16.
             elState (int, optional): State ID to treat as the electrons. Defaults to 0.
+            staggeredFirstMoment (bool, optional): If true, will treat all rate1* variables as if they are on the dual grid. Defaults to True.
         """
 
         self.__grid__ = grid
@@ -135,6 +137,7 @@ class CRMModelboundData(ModelboundData):
         self.__transitions__: List[Transition] = []
         self.__energyResolution__ = energyResolution
         self.__elStateID__ = elState
+        self.__staggeredFirstMoment__ = staggeredFirstMoment
 
     def addTransitionEnergy(self, transitionEnergy: float):
         """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within energyResolution of another value, it is not added"
@@ -260,7 +263,12 @@ class CRMModelboundData(ModelboundData):
     def __getitem__(self, key):
         if key not in self.varNames:
             raise KeyError()
-        return Variable(key, self.__grid__, isDerived=True)
+        return Variable(
+            key,
+            self.__grid__,
+            isDerived=True,
+            isOnDualGrid="rate1" in key if self.__staggeredFirstMoment__ else False,
+        )
 
     def getRate(self, transition: Union[str, Transition], moment: int = 0) -> Variable:
         """Return rate associated with a given transition as a Variable
