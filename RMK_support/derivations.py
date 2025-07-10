@@ -1266,7 +1266,7 @@ class AdditiveDerivation(Derivation):
             else result
         )
 
-        return result
+        return result.replace("+ -"," - ")
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
         assert (
