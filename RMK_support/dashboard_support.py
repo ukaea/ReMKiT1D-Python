@@ -279,7 +279,13 @@ class FluidMultiVariablePlot(DashboardElement):
                 )
         else:
             return pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+                pn.Param(
+                    self.param,
+                    widgets={
+                        "dim": pn.widgets.RadioButtonGroup,
+                        "variables": {"type": pn.widgets.MultiSelect, "size": 15},
+                    },
+                )
             )
 
         def loadFluidT(ind):
@@ -316,7 +322,14 @@ class FluidMultiVariablePlot(DashboardElement):
 
         return pn.Row(
             pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+                pn.Param(
+                    self.param,
+                    widgets={
+                        "dim": pn.widgets.RadioButtonGroup,
+                        "variables": {"type": pn.widgets.MultiSelect, "size": 15},
+                    },
+                ),
+                val,
             ),
             pn.panel(dmap),
         )
@@ -352,7 +365,12 @@ class ScalarMultiVariablePlot(DashboardElement):
                 self.__loader__.load(var, self.run)
 
         else:
-            return pn.Column(pn.Param(self.param))
+            return pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"variables": {"type": pn.widgets.MultiSelect, "size": 15}},
+                )
+            )
 
         curves = {
             var: scalarVarT(
@@ -363,7 +381,12 @@ class ScalarMultiVariablePlot(DashboardElement):
         }
 
         return pn.Row(
-            pn.Column(pn.Param(self.param)),
+            pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"variables": {"type": pn.widgets.MultiSelect, "size": 15}},
+                )
+            ),
             pn.panel(
                 hv.NdOverlay(curves).opts(
                     xlim=(self.x_lower_limit, self.x_upper_limit),
@@ -420,7 +443,13 @@ class FluidMultiRunPlot(DashboardElement):
 
         else:
             return pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+                pn.Param(
+                    self.param,
+                    widgets={
+                        "dim": pn.widgets.RadioButtonGroup,
+                        "runs": {"type": pn.widgets.MultiSelect, "size": 10},
+                    },
+                )
             )
 
         def loadFluidT(ind):
@@ -458,7 +487,14 @@ class FluidMultiRunPlot(DashboardElement):
 
         return pn.Row(
             pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+                pn.Param(
+                    self.param,
+                    widgets={
+                        "dim": pn.widgets.RadioButtonGroup,
+                        "runs": {"type": pn.widgets.MultiSelect, "size": 10},
+                    },
+                ),
+                val,
             ),
             pn.panel(dmap),
         )
@@ -494,7 +530,12 @@ class ScalarMultiRunPlot(DashboardElement):
                 self.__loader__.load(self.variable, run)
 
         else:
-            return pn.Column(pn.Param(self.param))
+            return pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"runs": {"type": pn.widgets.MultiSelect, "size": 10}},
+                )
+            )
 
         curves = {
             run: scalarVarT(
@@ -505,7 +546,12 @@ class ScalarMultiRunPlot(DashboardElement):
         }
 
         return pn.Row(
-            pn.Column(pn.Param(self.param)),
+            pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"runs": {"type": pn.widgets.MultiSelect, "size": 10}},
+                )
+            ),
             pn.panel(
                 hv.NdOverlay(curves).opts(
                     xlim=(self.x_lower_limit, self.x_upper_limit),
@@ -540,7 +586,7 @@ class DistExplorer(DashboardElement):
 
     def view(self):
         if not len(self.param["variable"].objects) > 0:
-            return pn.Column(pn.Param(self.param))
+            return pn.Column(pn.pane.Markdown("### No distribution variables"))
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
         if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
@@ -569,7 +615,12 @@ class DistExplorer(DashboardElement):
             )
 
         else:
-            return pn.Column(pn.Param(self.param))
+            return pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"runs": {"type": pn.widgets.MultiSelect, "size": 10}},
+                )
+            )
 
         def load_dist_curves(x: int, time: int, harmonic: int):
 
@@ -601,7 +652,18 @@ class DistExplorer(DashboardElement):
 
         dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h))
 
-        return pn.Row(pn.Column(self.param, pos, t, h), pn.panel(dmap))
+        return pn.Row(
+            pn.Column(
+                pn.Param(
+                    self.param,
+                    widgets={"runs": {"type": pn.widgets.MultiSelect, "size": 10}},
+                ),
+                pos,
+                t,
+                h,
+            ),
+            pn.panel(dmap),
+        )
 
 
 def quickDash(vars: VariableContainer, runPaths: Dict[str, str]):
