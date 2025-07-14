@@ -280,15 +280,13 @@ class FluidMultiVariablePlot(DashboardElement):
 
         if self.run is None:
             self.run = self.param["run"].objects[0]
-        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
-            self.variables = [self.param["variables"].objects[0]]
 
         return pn.Column(
             pn.Param(
                 self.param,
                 widgets={
                     "dim": pn.widgets.RadioButtonGroup,
-                    "variables": {"type": pn.widgets.MultiSelect, "size": 15},
+                    "variables": {"type": pn.widgets.MultiChoice},
                 },
             )
         )
@@ -372,13 +370,11 @@ class ScalarMultiVariablePlot(DashboardElement):
     def sidebar(self):
         if self.run is None:
             self.run = self.param["run"].objects[0]
-        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
-            self.variables = [self.param["variables"].objects[0]]
 
         return pn.Column(
             pn.Param(
                 self.param,
-                widgets={"variables": {"type": pn.widgets.MultiSelect, "size": 15}},
+                widgets={"variables": {"type": pn.widgets.MultiChoice}},
             )
         )
 
@@ -432,15 +428,13 @@ class FluidMultiRunPlot(DashboardElement):
     def sidebar(self):
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
-            self.runs = [self.param["runs"].objects[0]]
 
         return pn.Column(
             pn.Param(
                 self.param,
                 widgets={
                     "dim": pn.widgets.RadioButtonGroup,
-                    "runs": {"type": pn.widgets.MultiSelect, "size": 10},
+                    "runs": {"type": pn.widgets.MultiChoice},
                 },
             )
         )
@@ -524,13 +518,11 @@ class ScalarMultiRunPlot(DashboardElement):
     def sidebar(self):
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects):
-            self.runs = [self.param["runs"].objects[0]]
 
         return pn.Column(
             pn.Param(
                 self.param,
-                widgets={"runs": {"type": pn.widgets.MultiSelect, "size": 10}},
+                widgets={"runs": {"type": pn.widgets.MultiChoice}},
             )
         )
 
@@ -666,11 +658,11 @@ def dashboard(context: RMKContext, **kwargs):
 
         numElements (int): Total number of dashboard elements
 
-        theme (str): One of "default","dark". Defaults to "dark".
+        theme (str): One of "default","dark". Defaults to "default".
 
-        template (str): Currently supporting FastGrid and Golden. For FastGrid use one of ["FastGrid", "default", "fg"]. For Golden use ["Golden", "gold"].
+        template (str): Currently supporting FastGrid and Golden. For FastGrid use one of ["FastGrid", "fg"]. For Golden use ["Golden", "gold", "default"].
 
-        elementsPerTab (int): Number of elements per tab in Golden template.
+        elementsPerTab (int): Number of elements per tab in Golden template. Defaults to 1.
     """
     runPaths: Dict[str, str] = kwargs.get(
         "runPaths", {"base": context.IOContext.HDF5Dir}
@@ -683,8 +675,8 @@ def dashboard(context: RMKContext, **kwargs):
     ]
 
     templateMode = kwargs.get("template", "default")
-    theme = kwargs.get("theme", "dark")
-    if templateMode in ["FastGrid", "default", "fg"]:
+    theme = kwargs.get("theme", "default")
+    if templateMode in ["FastGrid", "fg"]:
 
         template = pn.template.FastGridTemplate(
             title="ReMKiT1D dashboard",
@@ -696,9 +688,9 @@ def dashboard(context: RMKContext, **kwargs):
 
         return template
 
-    if templateMode in ["Golden", "gold"]:
+    if templateMode in ["Golden", "gold", "default"]:
 
-        elementsPerTab = kwargs.get("elementsPerTab", 2)
+        elementsPerTab = kwargs.get("elementsPerTab", 1)
         template = pn.template.GoldenTemplate(
             title="ReMKiT1D dashboard",
             sidebar=[element.sidebar() for element in elements],
@@ -715,7 +707,7 @@ def dashboard(context: RMKContext, **kwargs):
                             i : min(i + elementsPerTab, numElements)
                         ]
                     ),
-                    name=f"Elements {i}+",
+                    name=f"Elements {i}+" if elementsPerTab > 1 else f"Element {i}",
                 )
             )
         return template
