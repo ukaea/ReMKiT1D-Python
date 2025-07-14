@@ -58,7 +58,12 @@ def fluidVarT(var: Variable, x: int, time: Variable) -> hv.Curve:
 
 
 def distVarV(
-    var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False
+    var: Variable,
+    x: int,
+    time: int,
+    harmonic: int,
+    energyGrid: bool = False,
+    logy=False,
 ) -> hv.Curve:
     """Produce a holoviews curve of a distribution variable velocity space profile
 
@@ -68,7 +73,7 @@ def distVarV(
         time (int): Time index for which to plot the profile
         harmonic (int): Harmonic index for which to plot the profile
         energyGrid (bool, optional): If true will plot against v**2 instead of v. Defaults to False.
-
+        logy (bool, optional): If true will take log of the data. Defaults to False.
     Returns:
         hv.Curve: Holoviews curve of distribution variable velocity profile
     """
@@ -78,10 +83,14 @@ def distVarV(
         curve = hv.Curve(
             (
                 var.grid.vGrid**2,
-                var.dataArr[time, x, harmonic, :],
+                (
+                    var.dataArr[time, x, harmonic, :]
+                    if not logy
+                    else np.log10(var.dataArr[time, x, harmonic, :])
+                ),
             ),
             "$v^2[v_0^2]$",
-            var.units,
+            var.units if not logy else "log(" + var.units + ")",
             label=var.name,
         )
     else:
@@ -89,10 +98,14 @@ def distVarV(
         curve = hv.Curve(
             (
                 var.grid.vGrid,
-                var.dataArr[time, x, harmonic, :],
+                (
+                    var.dataArr[time, x, harmonic, :]
+                    if not logy
+                    else np.log10(var.dataArr[time, x, harmonic, :])
+                ),
             ),
             "$v[v_0]$",
-            var.units,
+            var.units if not logy else "log(" + var.units + ")",
             label=var.name,
         )
 
@@ -262,10 +275,6 @@ class FluidMultiVariablePlot(DashboardElement):
     variables = param.ListSelector(default=[])
     run = param.Selector()
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -313,7 +322,7 @@ class FluidMultiVariablePlot(DashboardElement):
                 end=self.__loader__[(self.variables[0], self.run)].dataShape[0] - 1,
             )
 
-        def loadFluidT(ind):
+        def loadFluidT(ind, xlim, ylim):
             curves = {
                 var: fluidVarT(
                     self.__loader__[(var, self.run)],
@@ -323,29 +332,43 @@ class FluidMultiVariablePlot(DashboardElement):
                 for var in self.variables
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        def loadFluidX(ind):
+        def loadFluidX(ind, xlim, ylim):
             curves = {
                 var: fluidVarX(self.__loader__[(var, self.run)], ind)
                 for var in self.variables
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
+            ),
+        )
+
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+
         if self.dim == "Fixed position":
-            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val, xlim=xlim, ylim=ylim))
 
         else:
-            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val, xlim=xlim, ylim=ylim))
 
-        return pn.Column(pn.panel(dmap), val)
+        return pn.Column(pn.panel(dmap), val, xlim, ylim)
 
 
 class ScalarMultiVariablePlot(DashboardElement):
@@ -353,10 +376,6 @@ class ScalarMultiVariablePlot(DashboardElement):
     alias = "Scalar Multi Variable Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -394,15 +413,31 @@ class ScalarMultiVariablePlot(DashboardElement):
             for var in self.variables
         }
 
-        return pn.Row(
-            pn.panel(
-                hv.NdOverlay(curves).opts(
-                    xlim=(self.x_lower_limit, self.x_upper_limit),
-                    ylim=(self.y_lower_limit, self.y_upper_limit),
-                    title="",
-                )
+        def plotCurves(xlim, ylim):
+
+            return hv.NdOverlay(curves).opts(
+                xlim=xlim,
+                ylim=ylim,
+                title="",
+            )
+
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
             ),
         )
+
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+
+        dmap = hv.DynamicMap(pn.bind(plotCurves, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), xlim, ylim)
 
 
 class FluidMultiRunPlot(DashboardElement):
@@ -411,10 +446,6 @@ class FluidMultiRunPlot(DashboardElement):
     variable = param.Selector()
     runs = param.ListSelector([])
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -460,7 +491,7 @@ class FluidMultiRunPlot(DashboardElement):
                 end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
             )
 
-        def loadFluidT(ind):
+        def loadFluidT(ind, xlim, ylim):
             curves = {
                 run: fluidVarT(
                     self.__loader__[(self.variable, run)],
@@ -470,30 +501,44 @@ class FluidMultiRunPlot(DashboardElement):
                 for run in self.runs
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        def loadFluidX(ind):
+        def loadFluidX(ind, xlim, ylim):
             curves = {
                 run: fluidVarX(self.__loader__[(self.variable, run)], ind)
                 for run in self.runs
             }
 
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
+            ),
+        )
+
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+
         if self.dim == "Fixed position":
-            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val, xlim=xlim, ylim=ylim))
 
         else:
-            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val, xlim=xlim, ylim=ylim))
 
-        return pn.Column(pn.panel(dmap), val)
+        return pn.Column(pn.panel(dmap), val, xlim, ylim)
 
 
 class ScalarMultiRunPlot(DashboardElement):
@@ -501,10 +546,6 @@ class ScalarMultiRunPlot(DashboardElement):
     alias = "Scalar Multi Run Plot"
     variable = param.Selector()
     runs = param.ListSelector([])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -538,15 +579,31 @@ class ScalarMultiRunPlot(DashboardElement):
             for run in self.runs
         }
 
-        return pn.Column(
-            pn.panel(
-                hv.NdOverlay(curves).opts(
-                    xlim=(self.x_lower_limit, self.x_upper_limit),
-                    ylim=(self.y_lower_limit, self.y_upper_limit),
-                    title="",
-                )
+        def plotCurves(xlim, ylim):
+
+            return hv.NdOverlay(curves).opts(
+                xlim=xlim,
+                ylim=ylim,
+                title="",
+            )
+
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
             ),
         )
+
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+
+        dmap = hv.DynamicMap(pn.bind(plotCurves, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), xlim, ylim)
 
 
 class DistExplorer(DashboardElement):
@@ -555,12 +612,6 @@ class DistExplorer(DashboardElement):
     energy_grid = param.Boolean(default=False)
     variable = param.Selector()
     runs = param.ListSelector([])
-    auto_x_limits = param.Boolean(default=True)
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    auto_y_limits = param.Boolean(default=True)
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -576,8 +627,13 @@ class DistExplorer(DashboardElement):
             return pn.Column(pn.pane.Markdown("### " + self.name))
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
-            self.runs = [self.param["runs"].objects[0]]
+
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={"runs": {"type": pn.widgets.MultiChoice}},
+            )
+        )
 
     def main(self):
         if not len(self.param["variable"].objects) > 0:
@@ -607,18 +663,7 @@ class DistExplorer(DashboardElement):
             end=self.__loader__[(self.variable, self.runs[0])].dataShape[2] - 1,
         )
 
-        def load_dist_curves(x: int, time: int, harmonic: int):
-
-            xlims = (
-                (None, None)
-                if self.auto_x_limits
-                else (self.x_lower_limit, self.x_upper_limit)
-            )
-            ylims = (
-                (None, None)
-                if self.auto_y_limits
-                else (self.y_lower_limit, self.y_upper_limit)
-            )
+        def load_dist_curves(x: int, time: int, harmonic: int, xlim, ylim):
 
             curves = {
                 run: distVarV(
@@ -627,17 +672,27 @@ class DistExplorer(DashboardElement):
                     time,
                     harmonic,
                     self.energy_grid,
-                ).opts(framewise=True, logy=self.logarithmic_y, xlim=xlims, ylim=ylims)
+                    self.logarithmic_y,
+                ).opts()
                 for run in self.runs
             }
 
             return hv.NdOverlay(curves).opts(
                 title="",
+                xlim=xlim if xlim != (0, 0) else (None, None),
+                ylim=ylim if ylim != (0, 0) else (None, None),
             )
 
-        dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h))
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range", start=0, end=1, value=(0, 0)
+        )
 
-        return pn.Column(pn.panel(dmap), pos, t, h)
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+        dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), pos, t, h, xlim, ylim)
 
 
 def dashboard(context: RMKContext, **kwargs):
