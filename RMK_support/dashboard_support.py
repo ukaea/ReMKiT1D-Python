@@ -6,7 +6,7 @@ from .grid import Grid
 from .variable_container import VariableContainer, Variable
 from .remkit_context import RMKContext
 from . import IO_support as io
-from typing import List, Dict, Tuple, Type, ClassVar
+from typing import List, Dict, Tuple, Type, ClassVar, Optional
 from typing_extensions import Self
 import param  # type: ignore
 from warnings import warn
@@ -249,10 +249,12 @@ class ElementDisplay(param.Parameterized):
         for name in DashboardElement.__elementRegistry__:
             self.param["widget"].objects.append(name)
         self.__loader__ = loader
-        self.__last__ = "Selector"
         self.__widgetLabel__ = widgetLabel
         name = self.__widgetLabel__ + ": " + self.widget
-        self.element = DashboardElement(self.__loader__, name=name)
+        self.__constructedElements__ = {
+            "Selector": DashboardElement(self.__loader__, name=name)
+        }
+        self.element = self.__constructedElements__["Selector"]
         super().__init__(**params)
         self.__main__ = pn.Row(self.element.view())
 
@@ -260,16 +262,16 @@ class ElementDisplay(param.Parameterized):
         return pn.Column(pn.Param(self.param, name=self.__widgetLabel__))
 
     @param.depends("widget", "hide_widget_sidebar", "element.param", watch=True)
-    def _update(self):
-        if self.widget != self.__last__:
-            self.__last__ = self.widget
+    def _update_(self):
+
+        if self.widget not in self.__constructedElements__:
             name = self.__widgetLabel__ + ": " + self.widget
-            if self.widget == "Selector":
-                self.element = DashboardElement(self.__loader__, name=name)
-            else:
-                self.element = DashboardElement.__elementRegistry__[self.widget](
+            self.__constructedElements__[self.widget] = (
+                DashboardElement.__elementRegistry__[self.widget](
                     self.__loader__, name=name
                 )
+            )
+        self.element = self.__constructedElements__[self.widget]
         self.__main__[0] = self.element.view(not self.hide_widget_sidebar)
 
     @property
