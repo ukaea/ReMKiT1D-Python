@@ -206,15 +206,23 @@ class DashboardElement(param.Parameterized):
 
     Any extended element is automatically added to the registry under the class alias"""
 
-    alias = "Selector"
-    __sc__: ClassVar[Dict[str, Type[Self]]] = {}
+    __elementRegistry__: ClassVar[Dict[str, Type[Self]]] = {}
 
     def __init__(self, loader: LazyLoader, **params):
         self.__loader__ = loader
         super().__init__(**params)
 
-    def __init_subclass__(cls) -> None:
-        DashboardElement.__sc__[cls.alias] = cls
+    @classmethod
+    def register(cls, key: str):
+        """Decorator to register a subclass with a given key."""
+
+        def decorator(subclass: Type[Self]):
+            if key in cls.__elementRegistry__:
+                raise ValueError(f"Element '{key}' is already registered.")
+            cls.__elementRegistry__[key] = subclass
+            return subclass
+
+        return decorator
 
     def sidebar(self):
         return pn.pane.Markdown("### " + self.name)
@@ -238,7 +246,7 @@ class ElementDisplay(param.Parameterized):
 
     def __init__(self, loader: LazyLoader, widgetLabel: str = "Widget", **params):
         self.param["widget"].objects.append("Selector")
-        for name in DashboardElement.__sc__:
+        for name in DashboardElement.__elementRegistry__:
             self.param["widget"].objects.append(name)
         self.__loader__ = loader
         self.__last__ = "Selector"
@@ -259,7 +267,7 @@ class ElementDisplay(param.Parameterized):
             if self.widget == "Selector":
                 self.element = DashboardElement(self.__loader__, name=name)
             else:
-                self.element = DashboardElement.__sc__[self.widget](
+                self.element = DashboardElement.__elementRegistry__[self.widget](
                     self.__loader__, name=name
                 )
         self.__main__[0] = self.element.view(not self.hide_widget_sidebar)
@@ -269,9 +277,9 @@ class ElementDisplay(param.Parameterized):
         return self.__main__
 
 
+@DashboardElement.register("Fluid Multi Variable Plot")
 class FluidMultiVariablePlot(DashboardElement):
 
-    alias = "Fluid Multi Variable Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
@@ -371,9 +379,9 @@ class FluidMultiVariablePlot(DashboardElement):
         return pn.Column(pn.panel(dmap), val, xlim, ylim)
 
 
+@DashboardElement.register("Scalar Multi Variable Plot")
 class ScalarMultiVariablePlot(DashboardElement):
 
-    alias = "Scalar Multi Variable Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
 
@@ -440,9 +448,9 @@ class ScalarMultiVariablePlot(DashboardElement):
         return pn.Column(pn.panel(dmap), xlim, ylim)
 
 
+@DashboardElement.register("Fluid Multi Run Plot")
 class FluidMultiRunPlot(DashboardElement):
 
-    alias = "Fluid Multi Run Plot"
     variable = param.Selector()
     runs = param.ListSelector([])
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
@@ -541,9 +549,9 @@ class FluidMultiRunPlot(DashboardElement):
         return pn.Column(pn.panel(dmap), val, xlim, ylim)
 
 
+@DashboardElement.register("Scalar Multi Run Plot")
 class ScalarMultiRunPlot(DashboardElement):
 
-    alias = "Scalar Multi Run Plot"
     variable = param.Selector()
     runs = param.ListSelector([])
 
@@ -606,8 +614,8 @@ class ScalarMultiRunPlot(DashboardElement):
         return pn.Column(pn.panel(dmap), xlim, ylim)
 
 
+@DashboardElement.register("Distribution Explorer")
 class DistExplorer(DashboardElement):
-    alias = "Distribution Explorer"
     logarithmic_y = param.Boolean(default=False)
     energy_grid = param.Boolean(default=False)
     variable = param.Selector()
