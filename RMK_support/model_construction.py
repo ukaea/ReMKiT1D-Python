@@ -266,19 +266,17 @@ class TermCollection:
                 )
 
     def __add__(self, rhs: Union[Term, Self]) -> Self:
-        assert isinstance(rhs, (Term, TermCollection)), (
-            "cannot add non-Terms to term collection"
-        )
+        assert isinstance(
+            rhs, (Term, TermCollection)
+        ), "cannot add non-Terms to term collection"
         if isinstance(rhs, Term):
-            assert rhs.name not in self.termNames, (
-                "duplicate term name in TermCollection - use Term.rename()"
-            )
+            assert (
+                rhs.name not in self.termNames
+            ), "duplicate term name in TermCollection - use Term.rename()"
             assert (
                 rhs.evolvedVar is None
                 or rhs.evolvedVar.name == self.__evolvedVar__.name
-            ), (
-                "Cannot add Term to TermCollection if it evolves a variable different from the collection"
-            )
+            ), "Cannot add Term to TermCollection if it evolves a variable different from the collection"
             newCollection = deepcopy(self)
             newCollection.__terms__.append(deepcopy(rhs))
             newCollection.__terms__[-1].evolvedVar = self.__evolvedVar__
@@ -291,19 +289,17 @@ class TermCollection:
         return newCollection
 
     def __sub__(self, rhs: Union[Term, Self]):
-        assert isinstance(rhs, (Term, TermCollection)), (
-            "cannot add (negative) non-Terms to term collection"
-        )
+        assert isinstance(
+            rhs, (Term, TermCollection)
+        ), "cannot add (negative) non-Terms to term collection"
         if isinstance(rhs, Term):
-            assert rhs.name not in self.termNames, (
-                "duplicate term name in TermCollection - use Term.rename()"
-            )
+            assert (
+                rhs.name not in self.termNames
+            ), "duplicate term name in TermCollection - use Term.rename()"
             assert (
                 rhs.evolvedVar is None
                 or rhs.evolvedVar.name == self.__evolvedVar__.name
-            ), (
-                "Cannot add (negative) Term to TermCollection if it evolves a variable different from the collection"
-            )
+            ), "Cannot add (negative) Term to TermCollection if it evolves a variable different from the collection"
             newCollection = deepcopy(self)
             newCollection.__terms__.append(deepcopy(-1 * rhs))
             newCollection.__terms__[-1].evolvedVar = self.__evolvedVar__
@@ -649,9 +645,9 @@ class MatrixTerm(Term):
 
         self.__profiles__: Dict[str, Profile] = profiles if profiles is not None else {}
 
-        assert all(k in ["X", "H", "V"] for k in self.__profiles__.keys()), (
-            "Profiles in MatrixTerm constructor must have keys X,H, or V"
-        )
+        assert all(
+            k in ["X", "H", "V"] for k in self.__profiles__.keys()
+        ), "Profiles in MatrixTerm constructor must have keys X,H, or V"
 
         self.__R__ = R if R is not None else MultiplicativeArgument()
         self.__C__ = C if C is not None else MultiplicativeArgument()
@@ -793,12 +789,12 @@ class MatrixTerm(Term):
         )
 
     def dict(self):
-        assert self.evolvedVar is not None, (
-            "Called dict() on MatrixTerm without setting evolved variable"
-        )
-        assert self.__implicitVar__ is not None, (
-            "Called dict() on MatrixTerm without setting implicit variable"
-        )
+        assert (
+            self.evolvedVar is not None
+        ), "Called dict() on MatrixTerm without setting evolved variable"
+        assert (
+            self.__implicitVar__ is not None
+        ), "Called dict() on MatrixTerm without setting implicit variable"
 
         gTerm = {
             "termType": "matrixTerm",
@@ -875,9 +871,9 @@ class MatrixTerm(Term):
                     latexName=lhs.latex() + newMat.__profiles__[lhs.dim].latex(),
                 )
         if isinstance(lhs, TimeSignalData):
-            assert self.__T__ is None, (
-                "Cannot multiply MatrixTerm that already has explicit time dependece by a TimeSignal"
-            )
+            assert (
+                self.__T__ is None
+            ), "Cannot multiply MatrixTerm that already has explicit time dependece by a TimeSignal"
             newMat = deepcopy(self)
             newMat.__T__ = lhs
         if isinstance(lhs, (Variable, MultiplicativeArgument)):
@@ -927,24 +923,24 @@ class Stencil(AbstractStencil):
         """
         super().__init__()
         if latexTemplate is not None:
-            assert "$0" in latexTemplate, (
-                "Stencil latexTemplate argument must be specified"
-            )
+            assert (
+                "$0" in latexTemplate
+            ), "Stencil latexTemplate argument must be specified"
         self.__latexTemplate__ = latexTemplate
         self.__properties__ = properties
 
     def dict(self) -> dict:
-        assert self.__properties__ is not None, (
-            "Stencil default dict properties not provided"
-        )
+        assert (
+            self.__properties__ is not None
+        ), "Stencil default dict properties not provided"
         return self.__properties__
 
     def __call__(
         self, *args: Union[MultiplicativeArgument, Variable], **kwargs
     ) -> MatrixTerm:
-        assert len(args) == 1 or len(args) == 2, (
-            "Stencil __call__ must have 1 or 2 args"
-        )
+        assert (
+            len(args) == 1 or len(args) == 2
+        ), "Stencil __call__ must have 1 or 2 args"
         C = (
             args[0]
             if isinstance(args[0], MultiplicativeArgument)
@@ -959,14 +955,14 @@ class Stencil(AbstractStencil):
                 else MultiplicativeArgument((args[1], 1.0))
             )
         )
-        assert len(C.args) > 0, (
-            "First arg in Stencil call must have at least one variable"
-        )
+        assert (
+            len(C.args) > 0
+        ), "First arg in Stencil call must have at least one variable"
         for arg in args:
             if isinstance(arg, MultiplicativeArgument):
-                assert arg.scalar == 1, (
-                    "Stencils must act on MultiplicativeArguments without a non-trivial scalar component"
-                )
+                assert (
+                    arg.scalar == 1
+                ), "Stencils must act on MultiplicativeArguments without a non-trivial scalar component"
         return MatrixTerm(
             "unnamed_term",
             self,
@@ -976,9 +972,9 @@ class Stencil(AbstractStencil):
         )
 
     def latex(self, arg: MultiplicativeArgument, **kwargs):
-        assert self.__latexTemplate__ is not None, (
-            "latex() on Stencil called without a default latexTemplate set"
-        )
+        assert (
+            self.__latexTemplate__ is not None
+        ), "latex() on Stencil called without a default latexTemplate set"
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
         return self.__latexTemplate__.replace("$0", arg.latex(latexRemap))
 
@@ -1373,9 +1369,9 @@ class Model:
         return cast(Self, newModel)
 
     def addTerm(self, termTag: str, term: Term):
-        assert term.evolvedVar is not None, (
-            "Cannot add Term without evolved variable directly"
-        )
+        assert (
+            term.evolvedVar is not None
+        ), "Cannot add Term without evolved variable directly"
 
         self.ddt[term.evolvedVar] += term.rename(termTag)
 
@@ -1480,9 +1476,9 @@ class ModelCollection:
 
     def add(self, *args: Model):
         for arg in args:
-            assert arg.name not in self.modelNames, (
-                "Attempted to add duplicate model to ModelCollection - use key access if you wish to overwrite an existing model"
-            )
+            assert (
+                arg.name not in self.modelNames
+            ), "Attempted to add duplicate model to ModelCollection - use key access if you wish to overwrite an existing model"
 
         self.__models__ += list(args)
 
@@ -1696,29 +1692,29 @@ class LBCModelboundData(ModelboundData):
         assert ionCurrent.isScalar, "ionCurrent in LBCModelboundData must be a scalar"
         self.__ionCurrent__ = ionCurrent
 
-        assert distFun.isDistribution, (
-            "distFun in LBCModelboundData must be a distribution"
-        )
+        assert (
+            distFun.isDistribution
+        ), "distFun in LBCModelboundData must be a distribution"
 
         assert density.isFluid, "density must be a fluid variable in LBCModelboundData"
 
         if densityDual is not None:
-            assert densityDual.isOnDualGrid, (
-                "densityDual must be on the dual grid in LBCModelboundData"
-            )
-            assert densityDual.isFluid, (
-                "densityDual must be a fluid variable in LBCModelboundData"
-            )
+            assert (
+                densityDual.isOnDualGrid
+            ), "densityDual must be on the dual grid in LBCModelboundData"
+            assert (
+                densityDual.isFluid
+            ), "densityDual must be a fluid variable in LBCModelboundData"
 
         if densityOnBoundary is not None:
-            assert densityOnBoundary.isScalar, (
-                "densityOnBoundary must be a scalar variable in LBCModelboundData"
-            )
+            assert (
+                densityOnBoundary.isScalar
+            ), "densityOnBoundary must be a scalar variable in LBCModelboundData"
 
         if totalCurrent is not None:
-            assert totalCurrent.isScalar, (
-                "totalCurrent must be a scalar variable in LBCModelboundData"
-            )
+            assert (
+                totalCurrent.isScalar
+            ), "totalCurrent must be a scalar variable in LBCModelboundData"
         self.__totalCurrent__ = totalCurrent
 
         self.__bisTol__ = bisTol

@@ -1,5 +1,5 @@
 # CHANGELOG
-## v2.0.0-beta.2, 2025-07-09
+## v2.0.0, 2025-08-29
 
 - See beta.1 notes
 - Support for v1.3 BDE integrator rewrite 

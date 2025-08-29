@@ -181,6 +181,18 @@ The secondary feature of RMK_support modules is data analysis and visualization,
 
 From v2.0.0 a new dynamic, composable, and extensible dashboard is available through `ElementDisplay` objects, which can be composed into a [panel](https://panel.holoviz.org/) app.
 
+For example, running the below cell in the [advection with outflow](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/gaussian_advection_outflow.ipynb) after running the [advection](https://github.com/ukaea/ReMKiT1D-Python/blob/master/examples/ReMKiT1D_advection_test.ipynb) example will serve the pre-built dashboard (NOTE: some issues encountered with newer versions of Firefox, try serving in another browser if the dashboard is not rendering).
+
+```python
+from RMK_support.dashboard_support import dashboard
+
+runPaths={"outflow":rk.IOContext.HDF5Dir,"no-outflow":"./RMKOutput/RMK_advection_test/"}
+plt.rcParams['figure.dpi'] = 150
+hv.output(size=50,dpi=150)
+dashboard(rk,runPaths=runPaths,elementsPerTab=2).servable().show()
+```
+
+
 ![](docs/dashboard_example.png "ReMKiT1D v2.0.0 dashboard")
 
 ## Documentation, examples and tutorials

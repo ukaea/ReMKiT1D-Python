@@ -178,7 +178,7 @@ class IntegrationStepSequence:
         doc: tex.Document,
         implicitGroups: int,
         models: mc.ModelCollection,
-        **kwargs
+        **kwargs,
     ):
         doc.append(
             tex.NoEscape(
@@ -582,7 +582,7 @@ class IntegrationScheme:
         doc: tex.Document,
         implicitGroups: int,
         models: mc.ModelCollection,
-        **kwargs
+        **kwargs,
     ):
         with doc.create(tex.Section("Integration scheme")):
             doc.append(tex.NoEscape("$dt =" + self.timestep.latex(**kwargs) + " $ "))

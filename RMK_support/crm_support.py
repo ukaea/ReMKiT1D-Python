@@ -376,7 +376,7 @@ class DerivedTransition(Transition):
         inStates: List[Species],
         outStates: List[Species],
         rateDeriv: DerivationClosure,
-        **kwargs
+        **kwargs,
     ):
         """Transition where rates are calculated using transition objects
 
@@ -687,7 +687,7 @@ class DetailedBalanceTransition(Transition):
         electronDistribution: Variable,
         degeneracyRatio: float,
         maxResolvedCSHarmonic: int,
-        **kwargs
+        **kwargs,
     ):
         """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition
 

@@ -48,7 +48,7 @@ def timeDerivative(
         isScalar=variable.isScalar,
         isDistribution=variable.isDistribution,
         isSingleHarmonics=variable.isSingleHarmonic,
-        subtype=variable.subtype + "_time_derivative"
+        subtype=variable.subtype + "_time_derivative",
     )
 
     return var
@@ -79,7 +79,7 @@ def density(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. density",
         unitSI="$m^{-3}$",
-        normSI=context.normDensity
+        normSI=context.normDensity,
     )
 
     return var
@@ -107,7 +107,7 @@ def temperature(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. temperature",
         unitSI="eV",
-        normSI=context.normTemperature
+        normSI=context.normTemperature,
     )
 
     return var
@@ -135,7 +135,7 @@ def flux(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. flux",
         unitSI="$m^{-2}s{-1}$",
-        normSI=context.normDensity * context.norms["speed"]
+        normSI=context.normDensity * context.norms["speed"],
     )
 
     return var
@@ -164,7 +164,7 @@ def speed(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. speed",
         unitSI="$ms^{-1}$",
-        normSI=context.norms["speed"]
+        normSI=context.norms["speed"],
     )
 
     return var
@@ -193,7 +193,7 @@ def energyDensity(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. en. density",
         unitSI="$eV m^{-3}$",
-        normSI=context.normDensity * context.normTemperature
+        normSI=context.normDensity * context.normTemperature,
     )
 
     return var
@@ -222,7 +222,7 @@ def energyFlux(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. en. flux",
         unitSI="$eV m^{-2} s^{-1}$",
-        normSI=context.norms["heatFlux"]
+        normSI=context.norms["heatFlux"],
     )
 
     return var
@@ -251,7 +251,7 @@ def electricField(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. el. field",
         unitSI="$Vm{-1}$",
-        normSI=context.norms["EField"]
+        normSI=context.norms["EField"],
     )
 
     return var

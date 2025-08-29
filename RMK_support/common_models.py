@@ -289,7 +289,7 @@ def implicitTemperatures(
     species: List[Species],
     norms: Dict[str, float],
     speciesFluxes: Optional[List[Variable]] = None,
-    **kwargs
+    **kwargs,
 ) -> mc.Model:
     """Generate implicit temperature derivation matrix terms for each species: d*n_b*k*T_b/2 + m_b*n_b*u_b**2/2 = W_b, where d is the number of degrees of freedom. Temperatures here are assumed to be stationary and implicit variables. The kinetic energy contribution uses interpolation, so should be used with care in regions of poorly resolved flow gradients. Assumes default normalization.
 

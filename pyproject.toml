@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "RMK_support"
-version = "2.0.0-beta.2"
+version = "2.0.0"
 description = "Python modules and notebooks used to initialize and analyze ReMKiT1D runs"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -29,3 +29,8 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["RMK_support"]
+
+[tool.uv.workspace]
+members = [
+    "rmk-support",
+]
