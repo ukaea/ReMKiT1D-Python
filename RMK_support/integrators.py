@@ -178,7 +178,7 @@ class IntegrationStepSequence:
         doc: tex.Document,
         implicitGroups: int,
         models: mc.ModelCollection,
-        **kwargs
+        **kwargs,
     ):
         doc.append(
             tex.NoEscape(
@@ -582,7 +582,7 @@ class IntegrationScheme:
         doc: tex.Document,
         implicitGroups: int,
         models: mc.ModelCollection,
-        **kwargs
+        **kwargs,
     ):
         with doc.create(tex.Section("Integration scheme")):
             doc.append(tex.NoEscape("$dt =" + self.timestep.latex(**kwargs) + " $ "))
@@ -640,17 +640,21 @@ class BDEIntegrator(Integrator):
 
         internalStepControl (bool): True if integrator is allowed to control its internal steps based on convergence. Defaults to False.
 
-        initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1.
+        initialNumInternalSteps (int): Initial number of integrator substeps. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.2.2
 
         stepMultiplier (int): Factor by which to multiply current number of substeps when solve fails. Defaults to 2.
 
-        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1.
+        stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.3.0
 
-        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5.
+        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 3. NOTE: From ReMKiT1D v1.3.0 this handles consolidation
 
         maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
 
+        consolidationInterval (int): After how many steps the integrator should attempt to reduce the number of substeps to one. Defaults to 50. NOTE: Deprecated from ReMKiT1D v1.3.0 - consolidation happens at every step now based on MinNolinIters
+
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
+
+        allowLazyEval (bool): Allow lazy evaluation in internal step control. This will cause the solver to stop evolving everything except for time when it detects that nonlinear iterations drop to 1 on a first integration attempt (signalling no change within tolerance). Defaults to False
         """
         super().__init__(name)
         self.__maxNonlinIters__: int = kwargs.get("maxNonlinIters", 100)
@@ -665,10 +669,11 @@ class BDEIntegrator(Integrator):
         self.__initialNumInternalSteps__: int = kwargs.get("initialNumInternalSteps", 1)
         self.__stepMultiplier__: int = kwargs.get("stepMultiplier", 2)
         self.__stepDecrament__ = kwargs.get("stepDecrament", 1)
-        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 5)
+        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 3)
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
         self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 3)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
+        self.__allowLazyEval__: bool = kwargs.get("allowLazyEval", False)
 
     def dict(self) -> dict:
 
@@ -689,6 +694,7 @@ class BDEIntegrator(Integrator):
                 "minNumNonlinIters": self.__minNonlinIters__,
                 "maxBDERestarts": self.__maxBDERestarts__,
                 "BDEConsolidationInterval": self.__consolidationInterval__,
+                "BDEAllowLazyEval": self.__allowLazyEval__,
             },
         }
 

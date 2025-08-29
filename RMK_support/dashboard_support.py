@@ -4,11 +4,13 @@ import panel as pn
 import numpy as np
 from .grid import Grid
 from .variable_container import VariableContainer, Variable
+from .remkit_context import RMKContext
 from . import IO_support as io
-from typing import List, Dict, Tuple, Type, ClassVar
+from typing import List, Dict, Tuple, Type, ClassVar, Optional
 from typing_extensions import Self
 import param  # type: ignore
 from warnings import warn
+import matplotlib.pyplot as plt  # type: ignore
 
 
 def fluidVarX(var: Variable, time: int) -> hv.Curve:
@@ -56,7 +58,12 @@ def fluidVarT(var: Variable, x: int, time: Variable) -> hv.Curve:
 
 
 def distVarV(
-    var: Variable, x: int, time: int, harmonic: int, energyGrid: bool = False
+    var: Variable,
+    x: int,
+    time: int,
+    harmonic: int,
+    energyGrid: bool = False,
+    logy=False,
 ) -> hv.Curve:
     """Produce a holoviews curve of a distribution variable velocity space profile
 
@@ -66,7 +73,7 @@ def distVarV(
         time (int): Time index for which to plot the profile
         harmonic (int): Harmonic index for which to plot the profile
         energyGrid (bool, optional): If true will plot against v**2 instead of v. Defaults to False.
-
+        logy (bool, optional): If true will take log of the data. Defaults to False.
     Returns:
         hv.Curve: Holoviews curve of distribution variable velocity profile
     """
@@ -76,10 +83,14 @@ def distVarV(
         curve = hv.Curve(
             (
                 var.grid.vGrid**2,
-                var.dataArr[time, x, harmonic, :],
+                (
+                    var.dataArr[time, x, harmonic, :]
+                    if not logy
+                    else np.log10(var.dataArr[time, x, harmonic, :])
+                ),
             ),
             "$v^2[v_0^2]$",
-            var.units,
+            var.units if not logy else "log(" + var.units + ")",
             label=var.name,
         )
     else:
@@ -87,10 +98,14 @@ def distVarV(
         curve = hv.Curve(
             (
                 var.grid.vGrid,
-                var.dataArr[time, x, harmonic, :],
+                (
+                    var.dataArr[time, x, harmonic, :]
+                    if not logy
+                    else np.log10(var.dataArr[time, x, harmonic, :])
+                ),
             ),
             "$v[v_0]$",
-            var.units,
+            var.units if not logy else "log(" + var.units + ")",
             label=var.name,
         )
 
@@ -185,64 +200,91 @@ class LazyLoader:
 
 
 class DashboardElement(param.Parameterized):
-    """Base parameterised class used to extend dashboard element types"""
+    """Base parameterised class used to extend dashboard element types.
 
-    alias = "Selector"
-    __sc__: ClassVar[Dict[str, Type[Self]]] = {}
+    To extend, implement sidebar and main methods.
+
+    Any extended element is automatically added to the registry under the class alias"""
+
+    __elementRegistry__: ClassVar[Dict[str, Type[Self]]] = {}
 
     def __init__(self, loader: LazyLoader, **params):
         self.__loader__ = loader
         super().__init__(**params)
 
-    def __init_subclass__(cls) -> None:
-        DashboardElement.__sc__[cls.alias] = cls
+    @classmethod
+    def register(cls, key: str):
+        """Decorator to register a subclass with a given key."""
 
-    def view(self):
-        pass
+        def decorator(subclass: Type[Self]):
+            if key in cls.__elementRegistry__:
+                raise ValueError(f"Element '{key}' is already registered.")
+            cls.__elementRegistry__[key] = subclass
+            return subclass
+
+        return decorator
+
+    def sidebar(self):
+        return pn.pane.Markdown("### " + self.name)
+
+    def main(self):
+        return pn.Row(pn.pane.Markdown("### Select a widget type"))
+
+    def view(self, showSidebar: bool = True):
+        if showSidebar:
+            return pn.Row(self.sidebar(), self.main())
+        self.sidebar()  # handling corner case
+        return pn.Column(pn.pane.Markdown("### " + self.name), self.main())
 
 
 class ElementDisplay(param.Parameterized):
+    """Element display used to switch between various dashboard elements. To use in making Panel applications, call the sidebar method to get the sidebar element and use the main property to get access to the auto-updating content of the element."""
 
-    widget = param.Selector(default="Selector")
+    widget = param.Selector(default="Selector", label="")
     element = param.Parameter(instantiate=False, precedence=-1)
+    hide_widget_sidebar = param.Boolean()
 
-    def __init__(self, loader: LazyLoader, **params):
+    def __init__(self, loader: LazyLoader, widgetLabel: str = "Widget", **params):
         self.param["widget"].objects.append("Selector")
-        for name in DashboardElement.__sc__:
+        for name in DashboardElement.__elementRegistry__:
             self.param["widget"].objects.append(name)
         self.__loader__ = loader
-        self.__last__ = "Selector"
-        self.element = DashboardElement(self.__loader__, name="Selector")
+        self.__widgetLabel__ = widgetLabel
+        name = self.__widgetLabel__ + ": " + self.widget
+        self.__constructedElements__ = {
+            "Selector": DashboardElement(self.__loader__, name=name)
+        }
+        self.element = self.__constructedElements__["Selector"]
         super().__init__(**params)
-        self.__layout__ = pn.Column(pn.Param(self.param, name=""), self.element.view())
+        self.__main__ = pn.Row(self.element.view())
 
-    @param.depends("widget", "element.param", watch=True)
-    def _update(self):
-        if self.widget != self.__last__:
-            if self.widget == "Selector":
-                self.element = DashboardElement(self.__loader__, name="Selector")
-            else:
-                self.element = DashboardElement.__sc__[self.widget](
-                    self.__loader__, name=self.widget
+    def sidebar(self):
+        return pn.Column(pn.Param(self.param, name=self.__widgetLabel__))
+
+    @param.depends("widget", "hide_widget_sidebar", "element.param", watch=True)
+    def _update_(self):
+
+        if self.widget not in self.__constructedElements__:
+            name = self.__widgetLabel__ + ": " + self.widget
+            self.__constructedElements__[self.widget] = (
+                DashboardElement.__elementRegistry__[self.widget](
+                    self.__loader__, name=name
                 )
-        self.__last__ = self.widget
-        self.__layout__[1] = self.element.view()
+            )
+        self.element = self.__constructedElements__[self.widget]
+        self.__main__[0] = self.element.view(not self.hide_widget_sidebar)
 
     @property
-    def layout(self):
-        return self.__layout__
+    def main(self):
+        return self.__main__
 
 
+@DashboardElement.register("Fluid Multi Variable Plot")
 class FluidMultiVariablePlot(DashboardElement):
 
-    alias = "Fluid Multi Variable Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -253,35 +295,44 @@ class FluidMultiVariablePlot(DashboardElement):
         ]
         self.param["run"].objects = list(loader.__runPaths__.keys())
 
-    def view(self):
+    def sidebar(self):
+
         if self.run is None:
             self.run = self.param["run"].objects[0]
-        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
-            self.variables = [self.param["variables"].objects[0]]
 
-        if len(self.variables) > 0:
-            for var in self.variables:
-                self.__loader__.load(var, self.run)
-            if self.dim == "Fixed position":
-                val = pn.widgets.IntSlider(
-                    name="x",
-                    value=0,
-                    start=0,
-                    end=self.__loader__[(self.variables[0], self.run)].dataShape[1] - 1,
-                )
-            else:
-                val = pn.widgets.IntSlider(
-                    name="t",
-                    value=0,
-                    start=0,
-                    end=self.__loader__[(self.variables[0], self.run)].dataShape[0] - 1,
-                )
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={
+                    "dim": pn.widgets.RadioButtonGroup,
+                    "variables": {"type": pn.widgets.MultiChoice},
+                },
+            )
+        )
+
+    def main(self):
+
+        if len(self.variables) == 0:
+            return pn.Row(pn.pane.Markdown("### Select at least one variable"))
+
+        for var in self.variables:
+            self.__loader__.load(var, self.run)
+        if self.dim == "Fixed position":
+            val = pn.widgets.IntSlider(
+                name="x",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variables[0], self.run)].dataShape[1] - 1,
+            )
         else:
-            return pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+            val = pn.widgets.IntSlider(
+                name="t",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variables[0], self.run)].dataShape[0] - 1,
             )
 
-        def loadFluidT(ind):
+        def loadFluidT(ind, xlim, ylim):
             curves = {
                 var: fluidVarT(
                     self.__loader__[(var, self.run)],
@@ -291,45 +342,50 @@ class FluidMultiVariablePlot(DashboardElement):
                 for var in self.variables
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        def loadFluidX(ind):
+        def loadFluidX(ind, xlim, ylim):
             curves = {
                 var: fluidVarX(self.__loader__[(var, self.run)], ind)
                 for var in self.variables
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        if self.dim == "Fixed position":
-            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
-
-        else:
-            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
-
-        return pn.Row(
-            pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
             ),
-            pn.panel(dmap),
         )
 
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
 
+        if self.dim == "Fixed position":
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val, xlim=xlim, ylim=ylim))
+
+        else:
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), val, xlim, ylim)
+
+
+@DashboardElement.register("Scalar Multi Variable Plot")
 class ScalarMultiVariablePlot(DashboardElement):
 
-    alias = "Scalar Multi Variable Plot"
     variables = param.ListSelector(default=[])
     run = param.Selector()
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -340,18 +396,24 @@ class ScalarMultiVariablePlot(DashboardElement):
         ]
         self.param["run"].objects = list(loader.__runPaths__.keys())
 
-    def view(self):
+    def sidebar(self):
         if self.run is None:
             self.run = self.param["run"].objects[0]
-        if len(self.variables) == 0 and len(self.param["variables"].objects) > 0:
-            self.variables = [self.param["variables"].objects[0]]
 
-        if len(self.variables) > 0:
-            for var in self.variables:
-                self.__loader__.load(var, self.run)
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={"variables": {"type": pn.widgets.MultiChoice}},
+            )
+        )
 
-        else:
-            return pn.Column(pn.Param(self.param))
+    def main(self):
+
+        if len(self.variables) == 0:
+            return pn.Row(pn.pane.Markdown("### Select at least one variable"))
+
+        for var in self.variables:
+            self.__loader__.load(var, self.run)
 
         curves = {
             var: scalarVarT(
@@ -361,28 +423,39 @@ class ScalarMultiVariablePlot(DashboardElement):
             for var in self.variables
         }
 
-        return pn.Row(
-            pn.Column(pn.Param(self.param)),
-            pn.panel(
-                hv.NdOverlay(curves).opts(
-                    xlim=(self.x_lower_limit, self.x_upper_limit),
-                    ylim=(self.y_lower_limit, self.y_upper_limit),
-                    title="",
-                )
+        def plotCurves(xlim, ylim):
+
+            return hv.NdOverlay(curves).opts(
+                xlim=xlim,
+                ylim=ylim,
+                title="",
+            )
+
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
             ),
         )
 
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
 
+        dmap = hv.DynamicMap(pn.bind(plotCurves, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), xlim, ylim)
+
+
+@DashboardElement.register("Fluid Multi Run Plot")
 class FluidMultiRunPlot(DashboardElement):
 
-    alias = "Fluid Multi Run Plot"
     variable = param.Selector()
     runs = param.ListSelector([])
     dim = param.Selector(objects=["Fixed time", "Fixed position"])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -393,36 +466,42 @@ class FluidMultiRunPlot(DashboardElement):
         ]
         self.param["runs"].objects = list(loader.__runPaths__.keys())
 
-    def view(self):
+    def sidebar(self):
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
-            self.runs = [self.param["runs"].objects[0]]
 
-        if len(self.runs) > 0:
-            for run in self.runs:
-                self.__loader__.load(self.variable, run)
-            if self.dim == "Fixed position":
-                val = pn.widgets.IntSlider(
-                    name="x",
-                    value=0,
-                    start=0,
-                    end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
-                )
-            else:
-                val = pn.widgets.IntSlider(
-                    name="t",
-                    value=0,
-                    start=0,
-                    end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
-                )
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={
+                    "dim": pn.widgets.RadioButtonGroup,
+                    "runs": {"type": pn.widgets.MultiChoice},
+                },
+            )
+        )
 
+    def main(self):
+        if len(self.runs) == 0:
+            return pn.Row(pn.pane.Markdown("### Select at least one run"))
+
+        for run in self.runs:
+            self.__loader__.load(self.variable, run)
+        if self.dim == "Fixed position":
+            val = pn.widgets.IntSlider(
+                name="x",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
+            )
         else:
-            return pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup})
+            val = pn.widgets.IntSlider(
+                name="t",
+                value=0,
+                start=0,
+                end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
             )
 
-        def loadFluidT(ind):
+        def loadFluidT(ind, xlim, ylim):
             curves = {
                 run: fluidVarT(
                     self.__loader__[(self.variable, run)],
@@ -432,46 +511,51 @@ class FluidMultiRunPlot(DashboardElement):
                 for run in self.runs
             }
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        def loadFluidX(ind):
+        def loadFluidX(ind, xlim, ylim):
             curves = {
                 run: fluidVarX(self.__loader__[(self.variable, run)], ind)
                 for run in self.runs
             }
 
             return hv.NdOverlay(curves).opts(
-                xlim=(self.x_lower_limit, self.x_upper_limit),
-                ylim=(self.y_lower_limit, self.y_upper_limit),
+                xlim=xlim,
+                ylim=ylim,
                 title="",
             )
 
-        if self.dim == "Fixed position":
-            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val))
-
-        else:
-            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val))
-
-        return pn.Row(
-            pn.Column(
-                pn.Param(self.param, widgets={"dim": pn.widgets.RadioButtonGroup}), val
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
             ),
-            pn.panel(dmap),
         )
 
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
 
+        if self.dim == "Fixed position":
+            dmap = hv.DynamicMap(pn.bind(loadFluidT, ind=val, xlim=xlim, ylim=ylim))
+
+        else:
+            dmap = hv.DynamicMap(pn.bind(loadFluidX, ind=val, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), val, xlim, ylim)
+
+
+@DashboardElement.register("Scalar Multi Run Plot")
 class ScalarMultiRunPlot(DashboardElement):
 
-    alias = "Scalar Multi Run Plot"
     variable = param.Selector()
     runs = param.ListSelector([])
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -482,18 +566,20 @@ class ScalarMultiRunPlot(DashboardElement):
         ]
         self.param["runs"].objects = list(loader.__runPaths__.keys())
 
-    def view(self):
+    def sidebar(self):
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects):
-            self.runs = [self.param["runs"].objects[0]]
 
-        if len(self.runs) > 0:
-            for run in self.runs:
-                self.__loader__.load(self.variable, run)
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={"runs": {"type": pn.widgets.MultiChoice}},
+            )
+        )
 
-        else:
-            return pn.Column(pn.Param(self.param))
+    def main(self):
+        if len(self.runs) == 0:
+            return pn.Row(pn.pane.Markdown("### Select at least one run"))
 
         curves = {
             run: scalarVarT(
@@ -503,30 +589,39 @@ class ScalarMultiRunPlot(DashboardElement):
             for run in self.runs
         }
 
-        return pn.Row(
-            pn.Column(pn.Param(self.param)),
-            pn.panel(
-                hv.NdOverlay(curves).opts(
-                    xlim=(self.x_lower_limit, self.x_upper_limit),
-                    ylim=(self.y_lower_limit, self.y_upper_limit),
-                    title="",
-                )
+        def plotCurves(xlim, ylim):
+
+            return hv.NdOverlay(curves).opts(
+                xlim=xlim,
+                ylim=ylim,
+                title="",
+            )
+
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range",
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
+            value=(
+                0,
+                self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
             ),
         )
 
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
 
+        dmap = hv.DynamicMap(pn.bind(plotCurves, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), xlim, ylim)
+
+
+@DashboardElement.register("Distribution Explorer")
 class DistExplorer(DashboardElement):
-    alias = "Distribution Explorer"
     logarithmic_y = param.Boolean(default=False)
     energy_grid = param.Boolean(default=False)
     variable = param.Selector()
     runs = param.ListSelector([])
-    auto_x_limits = param.Boolean(default=True)
-    x_lower_limit = param.Number()
-    x_upper_limit = param.Number()
-    auto_y_limits = param.Boolean(default=True)
-    y_lower_limit = param.Number()
-    y_upper_limit = param.Number()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -537,51 +632,48 @@ class DistExplorer(DashboardElement):
         ]
         self.param["runs"].objects = list(loader.__runPaths__.keys())
 
-    def view(self):
+    def sidebar(self):
         if not len(self.param["variable"].objects) > 0:
-            return pn.Column(pn.Param(self.param))
+            return pn.Column(pn.pane.Markdown("### " + self.name))
         if self.variable is None:
             self.variable = self.param["variable"].objects[0]
-        if len(self.runs) == 0 and len(self.param["runs"].objects) > 0:
-            self.runs = [self.param["runs"].objects[0]]
 
-        if len(self.runs) > 0:
-            for run in self.runs:
-                self.__loader__.load(self.variable, run)
-            pos = pn.widgets.IntSlider(
-                name="x",
-                value=0,
-                start=0,
-                end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
+        return pn.Column(
+            pn.Param(
+                self.param,
+                widgets={"runs": {"type": pn.widgets.MultiChoice}},
             )
-            t = pn.widgets.IntSlider(
-                name="t",
-                value=0,
-                start=0,
-                end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
-            )
-            h = pn.widgets.IntSlider(
-                name="h",
-                value=0,
-                start=0,
-                end=self.__loader__[(self.variable, self.runs[0])].dataShape[2] - 1,
-            )
+        )
 
-        else:
-            return pn.Column(pn.Param(self.param))
+    def main(self):
+        if not len(self.param["variable"].objects) > 0:
+            return pn.Column(pn.pane.Markdown("### No distribution variables"))
 
-        def load_dist_curves(x: int, time: int, harmonic: int):
+        if len(self.runs) == 0:
+            return pn.Row(pn.pane.Markdown("### Select at least one run"))
 
-            xlims = (
-                (None, None)
-                if self.auto_x_limits
-                else (self.x_lower_limit, self.x_upper_limit)
-            )
-            ylims = (
-                (None, None)
-                if self.auto_y_limits
-                else (self.y_lower_limit, self.y_upper_limit)
-            )
+        for run in self.runs:
+            self.__loader__.load(self.variable, run)
+        pos = pn.widgets.IntSlider(
+            name="x",
+            value=0,
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].dataShape[1] - 1,
+        )
+        t = pn.widgets.IntSlider(
+            name="t",
+            value=0,
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].dataShape[0] - 1,
+        )
+        h = pn.widgets.IntSlider(
+            name="h",
+            value=0,
+            start=0,
+            end=self.__loader__[(self.variable, self.runs[0])].dataShape[2] - 1,
+        )
+
+        def load_dist_curves(x: int, time: int, harmonic: int, xlim, ylim):
 
             curves = {
                 run: distVarV(
@@ -590,31 +682,116 @@ class DistExplorer(DashboardElement):
                     time,
                     harmonic,
                     self.energy_grid,
-                ).opts(framewise=True, logy=self.logarithmic_y, xlim=xlims, ylim=ylims)
+                    self.logarithmic_y,
+                ).opts()
                 for run in self.runs
             }
 
             return hv.NdOverlay(curves).opts(
                 title="",
+                xlim=xlim if xlim != (0, 0) else (None, None),
+                ylim=ylim if ylim != (0, 0) else (None, None),
             )
 
-        dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h))
+        xlim = pn.widgets.EditableRangeSlider(
+            name="x axis range", start=0, end=1, value=(0, 0)
+        )
 
-        return pn.Row(pn.Column(self.param, pos, t, h), pn.panel(dmap))
+        ylim = pn.widgets.EditableRangeSlider(
+            name="y axis range", start=0, end=1, value=(0, 0)
+        )
+        dmap = hv.DynamicMap(pn.bind(load_dist_curves, pos, t, h, xlim=xlim, ylim=ylim))
+
+        return pn.Column(pn.panel(dmap), pos, t, h, xlim, ylim)
+
+
+def dashboard(context: RMKContext, **kwargs):
+    """Default dashboard constructed using the lazy loader and registered elements
+
+    Args:
+        context (RMKContext): Context used to define the possible variables for the loader
+
+    Raises:
+        NotImplementedError: In case of unsupported panel template (currently supporting FastGrid and Golden)
+
+    Returns:
+        Servable panel template. To use call .servable() on the return value.
+
+    kwargs:
+
+        runPaths (Dict[str,str]): Optional run paths that will be used. Keys are user-supplied run tags. Defaults to {"base": context.IOContext.HDF5Dir}
+
+        numElements (int): Total number of dashboard elements
+
+        theme (str): One of "default","dark". Defaults to "default".
+
+        template (str): Currently supporting FastGrid and Golden. For FastGrid use one of ["FastGrid", "fg"]. For Golden use ["Golden", "gold", "default"].
+
+        elementsPerTab (int): Number of elements per tab in Golden template. Defaults to 1.
+    """
+    runPaths: Dict[str, str] = kwargs.get(
+        "runPaths", {"base": context.IOContext.HDF5Dir}
+    )
+    numElements = kwargs.get("numElements", 2)
+
+    loader = LazyLoader(context.variables, runPaths)
+    elements = [
+        ElementDisplay(loader, widgetLabel=f"Element {i}") for i in range(numElements)
+    ]
+
+    templateMode = kwargs.get("template", "default")
+    theme = kwargs.get("theme", "default")
+    if templateMode in ["FastGrid", "fg"]:
+
+        template = pn.template.FastGridTemplate(
+            title="ReMKiT1D dashboard",
+            sidebar=[element.sidebar() for element in elements],
+            main=[element.main for element in elements],
+            theme_toggle=False,
+            theme=theme,
+        )
+
+        return template
+
+    if templateMode in ["Golden", "gold", "default"]:
+
+        elementsPerTab = kwargs.get("elementsPerTab", 1)
+        template = pn.template.GoldenTemplate(
+            title="ReMKiT1D dashboard",
+            sidebar=[element.sidebar() for element in elements],
+            theme=theme,
+            header_background="#0072B5",
+        )
+
+        for i in range(0, numElements, elementsPerTab):
+            template.main.append(
+                pn.Row(
+                    *(
+                        element.main
+                        for element in elements[
+                            i : min(i + elementsPerTab, numElements)
+                        ]
+                    ),
+                    name=f"Elements {i}+" if elementsPerTab > 1 else f"Element {i}",
+                )
+            )
+        return template
+
+    raise NotImplementedError
 
 
 class ReMKiT1DDashboard:
     def __init__(self, data: xr.Dataset, gridObj: Grid):
         """Constructor for a dashboard object
 
-        NOTE: This is the pre-v2.0.0 dashboard. It is depracated and might be removed in a future version.
+        NOTE: This is the pre-v2.0.0 dashboard. It is deprecated and might be removed in a future version.
 
         Args:
             data (xr.Dataset): Data loaded into the dashboard to be visualized
             gridObj (Grid): Grid object used to set axis ticks and labels.
         """
         warn(
-            "This is the pre-v2.0.0 dashboard. It is depracated and might be removed in a future version.",
+            "This is the pre-v2.0.0 dashboard. It is deprecated and might be removed in a future version.",
             category=DeprecationWarning,
         )
         self.__data__ = data

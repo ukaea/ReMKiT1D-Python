@@ -78,3 +78,8 @@ def test_standard_variable_factory(context):
     assert factory.species["density"].name == "nn"
     assert factory.species["temperature"].name == "Tn"
     assert factory.species["heatflux"].name == "qn"
+
+    dndt = cv.timeDerivative("dndt", rk.norms["time"], n)
+    assert dndt.units == "norm. density / time norm."
+    assert dndt.normConst == rk.normDensity / rk.norms["time"]
+    assert dndt.unitsSI == "$m^{-3}/s$"

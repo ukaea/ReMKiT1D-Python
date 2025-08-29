@@ -113,6 +113,10 @@ class Species:
         return self.__charge__
 
     @property
+    def varsByType(self):
+        return self.__varsByType__
+
+    @property
     def associatedVarNames(self):
         return [var.name for var in self.__associatedVars__]
 
@@ -143,6 +147,9 @@ class Species:
                             + "] element of this species."
                         )
 
+    def hasVarType(self, key: str):
+        return key in self.__varsByType__
+
     def __getitem__(self, key: str):
         return self.__varsByType__[key]
 
@@ -156,7 +163,7 @@ class Species:
         )
         assert (
             var.name in self.associatedVarNames
-        ), "If setting subtype variable manually on species it must already be associated t"
+        ), "If setting subtype variable manually on species it must already be associated"
         self.__varsByType__[key] = var
 
     def dict(self) -> dict:
@@ -176,7 +183,7 @@ class Species:
         return speciesData
 
     def latex(self) -> str:
-        """LaTeX represenation of the species
+        """LaTeX representation of the species
 
         Returns:
             str: LaTeX-compatible string representing the species
@@ -226,8 +233,8 @@ class SpeciesContainer:
                                 "$"
                                 + species.latex()
                                 + "$"
-                                + f": ID: {species.speciesID}; A: {species.atomicA:.4e}; Z: {species.charge:.2f}; Associated vars: "
-                                + ",".join(associatedVarNames)
+                                + f": ID: {species.speciesID}; A: {species.atomicA:.4e}; Z: {species.charge:.2f} \\newline Associated vars: "
+                                + ", ".join(associatedVarNames)
                             )
                         )
 
@@ -1259,7 +1266,7 @@ class AdditiveDerivation(Derivation):
             else result
         )
 
-        return result
+        return result.replace("+ -", " - ")
 
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
         assert (

@@ -113,6 +113,18 @@ def test_dist_grad_stencil():
     }
 
 
+def test_dist_div_stencil():
+
+    d = st.DistDivStencil(1, 1)
+
+    assert d.dict() == {
+        "stencilType": "kineticSpatialDiffStencil",
+        "rowHarmonic": 1,
+        "colHarmonic": 1,
+        "ignoreJacobian": False,
+    }
+
+
 def test_ddv_stencil(grid):
 
     ddv0 = st.DDVStencil(1, 1)

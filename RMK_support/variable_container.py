@@ -17,6 +17,7 @@ from typing_extensions import Self
 from copy import copy, deepcopy
 from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose
+from .tex_parsing import numToScientificTex
 
 
 class MultiplicativeArgument:
@@ -200,6 +201,7 @@ class Variable(DerivationArgument):
             scalarHostProcess (int): The process on which the variable lives if it is a scalar. Defaults to 0.
             inOutput (int): True if the variable should be added to any hdf5 output. Defaults to True.
             subtype (str): Denotes subtype of variable. Useful for filtering variables and working with species. Defaults to "untyped".
+            defaultLatex (str): Default latex remapping for this variable. Not used directly, instead is used at the context level to produce default remaps that can still be overwritten. Defaults to None.
         """
         self.__grid__ = gridObj
 
@@ -330,6 +332,14 @@ class Variable(DerivationArgument):
 
         self.__subtype__ = kwargs.get("subtype", "untyped")
 
+        self.__defaultLatex__: Optional[str] = kwargs.get("defaultLatex", None)
+
+        self.__usedKwargs__ = kwargs
+
+    @property
+    def kwargs(self):
+        return self.__usedKwargs__
+
     @property
     def dual(self) -> Optional[Self]:
         """The dual variable to this variable. If no dual returns None."""
@@ -340,11 +350,21 @@ class Variable(DerivationArgument):
         self.__dual__ = var
         var.__dual__ = self
 
-    def makeDual(self, name: Optional[str] = None):
+    @property
+    def defaultLatex(self):
+        return self.__defaultLatex__
+
+    def withLatex(self, remap: str):
+        newVar = deepcopy(self)
+        newVar.__defaultLatex__ = remap
+        return newVar
+
+    def makeDual(self, name: Optional[str] = None, latex: Optional[str] = None):
         """Create a dual variable from this variable, assigning the dual to self. If dual is already assigned will return existing dual instead of constructing new.
 
         Args:
             name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
+            latex (Optional[str], optional): Default latex remap for the dual variable. Defaults to None, adding '_{dual}' to the remap of this variable if it exists and wrapping the name in brackets.
         """
         if self.dual is not None:
             return self.dual
@@ -375,20 +395,30 @@ class Variable(DerivationArgument):
             isCommunicated=self.isCommunicated,
             inOutput=self.inOutput,
             subtype=self.__subtype__,
+            defaultLatex=(
+                latex
+                if latex is not None
+                else (
+                    None
+                    if self.__defaultLatex__ is None
+                    else "\\left(" + self.__defaultLatex__ + "\\right)_{dual}"
+                )
+            ),
         )
 
         self.dual = dualVar
 
         return dualVar
 
-    def withDual(self, name: Optional[str] = None):
+    def withDual(self, name: Optional[str] = None, latex: Optional[str] = None):
         """Generate dual variable of self if not already associated, and return self
 
         Args:
             name (Optional[str], optional): Name of the dual variable. Defaults to None, setting the name to the name of this variable with the "_dual" suffix.
+            latex (Optional[str], optional): Default latex remapping of the dual variable. Defaults to None, setting the remap to the remap of this variable with the "_{dual}" suffix if present.
         """
 
-        _ = self.makeDual(name)
+        _ = self.makeDual(name, latex)
         return self
 
     @property
@@ -663,7 +693,7 @@ class Variable(DerivationArgument):
         Returns:
             str: LaTeX-compatible string
         """
-        result = (
+        result = "$" + (
             "\\text{" + self.name.replace("_", r"\_") + "}"
             if self.name not in latexRemap
             else latexRemap[self.name]
@@ -678,6 +708,27 @@ class Variable(DerivationArgument):
                 for arg in self.__derivationArgs__
             )
             result += "= " + cast(Derivation, self.__derivation__).latex(*remappedArgs)
+
+        result += "$"
+        if len(self.unitsNorm) > 0:
+            result += "\\newline Units: " + self.unitsNorm
+        if len(self.unitsSI) > 0:
+            result += "\\newline SI: " + self.unitsSI
+            result += (
+                "\\newline Normalisation: $" + numToScientificTex(self.normSI) + "$ "
+            )
+        result += "\\newline Properties: "
+        if self.isFluid:
+            result += "fluid"
+        if self.isScalar:
+            result += "scalar"
+        if self.isDistribution:
+            result += "distribution"
+        if self.isSingleHarmonic:
+            result += "single harmonic"
+        if self.isStationary:
+            result += ", stationary"
+        result += "\\newline Subtype: " + self.subtype.replace("_", r"\_")
 
         return result
 
@@ -769,15 +820,21 @@ def varFromNode(
 
 
 def varAndDual(
-    name: str, gridObj: Grid, primaryOnDualGrid=False, dualSuffix="_dual", **kwargs
+    name: str,
+    gridObj: Grid,
+    primaryOnDualGrid=False,
+    dualSuffix="_dual",
+    dualLatexSuffix="_{dual}",
+    **kwargs,
 ) -> Tuple[Variable, Variable]:
-    """Return variable and its dual, making sure that the correct derivations are set. Takes in all of the same kwargs as the Variable constructor, and they refer to the primary variable.
+    """Return variable and its dual, making sure that the correct derivations are set. Takes in all of the same kwargs as the Variable constructor, and they refer to the primary variable. **NOTE**: The default latex remap, if present, will be treated similarly to the name, i.e. a '_{dual}' suffix will be used for the dual variable.
 
     Args:
         name (str): Name of the regular grid variable
         gridObj (Grid): Grid on which both the variables live
         primaryOnDualGrid (bool, optional): If true the primary variable is the dual grid variable. Defaults to False.
         dualSuffix (str, optional): Name suffix for dual variable. Defaults to "_dual".
+        dualLatexSuffix (str, optional): Latex remap suffix for dual variable. Defaults to "_{dual}".
 
     Returns:
         Tuple[Variable,Variable]: The primary,secondary variable tuple. **NOTE**: The dual will be the first element of the tuple if it is the primary.
@@ -789,13 +846,24 @@ def varAndDual(
     primaryName = name + dualSuffix if primaryOnDualGrid else name
     secondaryName = name if primaryOnDualGrid else name + dualSuffix
 
+    remap = kwargs.get("defaultRemap", None)
+    if remap is not None and primaryOnDualGrid:
+        kwargs["defaultRemap"] = (
+            "\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix
+        )
     isDistribution = kwargs.get("isDistribution", False)
 
     primary = Variable(
         primaryName, gridObj, isOnDualGrid=primaryOnDualGrid or isDistribution, **kwargs
     )
 
-    secondary = primary.makeDual(secondaryName)
+    if remap is not None and not primaryOnDualGrid:
+        secondary = primary.makeDual(
+            name=secondaryName,
+            latex="\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix,
+        )
+    else:
+        secondary = primary.makeDual(name=secondaryName)
 
     return primary, secondary
 
@@ -975,6 +1043,16 @@ class VariableContainer:
 
         return variableData
 
+    def getDefaultLatexRemap(self) -> Dict[str, str]:
+        """Return the base latexRemap dictionary using only default remaps associated to the variables"""
+        remap: Dict[str, str] = {}
+
+        for var in self.__variables__:
+            if var.defaultLatex is not None:
+                remap[var.name] = var.defaultLatex
+
+        return remap
+
     def addLatexToDoc(self, doc: Document, latexRemap: Dict[str, str] = {}) -> None:
         """Add variable section to a ReMKiT1D summary LaTeX doc
 
@@ -988,11 +1066,11 @@ class VariableContainer:
             with doc.create(Subsection("Implicit variables")):
                 with doc.create(Itemize()) as itemize:
                     for var in implicitVars:
-                        itemize.add_item(NoEscape(f"${var.latex(latexRemap)}$"))
+                        itemize.add_item(NoEscape(var.latex(latexRemap)))
             with doc.create(Subsection("Derived variables")):
                 with doc.create(Itemize()) as itemize:
                     for var in derivedVars:
-                        itemize.add_item(NoEscape(f"${var.latex(latexRemap)}$"))
+                        itemize.add_item(NoEscape(var.latex(latexRemap)))
 
     def registerDerivs(self, textbook: Textbook):
         """Register any derivations on derived variables in given textbook

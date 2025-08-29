@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "RMK_support"
+version = "2.0.0"
+description = "Python modules and notebooks used to initialize and analyze ReMKiT1D runs"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "GPLv3" }
+authors = [
+    { name = "UK Atomic Energy Authority" }
+]
+maintainers = [
+    { name = "Stefan Mijin", email = "stefan.mijin@ukaea.uk" }
+]
+dependencies = [
+    "numpy",
+    "xarray",
+    "holoviews",
+    "panel",
+    "matplotlib",
+    "h5py",
+    "scipy",
+    "pylatex"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["RMK_support"]
+
+[tool.uv.workspace]
+members = [
+    "rmk-support",
+]

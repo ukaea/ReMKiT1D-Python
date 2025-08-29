@@ -62,11 +62,15 @@ def test_crm_mbdata(grid: Grid):
 
     transition = crm.SimpleTransition("trans", a, b, transitionEnergy, transitionRate)
 
+    assert transition.getPopulationChange() == {"a": -1, "b": 1}
+
     mbData = crm.CRMModelboundData(grid)
 
     mbData.addTransition(transition)
 
     assert mbData.getTransitionIndices(transition.name) == [1]
+
+    assert mbData.getRate(transition, 0).name == "rate0index1"
 
     assert mbData.dict() == {
         "modelboundDataType": "modelboundCRMData",
@@ -297,9 +301,6 @@ def test_simple_transition(grid: Grid):
 
 
 def test_janev_transitions(grid: Grid):
-
-    # TODO: Test mbData.varNames and mbData.getRate, which each return the "rate(...)index(...)" format name for a given transition
-    # mbData.getRate needs to be changed to point to the correct dictionary key.
 
     temperature = vc.Variable("T", grid)
     electronDistribution = vc.Variable("f", grid, isDistribution=True)

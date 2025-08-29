@@ -237,6 +237,32 @@ class DistGradStencil(Stencil):
         )
 
 
+class DistDivStencil(Stencil):
+    """Distribution spatial divergence stencil"""
+
+    def __init__(self, rowHarmonic: int, colHarmonic: int):
+        """Return stencil representing the evolution of rowHarmonic due to spatial gradients of colHarmonic, including Jacobian values, i.e. treating the operator as a divergence. If the harmonics represent l-numbers of different parities and the variables are staggered the difference will be calculated using forward/backwards staggered difference, otherwise it will be calculated using central difference with interpolation at spatial cell faces.
+
+        Args:
+            rowHarmonic (int): Index of row (evolved) harmonic
+            colHarmonic (int): Indef of column (implicit) harmonic
+
+        """
+        super().__init__(
+            "\\delta_{h,"
+            + str(rowHarmonic)
+            + "}\\nabla \\cdot \\left( $0_{h'="
+            + str(colHarmonic)
+            + "}\\right)",
+            {
+                "stencilType": "kineticSpatialDiffStencil",
+                "rowHarmonic": rowHarmonic,
+                "colHarmonic": colHarmonic,
+                "ignoreJacobian": False,
+            },
+        )
+
+
 class DDVStencil(Stencil):
     """Velocity space gradient stencil"""
 

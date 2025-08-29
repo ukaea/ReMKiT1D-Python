@@ -51,6 +51,27 @@ class Transition(ABC):
     def outStates(self):
         return self.__outStates__
 
+    def getPopulationChange(self) -> Dict[str, int]:
+        """Return a dictionary of population change coefficients for the involved species
+
+        Returns:
+            Dict[str, int]: Species.name - population change dictionary
+        """
+        inStates = self.inStates
+        outStates = self.outStates
+
+        inStateNames = [st.name for st in inStates]
+        outStateNames = [st.name for st in outStates]
+
+        involvedSpecies = set(inStateNames + outStateNames)
+
+        popChange = {
+            sp: outStateNames.count(sp) - inStateNames.count(sp)
+            for sp in involvedSpecies
+        }
+
+        return popChange
+
     @abstractmethod
     def dict(self) -> Dict:
         pass
@@ -58,7 +79,7 @@ class Transition(ABC):
     def latex(self, **kwargs) -> str:
         reactants = "+".join([species.latex() for species in self.inStates])
         products = "+".join([species.latex() for species in self.outStates])
-        return "$" + reactants + "\\rightarrow" + products + "$"
+        return "$" + reactants + "\\rightarrow " + products + "$"
 
     def registerDerivs(self, container: Textbook):
         pass
@@ -88,6 +109,7 @@ class CRMModelboundData(ModelboundData):
         fixedTransitionEnergies=np.array([]),
         energyResolution: float = 1e-16,
         elState: int = 0,
+        staggeredFirstMoment=True,
     ) -> None:
         """ModelboundCRMData constructor
 
@@ -96,6 +118,7 @@ class CRMModelboundData(ModelboundData):
             fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to []. This gets automatically filled when adding transitions.
             energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-16.
             elState (int, optional): State ID to treat as the electrons. Defaults to 0.
+            staggeredFirstMoment (bool, optional): If true, will treat all rate1* variables as if they are on the dual grid. Defaults to True.
         """
 
         self.__grid__ = grid
@@ -114,6 +137,7 @@ class CRMModelboundData(ModelboundData):
         self.__transitions__: List[Transition] = []
         self.__energyResolution__ = energyResolution
         self.__elStateID__ = elState
+        self.__staggeredFirstMoment__ = staggeredFirstMoment
 
     def addTransitionEnergy(self, transitionEnergy: float):
         """Add a transition energy to the list of fixed transition energies allowed in CRM modelbound data. If the energy is within energyResolution of another value, it is not added"
@@ -219,10 +243,32 @@ class CRMModelboundData(ModelboundData):
 
         return varNames
 
+    def getDefaultLatexRemap(self):
+        remap = {}
+
+        for i, t in enumerate(self.__transitions__):
+            remap["rate0index" + str(i + 1)] = (
+                "C_{n,\\text{" + t.name.replace("_", r"\_") + "}}"
+            )
+            remap["rate2index" + str(i + 1)] = (
+                "C_{E,\\text{" + t.name.replace("_", r"\_") + "}}"
+            )
+            if t.hasMomentumRate:
+                remap["rate1index" + str(i + 1)] = (
+                    "C_{\\Gamma,\\text{" + t.name.replace("_", r"\_") + "}}"
+                )
+
+        return remap
+
     def __getitem__(self, key):
         if key not in self.varNames:
             raise KeyError()
-        return Variable(key, self.__grid__, isDerived=True)
+        return Variable(
+            key,
+            self.__grid__,
+            isDerived=True,
+            isOnDualGrid="rate1" in key if self.__staggeredFirstMoment__ else False,
+        )
 
     def getRate(self, transition: Union[str, Transition], moment: int = 0) -> Variable:
         """Return rate associated with a given transition as a Variable
@@ -243,20 +289,25 @@ class CRMModelboundData(ModelboundData):
         )
 
         return self[
-            "rate" + str(moment) + "index" + self.transitionTags.index(transitionName)
+            "rate"
+            + str(moment)
+            + "index"
+            + str(self.transitionTags.index(transitionName) + 1)
         ]
 
     def addLatexToDoc(self, doc: tex.Document, **kwargs):
         latexRemap: Dict[str, str] = kwargs.get("latexRemap", {})
+        usedRemap = self.getDefaultLatexRemap()
+        usedRemap.update(latexRemap)
         doc.append("CRM Modelbound data")
         with doc.create(tex.Subsubsection("Transitions")):
             with doc.create(tex.Itemize()) as itemize:
                 for transition in self.transitions:
                     itemize.add_item(
                         tex.NoEscape(
-                            transition.name
+                            transition.name.replace("_", r"\_")
                             + ": "
-                            + transition.latex(latexRemap=latexRemap)
+                            + transition.latex(latexRemap=usedRemap)
                         )
                     )
 
@@ -325,7 +376,7 @@ class DerivedTransition(Transition):
         inStates: List[Species],
         outStates: List[Species],
         rateDeriv: DerivationClosure,
-        **kwargs
+        **kwargs,
     ):
         """Transition where rates are calculated using transition objects
 
@@ -636,7 +687,7 @@ class DetailedBalanceTransition(Transition):
         electronDistribution: Variable,
         degeneracyRatio: float,
         maxResolvedCSHarmonic: int,
-        **kwargs
+        **kwargs,
     ):
         """Detailed balance transition corresponding to a direct fixed energy/cross-section electron-impact transition
 
@@ -1368,8 +1419,12 @@ class CRMElEnergyTermGenerator(TermGenerator):
         doc.append(
             tex.NoEscape(
                 "\\newline Evolved energy variable: $"
-                + self.__electronEnergyDens__.latex(latexRemap)
+                + latexRemap[self.__electronEnergyDens__.name]
                 + "$"
+                if self.__electronEnergyDens__.name in latexRemap
+                else "$\\text{"
+                + self.__electronEnergyDens__.name.replace("_", r"\_")
+                + "}$"
             )
         )
         doc.append(

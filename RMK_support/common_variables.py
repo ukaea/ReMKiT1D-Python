@@ -4,8 +4,58 @@ import numpy as np
 from .variable_container import Variable, node
 from .derivations import Species
 from . import derivations
-from .remkit_context import RMKContext
 from abc import ABC, abstractmethod
+
+
+def timeDerivative(
+    name: str, timeNorm: float, variable: Variable, **kwargs
+) -> Variable:
+    """Generate a time derivative of a given variable as a variable, making sure units and grids are correct.
+
+    Args:
+        name (str): Variable name for the time derivative
+        timeNorm (float): Time normalisation
+        variable (Variable): Variable whose derivative should be taken
+
+    Returns:
+        Variable: Variable with correct time derivative units
+    """
+
+    for key in [
+        "units",
+        "unitSI",
+        "normSI",
+        "isOnDualGrid",
+        "isDistribution",
+        "isSingleHarmonic",
+        "isScalar",
+        "subtype",
+    ]:
+        assert key not in kwargs, key + " not allowed in time derivative variable call"
+
+    latexWrapped = "$" in variable.unitsSI
+    unitSI = variable.unitsSI.replace("$", "") + "/s"
+    if latexWrapped:
+        unitSI = "$" + unitSI + "$"
+    var = Variable(
+        name,
+        variable.grid,
+        **kwargs,
+        units=variable.unitsNorm + " / time norm.",
+        unitSI=unitSI,
+        normSI=variable.normSI / timeNorm,
+        isOnDualGrid=variable.isOnDualGrid,
+        isScalar=variable.isScalar,
+        isDistribution=variable.isDistribution,
+        isSingleHarmonics=variable.isSingleHarmonic,
+        subtype=variable.subtype + "_time_derivative",
+    )
+
+    return var
+
+
+# cyclic import workaround
+from .remkit_context import RMKContext
 
 
 def density(name: str, context: RMKContext, **kwargs) -> Variable:
@@ -29,7 +79,7 @@ def density(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. density",
         unitSI="$m^{-3}$",
-        normSI=context.normDensity
+        normSI=context.normDensity,
     )
 
     return var
@@ -57,7 +107,7 @@ def temperature(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. temperature",
         unitSI="eV",
-        normSI=context.normTemperature
+        normSI=context.normTemperature,
     )
 
     return var
@@ -85,7 +135,7 @@ def flux(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. flux",
         unitSI="$m^{-2}s{-1}$",
-        normSI=context.normDensity * context.norms["speed"]
+        normSI=context.normDensity * context.norms["speed"],
     )
 
     return var
@@ -114,7 +164,7 @@ def speed(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. speed",
         unitSI="$ms^{-1}$",
-        normSI=context.norms["speed"]
+        normSI=context.norms["speed"],
     )
 
     return var
@@ -143,7 +193,7 @@ def energyDensity(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. en. density",
         unitSI="$eV m^{-3}$",
-        normSI=context.normDensity * context.normTemperature
+        normSI=context.normDensity * context.normTemperature,
     )
 
     return var
@@ -172,7 +222,7 @@ def energyFlux(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. en. flux",
         unitSI="$eV m^{-2} s^{-1}$",
-        normSI=context.norms["heatFlux"]
+        normSI=context.norms["heatFlux"],
     )
 
     return var
@@ -201,7 +251,7 @@ def electricField(name: str, context: RMKContext, **kwargs) -> Variable:
         **kwargs,
         units="norm. el. field",
         unitSI="$Vm{-1}$",
-        normSI=context.norms["EField"]
+        normSI=context.norms["EField"],
     )
 
     return var
@@ -284,7 +334,12 @@ class StandardFluidVariables(VariableFactory):
         Returns:
             Variable: Standard density variable
         """
-        n = density("n" + self.species.name, self.__context__, data=initVals).withDual()
+        n = density(
+            "n" + self.species.name,
+            self.__context__,
+            data=initVals,
+            defaultLatex="n_{" + self.species.latex() + "}",
+        ).withDual()
         if self.__associateOnCreation__:
             if n.name not in self.species.associatedVarNames:
                 self.species.associateVar(n, n.dual)
@@ -308,7 +363,12 @@ class StandardFluidVariables(VariableFactory):
             self.__context__,
             isOnDualGrid=True,
             data=initVals,
-        ).withDual("G" + self.species.name)
+            defaultLatex="\\left(\\vec{\\Gamma}_{"
+            + self.species.name
+            + "}\\right)_{dual}",
+        ).withDual(
+            "G" + self.species.name, "\\vec{\\Gamma}_{" + self.species.latex() + "}"
+        )
         if self.__associateOnCreation__:
             if G.name not in self.species.associatedVarNames:
                 self.species.associateVar(G, G.dual)
@@ -328,7 +388,10 @@ class StandardFluidVariables(VariableFactory):
             Variable: Standard energy density variable
         """
         W = energyDensity(
-            "W" + self.species.name, self.__context__, data=initVals
+            "W" + self.species.name,
+            self.__context__,
+            data=initVals,
+            defaultLatex="W_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if W.name not in self.species.associatedVarNames:
@@ -349,7 +412,11 @@ class StandardFluidVariables(VariableFactory):
             Variable: Standard temperature variable
         """
         T = temperature(
-            "T" + self.species.name, self.__context__, data=initVals, isStationary=True
+            "T" + self.species.name,
+            self.__context__,
+            data=initVals,
+            isStationary=True,
+            defaultLatex="T_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if T.name not in self.species.associatedVarNames:
@@ -379,7 +446,10 @@ class StandardFluidVariables(VariableFactory):
                 "n" + self.species.name + "_dual",
             ],
             isOnDualGrid=True,
-        ).withDual("u" + self.species.name)
+            defaultLatex="\\left(\\vec{u}_{"
+            + self.species.latex()
+            + "}\\right)_{dual}",
+        ).withDual("u" + self.species.name, "\\vec{u}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
                 self.species.associateVar(u, u.dual)
@@ -405,7 +475,10 @@ class StandardFluidVariables(VariableFactory):
             isStationary=True,
             isOnDualGrid=True,
             subtype="heatflux",
-        ).withDual("q" + self.species.name)
+            defaultLatex="\\left(\\vec{q}_{"
+            + self.species.latex()
+            + "}\\right)_{dual}",
+        ).withDual("q" + self.species.name, "\\vec{q}_{" + self.species.latex() + "}")
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:
                 self.species.associateVar(q, q.dual)
@@ -433,6 +506,7 @@ class StandardFluidVariables(VariableFactory):
                 node=node(self.density()) * node(self.temperature()),
             ),
             subtype="pressure",
+            defaultLatex="p_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if p.name not in self.species.associatedVarNames:
@@ -458,6 +532,7 @@ class StandardFluidVariables(VariableFactory):
             data=initVals,
             isStationary=True,
             subtype="viscosity",
+            defaultLatex="\\Pi_{" + self.species.latex() + "}",
         ).withDual()
         if self.__associateOnCreation__:
             if pi.name not in self.species.associatedVarNames:

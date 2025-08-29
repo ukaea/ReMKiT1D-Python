@@ -320,14 +320,14 @@ class Node:
 
         else:
             if self.additiveMode:
-                childrenResult = "+".join(
+                childrenResult = " + ".join(
                     child.latex(latexRemap) for child in self.children
                 )
 
             else:
                 childrenResult = const + "".join(
                     (
-                        "\\left(" + child.latex(latexRemap) + "\\right)"
+                        "(" + child.latex(latexRemap) + ")"
                         if child.additiveMode
                         else child.latex(latexRemap)
                     )
@@ -335,9 +335,9 @@ class Node:
                 )
 
         if self.unaryTransform is None:
-            return childrenResult.replace("+-", "-")
+            return childrenResult.replace("+ -", " - ")
 
-        return self.unaryTransform.latex(childrenResult).replace("+-", "-")
+        return self.unaryTransform.latex(childrenResult).replace("+ -", " - ")
 
 
 class UnaryTransform:
@@ -542,7 +542,7 @@ def powUnary(power: Union[int, float]) -> UnaryTransform:
             "ipow",
             intParams=[power],
             unaryCallable=func,
-            latexTemplate="\\left($0\\right)^{$1}",
+            latexTemplate="($0)^{$1}",
         )
         return transform
 
@@ -551,7 +551,7 @@ def powUnary(power: Union[int, float]) -> UnaryTransform:
         "rpow",
         realParams=[power],
         unaryCallable=func,
-        latexTemplate="\\left($0\\right)^{$1}",
+        latexTemplate="($0)^{$1}",
     )
     return transform
 

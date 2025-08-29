@@ -38,9 +38,10 @@ def test_bde_integrator(grid):
             "startingNumSteps": 1,
             "stepMultiplier": 2,
             "stepDecrament": 1,
-            "minNumNonlinIters": 5,
+            "minNumNonlinIters": 3,
             "maxBDERestarts": 3,
             "BDEConsolidationInterval": 50,
+            "BDEAllowLazyEval": False,
         },
     }
 
