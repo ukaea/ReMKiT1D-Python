@@ -344,7 +344,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if n.name not in self.species.associatedVarNames:
                 self.species.associateVar(n, n.dual)
-            self.species[n.subtype] = n
+                self.species[n.subtype] = n
         if self.__addOnCreation__:
             if n.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(n)
@@ -373,7 +373,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if G.name not in self.species.associatedVarNames:
                 self.species.associateVar(G, G.dual)
-            self.species[G.subtype] = G.dual
+                self.species[G.subtype] = G.dual
         if self.__addOnCreation__:
             if G.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(G)
@@ -397,7 +397,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if W.name not in self.species.associatedVarNames:
                 self.species.associateVar(W, W.dual)
-            self.species[W.subtype] = W
+                self.species[W.subtype] = W
         if self.__addOnCreation__:
             if W.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(W)
@@ -422,7 +422,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if T.name not in self.species.associatedVarNames:
                 self.species.associateVar(T, T.dual)
-            self.species[T.subtype] = T
+                self.species[T.subtype] = T
         if self.__addOnCreation__:
             if T.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(T)
@@ -454,7 +454,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
                 self.species.associateVar(u, u.dual)
-            self.species[u.subtype] = u.dual
+                self.species[u.subtype] = u.dual
         if self.__addOnCreation__:
             if u.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(u)
@@ -483,7 +483,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:
                 self.species.associateVar(q, q.dual)
-            self.species[q.subtype] = q.dual
+                self.species[q.subtype] = q.dual
         if self.__addOnCreation__:
             if q.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(q)
@@ -512,7 +512,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if p.name not in self.species.associatedVarNames:
                 self.species.associateVar(p, p.dual)
-            self.species[p.subtype] = p
+                self.species[p.subtype] = p
         if self.__addOnCreation__:
             if p.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(p)
@@ -538,7 +538,7 @@ class StandardFluidVariables(VariableFactory):
         if self.__associateOnCreation__:
             if pi.name not in self.species.associatedVarNames:
                 self.species.associateVar(pi, pi.dual)
-            self.species[pi.subtype] = pi
+                self.species[pi.subtype] = pi
         if self.__addOnCreation__:
             if pi.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(pi)
