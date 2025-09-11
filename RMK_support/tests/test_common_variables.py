@@ -24,24 +24,36 @@ def context():
 
 @pytest.mark.parametrize(
     "associateOnCreation,addOnCreation",
-    [pytest.param(
-        True, True, id="default",
-    ),
-    pytest.param(
-        True, False, id="associateOnly",
-    ),
-    pytest.param(
-        False, True, id="addOnly",
-    )],
+    [
+        pytest.param(
+            True,
+            True,
+            id="default",
+        ),
+        pytest.param(
+            True,
+            False,
+            id="associateOnly",
+        ),
+        pytest.param(
+            False,
+            True,
+            id="addOnly",
+        ),
+    ],
 )
-def test_standard_variable_factory(context:RMKContext, associateOnCreation:bool, addOnCreation:bool):
+def test_standard_variable_factory(
+    context: RMKContext, associateOnCreation: bool, addOnCreation: bool
+):
 
     rk = context
 
-    associateOnCreation=False
-    addOnCreation=False
+    associateOnCreation = False
+    addOnCreation = False
 
-    factory = cv.StandardFluidVariables(rk, rk.species["e"], associateOnCreation, addOnCreation)
+    factory = cv.StandardFluidVariables(
+        rk, rk.species["e"], associateOnCreation, addOnCreation
+    )
 
     n = factory.density()
 
