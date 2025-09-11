@@ -1,10 +1,11 @@
+from abc import ABC, abstractmethod
 from typing import Optional
+
 import numpy as np
 
-from .variable_container import Variable, node
-from .derivations import Species
 from . import derivations
-from abc import ABC, abstractmethod
+from .derivations import Species
+from .variable_container import Variable, node
 
 
 def timeDerivative(
