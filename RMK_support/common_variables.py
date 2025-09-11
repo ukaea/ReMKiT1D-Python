@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, cast
 
 import numpy as np
 
@@ -341,9 +341,10 @@ class StandardFluidVariables(VariableFactory):
             data=initVals,
             defaultLatex="n_{" + self.species.latex() + "}",
         ).withDual()
+        n_dual = cast(Variable, n.dual)
         if self.__associateOnCreation__:
             if n.name not in self.species.associatedVarNames:
-                self.species.associateVar(n, n.dual)
+                self.species.associateVar(n, n_dual)
                 self.species[n.subtype] = n
         if self.__addOnCreation__:
             if n.name not in self.__context__.variables.varNames:
@@ -370,10 +371,11 @@ class StandardFluidVariables(VariableFactory):
         ).withDual(
             "G" + self.species.name, "\\vec{\\Gamma}_{" + self.species.latex() + "}"
         )
+        G_dual = cast(Variable, G.dual)
         if self.__associateOnCreation__:
             if G.name not in self.species.associatedVarNames:
-                self.species.associateVar(G, G.dual)
-                self.species[G.subtype] = G.dual
+                self.species.associateVar(G, G_dual)
+                self.species[G.subtype] = G_dual
         if self.__addOnCreation__:
             if G.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(G)
@@ -394,9 +396,10 @@ class StandardFluidVariables(VariableFactory):
             data=initVals,
             defaultLatex="W_{" + self.species.latex() + "}",
         ).withDual()
+        W_dual = cast(Variable, W.dual)
         if self.__associateOnCreation__:
             if W.name not in self.species.associatedVarNames:
-                self.species.associateVar(W, W.dual)
+                self.species.associateVar(W, W_dual)
                 self.species[W.subtype] = W
         if self.__addOnCreation__:
             if W.name not in self.__context__.variables.varNames:
@@ -419,9 +422,10 @@ class StandardFluidVariables(VariableFactory):
             isStationary=True,
             defaultLatex="T_{" + self.species.latex() + "}",
         ).withDual()
+        T_dual = cast(Variable, T.dual)
         if self.__associateOnCreation__:
             if T.name not in self.species.associatedVarNames:
-                self.species.associateVar(T, T.dual)
+                self.species.associateVar(T, T_dual)
                 self.species[T.subtype] = T
         if self.__addOnCreation__:
             if T.name not in self.__context__.variables.varNames:
@@ -451,10 +455,11 @@ class StandardFluidVariables(VariableFactory):
             + self.species.latex()
             + "}\\right)_{dual}",
         ).withDual("u" + self.species.name, "\\vec{u}_{" + self.species.latex() + "}")
+        u_dual = cast(Variable, u.dual)
         if self.__associateOnCreation__:
             if u.name not in self.species.associatedVarNames:
-                self.species.associateVar(u, u.dual)
-                self.species[u.subtype] = u.dual
+                self.species.associateVar(u, u_dual)
+                self.species[u.subtype] = u_dual
         if self.__addOnCreation__:
             if u.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(u)
@@ -480,10 +485,11 @@ class StandardFluidVariables(VariableFactory):
             + self.species.latex()
             + "}\\right)_{dual}",
         ).withDual("q" + self.species.name, "\\vec{q}_{" + self.species.latex() + "}")
+        q_dual = cast(Variable, q.dual)
         if self.__associateOnCreation__:
             if q.name not in self.species.associatedVarNames:
-                self.species.associateVar(q, q.dual)
-                self.species[q.subtype] = q.dual
+                self.species.associateVar(q, q_dual)
+                self.species[q.subtype] = q_dual
         if self.__addOnCreation__:
             if q.name not in self.__context__.variables.varNames:
                 self.__context__.variables.add(q)
@@ -509,9 +515,10 @@ class StandardFluidVariables(VariableFactory):
             subtype="pressure",
             defaultLatex="p_{" + self.species.latex() + "}",
         ).withDual()
+        p_dual = cast(Variable, p.dual)
         if self.__associateOnCreation__:
             if p.name not in self.species.associatedVarNames:
-                self.species.associateVar(p, p.dual)
+                self.species.associateVar(p, p_dual)
                 self.species[p.subtype] = p
         if self.__addOnCreation__:
             if p.name not in self.__context__.variables.varNames:
@@ -535,9 +542,10 @@ class StandardFluidVariables(VariableFactory):
             subtype="viscosity",
             defaultLatex="\\Pi_{" + self.species.latex() + "}",
         ).withDual()
+        pi_dual = cast(Variable, pi.dual)
         if self.__associateOnCreation__:
             if pi.name not in self.species.associatedVarNames:
-                self.species.associateVar(pi, pi.dual)
+                self.species.associateVar(pi, pi_dual)
                 self.species[pi.subtype] = pi
         if self.__addOnCreation__:
             if pi.name not in self.__context__.variables.varNames:
