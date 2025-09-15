@@ -1,4 +1,29 @@
 # CHANGELOG
+
+## v2.0.1, xxxx-xx-xx
+
+- Bug fixes
+
+### Breaking Changes
+
+- N/A
+
+### Deprecations
+
+- N/A
+
+### New Features
+
+- N/A
+
+### Bug Fixes
+
+- Fixed bug in common variables which lead to rebuilding of density and temperature variables
+
+### New Notebooks 
+
+- N/A
+
 ## v2.0.0, 2025-08-29
 
 - See beta.1 notes
