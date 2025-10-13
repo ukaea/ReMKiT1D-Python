@@ -34,6 +34,7 @@ jobs:
         pip install pydata_sphinx_theme
         pip install .
 
+        sudo apt-get update
         sudo apt-get install --no-install-recommends pandoc
         sudo apt-get install texlive-latex-recommended texlive-latex-extra latexmk
         
