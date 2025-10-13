@@ -1,3 +1,11 @@
+<p align="left">
+    <picture >
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/ukaea/ReMKiT1D/blob/master/logos/thumbnail_ReMKiT1D_white.png">
+      <source media="(prefers-color-scheme: light)" srcset="https://github.com/ukaea/ReMKiT1D/blob/master/logos/thumbnail_ReMKiT1D_black.png">
+      <img src="https://github.com/ukaea/ReMKiT1D/blob/master/logos/thumbnail_ReMKiT1D_black.png" alt="" width="60%" >
+    </picture>
+</p>
+
 # ReMKiT1D Python support - v2.0.0
 [![tests](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/pytest_action.yml)
 [![black/mypy](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml/badge.svg)](https://github.com/ukaea/ReMKiT1D-Python/actions/workflows/code_quality.yml)
@@ -5,6 +13,8 @@
 [![Documentation Status](https://readthedocs.org/projects/remkit1d-python/badge/?version=latest)](https://remkit1d-python.readthedocs.io/en/latest/?badge=latest)
 
 Contact: stefan.mijin@ukaea.uk 
+
+Logo credits: Vera Oberhauser
 
 ## Overview
 
