@@ -71,7 +71,7 @@ common\_models submodule
    :show-inheritance:
 
 common\_variables submodule
-------------------------
+---------------------------
 
 .. automodule:: RMK_support.common_variables
    :members:
