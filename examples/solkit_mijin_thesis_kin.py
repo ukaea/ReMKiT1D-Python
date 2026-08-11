@@ -168,7 +168,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     n_b = BoundedExtrapolationDerivation("n_b")(ni)
     n_b.scalarHostProcess = rk.mpiContext.fluidProcs[-1]
 
-    extrap_LB_ui = DerivationClosure(BoundedExtrapolationDerivation("extrap_LB_ui",lowerBound=cs_b),ui)
+    extrap_LB_ui = DerivationClosure(BoundedExtrapolationDerivation("extrap_LB_ui",lowerBound=cs_b),cs)
     extrap_n = DerivationClosure(BoundedExtrapolationDerivation("extrap_n"),ni)
 
     boundaryFluxDeriv = extrap_LB_ui*extrap_n
@@ -276,7 +276,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     rk.models.add(heatingModel)
 
     rk.models.add(cm.standardBaseFluid(ionSpecies,ni,Gi,ui,Te,E))
-    rk.models.add(cm.bohmBoundaryModel(ionSpecies,ni,Gi,ui,Te,cs))
+    rk.models.add(cm.bohmBoundaryModel(ionSpecies,ni,Gi,cs,Te,cs))
 
     amModel = cm.ampereMaxwell(E_dual,[Gi_dual],[ionSpecies],rk.norms).rename("ampereMaxwell")
     amModel.ddt[E_dual] += cm.ampereMaxwellKineticElTerm(f,rk.norms).rename("kinElTerm")
@@ -337,7 +337,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
         for i,neut in enumerate(nn):
             neutDynModel.ddt[neut] += normConstDiff/sigmaCx[i] * stencils.DiffusionStencil(diffusionDeriv,diffCoeffOnDualGrid=True)(neut).rename("neutralDiff"+str(i+1))
 
-    neutDynModel.ddt[nn[0]] += stencils.BCDivStencil(ui,cs)(ni).rename("recyclingTerms")
+    neutDynModel.ddt[nn[0]] += stencils.BCDivStencil(cs,cs)(ni).rename("recyclingTerms")
 
     rk.models.add(neutDynModel)
 
