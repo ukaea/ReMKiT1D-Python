@@ -8,3 +8,4 @@ holoviews
 matplotlib
 pypandoc_binary
 scipy
+pylatex
