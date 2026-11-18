@@ -485,9 +485,4 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     rk.variables.add(rmk.Variable("elInelEnergyLossIon",rk.grid, isDerived=True))
     rk.manipulators.add(rmk.GroupEvaluator("elInelEnergyLossIon",crmModel,3,rk.variables["elInelEnergyLossIon"]))
 
-    rk.setPETScOptions(
-        cliOpts="-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
-        kspSolverType="gmres",
-    )
-
     return rk

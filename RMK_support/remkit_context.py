@@ -450,16 +450,18 @@ class RMKContext:
 
         self.__IOContext__ = IOContext()
 
+        self.__relTolPETSc__: Optional[float] = None
+        self.__cliOptsPETSc__: Optional[str] = None
         self.__optionsPETSc__: Dict[str, object] = {
             "active": True,  # Sets whether PETSc should be included (set to False if not using any PETSc functionality)
             "solverOptions": {
-                "solverToleranceRel": 0.1e-16,  # Relative tolerance for Krylov solver
+                "solverToleranceRel": 1.0e-14,  # Relative tolerance for Krylov solver
                 "solverToleranceAbs": 1.0e-20,  # Absolute tolerance
                 "solverToleranceDiv": 0.1e8,  # Divergence tolerance
-                "maxSolverIters": 10000,  # Maximum allowed Krylov iterations
-                "kspSolverType": "bcgs",  # Solver type (see PETSc documentation)
+                "maxSolverIters": 500,  # Maximum allowed Krylov iterations
+                "kspSolverType": "gmres",  # Solver type (see PETSc documentation)
                 "hyprePCType": "",  # Hypre PC type
-                "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",  # Command line stype PETSc options
+                "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0",  # Command line style PETSc options
             },
             "objGroups": 1,  # Number of PETSc objects groups to construct (different matrix contexts)
         }
@@ -564,6 +566,34 @@ class RMKContext:
     @property
     def optionsPETSc(self):
         """PETSc library options used by this context"""
+        solverOpts = cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])
+        if self.__relTolPETSc__ is None:
+            bdeTols = (
+                [
+                    step.integrator.nonlinTol
+                    for step in self.__integrationScheme__.steps
+                    if isinstance(step.integrator, it.BDEIntegrator)
+                ]
+                if self.__integrationScheme__ is not None
+                else []
+            )
+            solverOpts["solverToleranceRel"] = (
+                max(1.0e-15, min(1.0e-12, 0.01 * min(bdeTols))) if bdeTols else 1.0e-14
+            )
+        if self.__cliOptsPETSc__ is None:
+            implicitVars = (
+                self.__variables__.implicitVars
+                if self.__variables__ is not None
+                else []
+            )
+            if implicitVars and not any(var.isDistribution for var in implicitVars):
+                solverOpts["PETScCommandLineOpts"] = (
+                    "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_shift_type nonzero"
+                )
+            else:
+                solverOpts["PETScCommandLineOpts"] = (
+                    "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0"
+                )
         return self.__optionsPETSc__
 
     @property
@@ -606,53 +636,50 @@ class RMKContext:
 
     def setPETScOptions(
         self,
-        active=True,
-        relTol=0.1e-16,
-        absTol=1.0e-20,
-        divTol=0.1e8,
-        maxIters=10000,
-        kspSolverType="bcgs",
-        hyprePC="",
-        cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
-        objGroups=1,
+        active: Optional[bool] = None,
+        relTol: Optional[float] = None,
+        absTol: Optional[float] = None,
+        divTol: Optional[float] = None,
+        maxIters: Optional[int] = None,
+        kspSolverType: Optional[str] = None,
+        hyprePC: Optional[str] = None,
+        cliOpts: Optional[str] = None,
+        objGroups: Optional[int] = None,
     ) -> None:
-        """Set PETSc solver options
+        """Update PETSc solver options (omitted arguments preserve current or auto-resolved values)
 
         Args:
-            active (bool, optional): Set to true if the PETSc object is built - turn off if no implicit terms in any model. Defaults to True.
-            relTol (float, optional): Solver relative tolerance. Defaults to 0.1e-16.
-            absTol (float, optional): Solver absolute tolerance. Defaults to 1.0e-20.
-            divTol (float, optional): Solver divergence tolerance. Defaults to 0.1e+8.
-            maxIters (int, optional): Maximum allowed number of KSP iterations. Defaults to 10000.
-            kspSolverType (str, optional): Type of KSP solver used. Defaults to "bcgs".
-            hyprePC (str, optional): Type of Hypre preconditioner used. Defaults to "euclid".
-            cliOpts (str, optional): Optional command line PETSc options. Defaults to "".
-            objGroups (int, optional): Number of PETSc object groups to create. This is useful when different integrators need to be associated with different models/terms. Defaults to 1.
+            active (Optional[bool], optional): Set to true if the PETSc object is built - turn off if no implicit terms in any model. Defaults to None (initial context value True).
+            relTol (Optional[float], optional): Solver relative tolerance. Defaults to None (auto-clamped to 1% of BDE nonlinTol in [1e-15, 1e-12], fallback 1e-14).
+            absTol (Optional[float], optional): Solver absolute tolerance. Defaults to None (initial context value 1.0e-20).
+            divTol (Optional[float], optional): Solver divergence tolerance. Defaults to None (initial context value 0.1e+8).
+            maxIters (Optional[int], optional): Maximum allowed number of KSP iterations. Defaults to None (initial context value 500).
+            kspSolverType (Optional[str], optional): Type of KSP solver used. Defaults to None (initial context value "gmres").
+            hyprePC (Optional[str], optional): Type of Hypre preconditioner used. Defaults to None (initial context value "").
+            cliOpts (Optional[str], optional): Optional command line PETSc options. Defaults to None (auto bjacobi+lu for pure fluid, bjacobi+ilu(0) when distributions are present).
+            objGroups (Optional[int], optional): Number of PETSc object groups to create. This is useful when different integrators need to be associated with different models/terms. Defaults to None (initial context value 1).
         """
-
-        self.__optionsPETSc__["active"] = active
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "solverToleranceRel"
-        ] = relTol
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "solverToleranceAbs"
-        ] = absTol
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "solverToleranceDiv"
-        ] = divTol
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "maxSolverIters"
-        ] = maxIters
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "kspSolverType"
-        ] = kspSolverType
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "hyprePCType"
-        ] = hyprePC
-        cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])[
-            "PETScCommandLineOpts"
-        ] = cliOpts
-        self.__optionsPETSc__["objGroups"] = objGroups
+        solverOpts = cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])
+        if active is not None:
+            self.__optionsPETSc__["active"] = active
+        if relTol is not None:
+            self.__relTolPETSc__ = relTol
+            solverOpts["solverToleranceRel"] = relTol
+        if absTol is not None:
+            solverOpts["solverToleranceAbs"] = absTol
+        if divTol is not None:
+            solverOpts["solverToleranceDiv"] = divTol
+        if maxIters is not None:
+            solverOpts["maxSolverIters"] = maxIters
+        if kspSolverType is not None:
+            solverOpts["kspSolverType"] = kspSolverType
+        if hyprePC is not None:
+            solverOpts["hyprePCType"] = hyprePC
+        if cliOpts is not None:
+            self.__cliOptsPETSc__ = cliOpts
+            solverOpts["PETScCommandLineOpts"] = cliOpts
+        if objGroups is not None:
+            self.__optionsPETSc__["objGroups"] = objGroups
 
     def checkAll(self):
         """Perform all consistency checks within the components"""

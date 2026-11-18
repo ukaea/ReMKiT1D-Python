@@ -21,7 +21,7 @@ def grid():
 def test_bde_integrator(grid):
 
     integrator = it.BDEIntegrator(
-        "BDE", nonlinTol=1e-12, absTol=10.0, convergenceVars=[Variable("a", grid)]
+        "BDE", nonlinTol=1e-12, convergenceVars=[Variable("a", grid)]
     )
 
     assert integrator.dict() == {
@@ -31,7 +31,7 @@ def test_bde_integrator(grid):
         "absTol": 10.0,
         "convergenceVars": ["a"],
         "associatedPETScGroup": 1,
-        "reusePreconditioner": False,
+        "reusePreconditioner": True,
         "use2Norm": False,
         "relaxationWeight": 1.0,
         "internalStepControl": {
@@ -39,8 +39,8 @@ def test_bde_integrator(grid):
             "startingNumSteps": 1,
             "stepMultiplier": 2,
             "stepDecrament": 1,
-            "minNumNonlinIters": 3,
-            "maxBDERestarts": 3,
+            "minNumNonlinIters": 5,
+            "maxBDERestarts": 5,
             "BDEConsolidationInterval": 50,
             "BDEAllowLazyEval": False,
         },
@@ -48,8 +48,9 @@ def test_bde_integrator(grid):
 
 
 def test_bde_reuse_preconditioner():
-    integrator = it.BDEIntegrator("BDE", reusePreconditioner=True)
-    assert integrator.dict()["reusePreconditioner"] is True
+    assert it.BDEIntegrator("BDE").dict()["reusePreconditioner"] is True
+    integrator = it.BDEIntegrator("BDE", reusePreconditioner=False)
+    assert integrator.dict()["reusePreconditioner"] is False
 
 
 def test_steps(grid):

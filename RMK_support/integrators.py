@@ -630,15 +630,15 @@ class BDEIntegrator(Integrator):
         maxNonlinIters (int): Maximum allowed nonlinear (Picard/fixed point) iterations. Defaults to 100.
 
         nonlinTol (float): Relative convergence tolerance on 2-norm. Defaults to 1.0e-12.
-        absTol (float): Absolute tolerance in machine precision units (epsilon in Fortran - 2.22e-16 for double precision). Defaults to 1.0.
+        absTol (float): Absolute tolerance in machine precision units (epsilon in Fortran - 2.22e-16 for double precision). Defaults to 10.0.
 
         convergenceVars (List[str]): Variables used to check for convergence. Defaults to [], which results in all implicit variables.
 
         associatedPETScGroup (int): PETSc object group this integrator is associated with. Defaults to 1.
 
         reusePreconditioner (bool): Reuse the PETSc preconditioner after the first Picard solve of each attempted substep.
-        Defaults to False. Disabled for dt=0; a diverged reused-PC solve is retried once with a fresh PC.
-        Requires an iterative KSP (not preonly). Application control overrides -ksp_reuse_preconditioner.
+        Defaults to True. Disabled for dt=0 or KSPPREONLY; a diverged reused-PC solve is retried once with a fresh PC.
+        Application control overrides -ksp_reuse_preconditioner.
         PETSc error options such as -ksp_error_if_not_converged can abort before the retry.
 
         use2Norm (bool): True if 2-norm should be used (benefits distributions). Defaults to False.
@@ -651,9 +651,9 @@ class BDEIntegrator(Integrator):
 
         stepDecrament (int): How much to reduce the current number of substeps if nonlinear iterations are below minNonlinIters. Defaults to 1. NOTE: Deprecated from ReMKiT1D v1.3.0
 
-        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 3. NOTE: From ReMKiT1D v1.3.0 this handles consolidation
+        minNonlinIters (int): Number of nonlinear iterations under which the integrator should attempt to reduce the number of internal steps. Defaults to 5. NOTE: From ReMKiT1D v1.3.0 this handles consolidation
 
-        maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 3. Note that there is a hard limit of 10.
+        maxBDERestarts (int): Maximum number of solver restarts with step splitting. Defaults to 5. Note that there is a hard limit of 10.
 
         consolidationInterval (int): After how many steps the integrator should attempt to reduce the number of substeps to one. Defaults to 50. NOTE: Deprecated from ReMKiT1D v1.3.0 - consolidation happens at every step now based on MinNolinIters
 
@@ -664,10 +664,10 @@ class BDEIntegrator(Integrator):
         super().__init__(name)
         self.__maxNonlinIters__: int = kwargs.get("maxNonlinIters", 100)
         self.__nonlinTol__: float = kwargs.get("nonlinTol", 1.0e-12)
-        self.__absTol__: float = kwargs.get("absTol", 1.0)
+        self.__absTol__: float = kwargs.get("absTol", 10.0)
         self.__convergenceVars__: List[Variable] = kwargs.get("convergenceVars", [])
         self.__associatedPETScGroup__: int = kwargs.get("associatedPETScGroup", 1)
-        self.__reusePreconditioner__: bool = kwargs.get("reusePreconditioner", False)
+        self.__reusePreconditioner__: bool = kwargs.get("reusePreconditioner", True)
         self.__use2Norm__: bool = kwargs.get("use2Norm", False)
 
         self.__internalStepControl__: bool = kwargs.get("internalStepControl", False)
@@ -675,11 +675,15 @@ class BDEIntegrator(Integrator):
         self.__initialNumInternalSteps__: int = kwargs.get("initialNumInternalSteps", 1)
         self.__stepMultiplier__: int = kwargs.get("stepMultiplier", 2)
         self.__stepDecrament__ = kwargs.get("stepDecrament", 1)
-        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 3)
+        self.__minNonlinIters__ = kwargs.get("minNonlinIters", 5)
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
-        self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 3)
+        self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 5)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
         self.__allowLazyEval__: bool = kwargs.get("allowLazyEval", False)
+
+    @property
+    def nonlinTol(self) -> float:
+        return self.__nonlinTol__
 
     def dict(self) -> dict:
 

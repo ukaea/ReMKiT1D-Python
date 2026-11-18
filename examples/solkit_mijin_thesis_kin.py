@@ -464,9 +464,4 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     rk.manipulators.add(rmk.MBDataExtractor("logLeeExtract",rk.models["e-e0"],logLee))
 
-    rk.setPETScOptions(
-        cliOpts="-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
-        kspSolverType="gmres",
-    )
-
     return rk

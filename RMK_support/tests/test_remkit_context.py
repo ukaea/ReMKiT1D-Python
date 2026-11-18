@@ -149,8 +149,10 @@ def test_set_petsc():
     rk = RMKContext()
 
     rk.setPETScOptions(
-        relTol=1e-14, absTol=1e-15, divTol=1e6, maxIters=2000, kspSolverType="gmres"
+        relTol=1e-14, absTol=1e-15, divTol=1e6, maxIters=2000, kspSolverType="bcgs"
     )
+    # Partial update preserves previously set explicit options
+    rk.setPETScOptions(maxIters=1500)
 
     assert rk.optionsPETSc == {
         "active": True,
@@ -158,13 +160,51 @@ def test_set_petsc():
             "solverToleranceRel": 1.0e-14,
             "solverToleranceAbs": 1.0e-15,
             "solverToleranceDiv": 0.1e7,
-            "maxSolverIters": 2000,
-            "kspSolverType": "gmres",
+            "maxSolverIters": 1500,
+            "kspSolverType": "bcgs",
             "hyprePCType": "",
-            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
+            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0",
         },
         "objGroups": 1,
     }
+
+
+def test_petsc_auto_options(grid: Grid):
+    rk = RMKContext()
+    rk.grid = grid
+    n = Variable("n", rk.grid)
+    rk.variables.add(n)
+
+    # Pure fluid implicit variable -> bjacobi + lu
+    assert (
+        rk.optionsPETSc["solverOptions"]["PETScCommandLineOpts"]
+        == "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_shift_type nonzero"
+    )
+
+    # Auto relTol clamped to 1% of BDE nonlinTol within [1e-15, 1e-12]
+    for nonlin_tol, expected_rel_tol in [
+        (1e-8, 1e-12),
+        (1e-10, 1e-12),
+        (1e-12, 1e-14),
+        (1e-14, 1e-15),
+    ]:
+        rk.integrationScheme = it.IntegrationScheme(
+            dt=0.1,
+            steps=it.IntegrationStep(
+                "BE", it.BDEIntegrator("BDE", nonlinTol=nonlin_tol)
+            ),
+        )
+        assert rk.optionsPETSc["solverOptions"]["solverToleranceRel"] == pytest.approx(
+            expected_rel_tol
+        )
+
+    # Adding an implicit distribution switches auto cliOpts to bjacobi + ilu(0)
+    f = Variable("f", rk.grid, isDistribution=True)
+    rk.variables.add(f)
+    assert (
+        rk.optionsPETSc["solverOptions"]["PETScCommandLineOpts"]
+        == "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0"
+    )
 
 
 def test_species(grid: Grid):
@@ -492,13 +532,13 @@ def test_wrapper_init(grid: Grid):
     assert rk.optionsPETSc == {
         "active": True,
         "solverOptions": {
-            "solverToleranceRel": 0.1e-16,
+            "solverToleranceRel": 1.0e-14,
             "solverToleranceAbs": 1.0e-20,
             "solverToleranceDiv": 0.1e8,
-            "maxSolverIters": 10000,
-            "kspSolverType": "bcgs",
+            "maxSolverIters": 500,
+            "kspSolverType": "gmres",
             "hyprePCType": "",
-            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 1",
+            "PETScCommandLineOpts": "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0",
         },
         "objGroups": 1,
     }
