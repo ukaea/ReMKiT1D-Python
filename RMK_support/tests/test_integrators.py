@@ -31,6 +31,7 @@ def test_bde_integrator(grid):
         "absTol": 10.0,
         "convergenceVars": ["a"],
         "associatedPETScGroup": 1,
+        "reusePreconditioner": False,
         "use2Norm": False,
         "relaxationWeight": 1.0,
         "internalStepControl": {
@@ -44,6 +45,11 @@ def test_bde_integrator(grid):
             "BDEAllowLazyEval": False,
         },
     }
+
+
+def test_bde_reuse_preconditioner():
+    integrator = it.BDEIntegrator("BDE", reusePreconditioner=True)
+    assert integrator.dict()["reusePreconditioner"] is True
 
 
 def test_steps(grid):

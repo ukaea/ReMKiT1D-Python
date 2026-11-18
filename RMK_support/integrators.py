@@ -636,6 +636,11 @@ class BDEIntegrator(Integrator):
 
         associatedPETScGroup (int): PETSc object group this integrator is associated with. Defaults to 1.
 
+        reusePreconditioner (bool): Reuse the PETSc preconditioner after the first Picard solve of each attempted substep.
+        Defaults to False. Disabled for dt=0; a diverged reused-PC solve is retried once with a fresh PC.
+        Requires an iterative KSP (not preonly). Application control overrides -ksp_reuse_preconditioner.
+        PETSc error options such as -ksp_error_if_not_converged can abort before the retry.
+
         use2Norm (bool): True if 2-norm should be used (benefits distributions). Defaults to False.
 
         internalStepControl (bool): True if integrator is allowed to control its internal steps based on convergence. Defaults to False.
@@ -662,6 +667,7 @@ class BDEIntegrator(Integrator):
         self.__absTol__: float = kwargs.get("absTol", 1.0)
         self.__convergenceVars__: List[Variable] = kwargs.get("convergenceVars", [])
         self.__associatedPETScGroup__: int = kwargs.get("associatedPETScGroup", 1)
+        self.__reusePreconditioner__: bool = kwargs.get("reusePreconditioner", False)
         self.__use2Norm__: bool = kwargs.get("use2Norm", False)
 
         self.__internalStepControl__: bool = kwargs.get("internalStepControl", False)
@@ -684,6 +690,7 @@ class BDEIntegrator(Integrator):
             "absTol": self.__absTol__,
             "convergenceVars": [var.name for var in self.__convergenceVars__],
             "associatedPETScGroup": self.__associatedPETScGroup__,
+            "reusePreconditioner": self.__reusePreconditioner__,
             "use2Norm": self.__use2Norm__,
             "relaxationWeight": self.__relaxationWeight__,
             "internalStepControl": {
