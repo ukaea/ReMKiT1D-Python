@@ -42,6 +42,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     initFromFluidRun: If true will initialize from given hdf5 file assuming it is a fluid run. Defaults to False.
     hdf5InputFile (str): Path of hdf5 input file (without the extension!). Defaults to "ReMKiT1DVarInput".
     amjuelPath (str): Path to amjuel.tex file. Defaults to "../data/amjuel.tex".
+    lagEEIJTerms (bool): If true, lag the higher-l e-e Shkarofsky I/J(f_l) field-particle C[f_0, f_l] integral terms in modelbound data with implicit f_0 velocity derivatives. Defaults to False.
 
     Returns:
         RMKContext: Context containing run information
@@ -233,13 +234,14 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     # ### e-e collisions for odd l
 
-    rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te_dual,ne_dual,list(range(2,rk.grid.numH+1,2))).rename("e-e_odd"))
+    lagEEIJTerms = kwargs.get("lagEEIJTerms", False)
+    rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te_dual,ne_dual,list(range(2,rk.grid.numH+1,2)),lagIJTerms=lagEEIJTerms).rename("e-e_odd"))
 
     if lMax > 1:
         
         rk.models.add(cm.flowingIonEIColl(rk.grid,rk.textbook,rk.norms,f,ni,ui,ne,Te,ionSpecies,list(range(3,rk.grid.numH+1,2)),Gi).rename("e-i_even"))
 
-        rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te,ne,list(range(3,rk.grid.numH+1,2))).rename("e-e_even"))
+        rk.models.add(cm.eeCollHigherL(rk.grid,rk.textbook,rk.norms,f,Te,ne,list(range(3,rk.grid.numH+1,2)),lagIJTerms=lagEEIJTerms).rename("e-e_even"))
 
     # ### Logical boundary condition
 

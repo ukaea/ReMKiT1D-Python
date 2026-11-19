@@ -3159,6 +3159,170 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
     assert model.dict() == result
 
 
+def test_eeCollHigherL_lagged(norms: dict):
+    grid = Grid(
+        np.geomspace(5.0, 0.2, 4),
+        np.geomspace(0.1, 0.8, 5),
+        2,
+        0,
+        interpretXGridAsWidths=True,
+        interpretVGridAsWidths=True,
+    )
+    textbook = dv.Textbook(grid)
+    f, _ = vc.varAndDual("f", grid, isDistribution=True)
+    Te, Te_dual = vc.varAndDual("Te", grid)
+    ne, ne_dual = vc.varAndDual("ne", grid)
+
+    gamma0norm = elCharge**4 / (4 * np.pi * elMass**2 * epsilon0**2)
+    normHalf = gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    normFull = gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    v1 = (1.0 / grid.vGrid).tolist()
+    v2 = (1.0 / grid.vGrid**2).tolist()
+    expectedCfAtZero = [
+        1.0 / (1.0 - grid.vGrid[0] ** 2 / grid.vGrid[1] ** 2),
+        -grid.vGrid[0] ** 2
+        / grid.vGrid[1] ** 2
+        / (1.0 - grid.vGrid[0] ** 2 / grid.vGrid[1] ** 2),
+    ]
+
+    oddModel = cm.eeCollHigherL(
+        grid,
+        textbook,
+        norms,
+        f,
+        Te_dual,
+        ne_dual,
+        [2],
+        lagIJTerms=True,
+    )
+    oddDict = oddModel.dict()
+    assert "lagIJddf_h=2" in oddDict["termTags"]
+    assert "lagIJdf_h=2" in oddDict["termTags"]
+    assert all(
+        oddDict[tag]["stencilData"]["stencilType"] != "shkarofskyIJStencil"
+        for tag in oddDict["termTags"]
+    )
+    assert "df0" not in oddModel.mbData.varNames
+    assert "ddf0" not in oddModel.mbData.varNames
+
+    ddfOdd = oddDict["lagIJddf_h=2"]
+    dfOdd = oddDict["lagIJdf_h=2"]
+    assert ddfOdd["implicitVar"] == "f"
+    assert ddfOdd["stencilData"] == {
+        "stencilType": "vDiffusionStencil",
+        "modelboundA": "none",
+        "rowHarmonic": 2,
+        "colHarmonic": 1,
+    }
+    assert ddfOdd["varData"]["requiredRowVarNames"] == []
+    assert set(ddfOdd["varData"]["requiredMBRowVarNames"]) == {
+        "logLee",
+        "IJddf_h2",
+    }
+    assert ddfOdd["customNormConst"]["multConst"] == pytest.approx(normHalf)
+    assert ddfOdd["velocityProfile"] == pytest.approx(v1)
+    assert ddfOdd["skipPattern"] is False
+
+    assert dfOdd["implicitVar"] == "f"
+    assert dfOdd["stencilData"]["stencilType"] == "ddvStencil"
+    assert dfOdd["stencilData"]["modelboundC"] == "none"
+    assert dfOdd["stencilData"]["modelboundInterp"] == "none"
+    assert dfOdd["stencilData"]["rowHarmonic"] == 2
+    assert dfOdd["stencilData"]["colHarmonic"] == 1
+    assert dfOdd["stencilData"]["cfAtZero"] == pytest.approx(expectedCfAtZero)
+    assert dfOdd["varData"]["requiredRowVarNames"] == []
+    assert set(dfOdd["varData"]["requiredMBRowVarNames"]) == {
+        "logLee",
+        "IJdf_h2",
+    }
+    assert dfOdd["customNormConst"]["multConst"] == pytest.approx(normFull)
+    assert dfOdd["velocityProfile"] == pytest.approx(v2)
+    assert dfOdd["skipPattern"] is False
+
+    # l = 1 (harmonic 2): C2 = 0 and C6 = 0 so J0_h2 is omitted, and I1_h2 only enters IJdf_h2
+    assert "J0_h2" not in oddModel.mbData.varNames
+    oddMB = oddModel.mbData.dict()
+    assert oddMB["f2"]["requiredVarNames"] == ["f"]
+    assert oddMB["I3_h2"]["requiredVarNames"] == ["f2"]
+    assert oddMB["J-2_h2"]["requiredVarNames"] == ["f2"]
+    assert oddMB["I1_h2"]["requiredVarNames"] == ["f2"]
+    assert oddMB["IJddf_h2"]["requiredVarNames"] == ["I3_h2", "J-2_h2"]
+    assert oddMB["IJdf_h2"]["requiredVarNames"] == ["I3_h2", "J-2_h2", "I1_h2"]
+
+    oddI3 = oddModel.mbData["I3_h2"].derivation.dict()
+    oddJm2 = oddModel.mbData["J-2_h2"].derivation.dict()
+    oddI1 = oddModel.mbData["I1_h2"].derivation.dict()
+    assert oddI3["type"] == "IJIntegralDerivation"
+    assert oddI3["isJIntegral"] is False and oddI3["index"] == 3
+    assert oddJm2["isJIntegral"] is True and oddJm2["index"] == -2
+    assert oddI1["isJIntegral"] is False and oddI1["index"] == 1
+    assert oddModel.mbData["IJddf_h2"].derivation.dict()[
+        "polynomialCoefficients"
+    ] == pytest.approx([2 / 5, 2 / 5])
+    assert oddModel.mbData["IJdf_h2"].derivation.dict()[
+        "polynomialCoefficients"
+    ] == pytest.approx([-1 / 5, 2 / 15, 1 / 3])
+
+    evenModel = cm.eeCollHigherL(
+        grid,
+        textbook,
+        norms,
+        f,
+        Te,
+        ne,
+        [3],
+        lagIJTerms=True,
+    )
+    evenDict = evenModel.dict()
+    assert "df0" not in evenModel.mbData.varNames
+    assert "ddf0" not in evenModel.mbData.varNames
+    assert "lagIJddf_h=3" in evenDict["termTags"]
+    assert "lagIJdf_h=3" in evenDict["termTags"]
+    assert evenDict["lagIJddf_h=3"]["implicitVar"] == "f"
+    assert evenDict["lagIJddf_h=3"]["stencilData"] == {
+        "stencilType": "vDiffusionStencil",
+        "modelboundA": "none",
+        "rowHarmonic": 3,
+        "colHarmonic": 1,
+    }
+    assert evenDict["lagIJdf_h=3"]["implicitVar"] == "f"
+    assert evenDict["lagIJdf_h=3"]["stencilData"]["stencilType"] == "ddvStencil"
+    assert evenDict["lagIJdf_h=3"]["stencilData"]["rowHarmonic"] == 3
+    assert evenDict["lagIJdf_h=3"]["stencilData"]["colHarmonic"] == 1
+    assert evenDict["lagIJdf_h=3"]["stencilData"]["cfAtZero"] == pytest.approx(
+        expectedCfAtZero
+    )
+    assert evenDict["lagIJddf_h=3"]["customNormConst"]["multConst"] == pytest.approx(
+        normHalf
+    )
+    assert evenDict["lagIJdf_h=3"]["customNormConst"]["multConst"] == pytest.approx(
+        normFull
+    )
+
+    # l = 2 (harmonic 3): all four integrals active
+    evenMB = evenModel.mbData.dict()
+    assert evenMB["IJddf_h3"]["requiredVarNames"] == [
+        "I4_h3",
+        "J-3_h3",
+        "I2_h3",
+        "J-1_h3",
+    ]
+    assert evenMB["IJdf_h3"]["requiredVarNames"] == [
+        "I4_h3",
+        "J-3_h3",
+        "I2_h3",
+        "J-1_h3",
+    ]
+    assert evenModel.mbData["J-1_h3"].derivation.dict()["isJIntegral"] is True
+    assert evenModel.mbData["J-1_h3"].derivation.dict()["index"] == -1
+    assert evenModel.mbData["IJddf_h3"].derivation.dict()[
+        "polynomialCoefficients"
+    ] == pytest.approx([12 / 35, 12 / 35, -2 / 15, -2 / 15])
+    assert evenModel.mbData["IJdf_h3"].derivation.dict()[
+        "polynomialCoefficients"
+    ] == pytest.approx([-6 / 35, 1 / 35, 4 / 15, -1 / 15])
+
+
 def test_ampere_maxwell_kinetic_term(grid: Grid, norms: dict):
 
     distribution = vc.Variable("f", grid, isDistribution=True)

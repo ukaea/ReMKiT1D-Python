@@ -1239,6 +1239,7 @@ def eeCollHigherL(
     elTemperature: Variable,
     elDensity: Variable,
     evolvedHarmonics: List[int],
+    lagIJTerms: bool = False,
 ) -> mc.Model:
     """Return e-e collision model for l>0 using matrix terms. Assumes default normalization.
     NOTE: Must be called separately for odd and even harmonics if staggered, and the fluid quantities used must reflect that (dual for odd harmonics).
@@ -1251,6 +1252,7 @@ def eeCollHigherL(
         elTemperature (Variable): Electron temperature - should live on the same grid as the evolved harmonics
         elDensity (Variable): Electron density - should live on the same grid as the evolved harmonics
         evolvedHarmonics (List[int]): List of evolved harmonics, must all correspond to either odd or even l numbers
+        lagIJTerms (bool, optional): If true, lag the higher-l Shkarofsky I/J(f_l) integral terms (the field-particle C[f_0, f_l] contribution) into O(N_v) modelbound data while keeping the f_0 velocity derivatives implicit via D2DV2Stencil and DDVStencil, removing the dense N_v x N_v matrix blocks. Defaults to False (fully implicit dense stencils).
 
     Returns:
         Model: Electron-electron collision operator model for l>0, ready for addition into a ReMKiT1D context
@@ -1309,23 +1311,26 @@ def eeCollHigherL(
     )
     mbData.addVar(textbook["logLee"](elTemperature, elDensity))
 
-    df0 = derivations.DDVDerivation(
-        "df0/dv",
-        grid,
-        1,
-        vifAtZero=(
-            1.0 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
-            -vGrid[0] ** 2 / vGrid[1] ** 2 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
-        ),
+    f0AtZeroCoeffs = (
+        1.0 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
+        -vGrid[0] ** 2 / vGrid[1] ** 2 / (1.0 - vGrid[0] ** 2 / vGrid[1] ** 2),
     )
-    ddf0 = derivations.D2DV2Derivation("d2f0/dv2", grid, 1)
 
-    mbData.addVar(
-        df0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("df0")
-    )
-    mbData.addVar(
-        ddf0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("ddf0")
-    )
+    if not lagIJTerms:
+        df0 = derivations.DDVDerivation(
+            "df0/dv",
+            grid,
+            1,
+            vifAtZero=f0AtZeroCoeffs,
+        )
+        ddf0 = derivations.D2DV2Derivation("d2f0/dv2", grid, 1)
+
+        mbData.addVar(
+            df0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("df0")
+        )
+        mbData.addVar(
+            ddf0(derivDistribution).onDualGrid(elDensity.isOnDualGrid).rename("ddf0")
+        )
 
     eeModel = mc.Model("e-e_coll_l>0")
     eeModel.setModelboundData(mbData)
@@ -1408,123 +1413,136 @@ def eeCollHigherL(
         @ (h * (v3 * diag(distribution))).rename("termLL")
     )
 
-    #     # I/J(f_l) terms
+    # I/J(f_l) terms
+
+    normHalf = gamma0norm / 2 * norms["density"] * norms["time"] / norms["velGrid"] ** 3
+    normFull = gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
 
     for harmonic in evolvedHarmonics:
         l = lNums[harmonic - 1]
+        C1 = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))
+        C2 = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))
+        C3 = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))
+        C4 = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3))
+        C5 = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1))
+        C6 = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))
+
+        if lagIJTerms:
+            fHName = f"f{harmonic}"
+            mbData.addVar(
+                derivations.HarmonicExtractorDerivation(fHName, grid, harmonic)(
+                    distribution
+                )
+                .onDualGrid(elDensity.isOnDualGrid)
+                .rename(fHName)
+            )
+
+            ijSpecs: List[Tuple[str, bool, int, float, float]] = [
+                (f"I{l + 2}_h{harmonic}", False, l + 2, C1, C3),
+                (f"J{-l - 1}_h{harmonic}", True, -l - 1, C1, C4),
+                (f"I{l}_h{harmonic}", False, l, C2, C5),
+                (f"J{1 - l}_h{harmonic}", True, 1 - l, C2, C6),
+            ]
+            for ijName, isJ, idx, cDdf, cDf in ijSpecs:
+                if cDdf == 0.0 and cDf == 0.0:
+                    continue
+                derivFn = (
+                    derivations.shkarofskyJIntegralDeriv
+                    if isJ
+                    else derivations.shkarofskyIIntegralDeriv
+                )
+                mbData.addVar(
+                    Variable(
+                        ijName,
+                        grid,
+                        isSingleHarmonic=True,
+                        derivation=derivFn(ijName, idx),
+                        derivationArgs=[fHName],
+                    ).onDualGrid(elDensity.isOnDualGrid)
+                )
+
+            for polyName, sumVarName, coeffPos in (
+                (f"IJddfSum_h{harmonic}", f"IJddf_h{harmonic}", 3),
+                (f"IJdfSum_h{harmonic}", f"IJdf_h{harmonic}", 4),
+            ):
+                activeTerms: List[Tuple[str, float]] = [
+                    (spec[0], float(spec[coeffPos]))
+                    for spec in ijSpecs
+                    if spec[coeffPos] != 0.0
+                ]
+                poly = derivations.PolynomialDerivation(
+                    polyName,
+                    0.0,
+                    polyPowers=np.ones(len(activeTerms)),
+                    polyCoeffs=np.array([coeff for _, coeff in activeTerms]),
+                )
+                mbData.addVar(
+                    poly(*[mbData[name] for name, _ in activeTerms])
+                    .onDualGrid(elDensity.isOnDualGrid)
+                    .rename(sumVarName)
+                )
+
+            velDiffF0 = stencils.D2DV2Stencil(harmonic, 1)
+            ddvF0 = stencils.DDVStencil(harmonic, 1, cfAtZero=f0AtZeroCoeffs)
+            eeModel.ddt[distribution] += (
+                normHalf
+                * (mbData["logLee"] * mbData[f"IJddf_h{harmonic}"])
+                @ (v1 * velDiffF0(distribution)).rename(f"lagIJddf_h={harmonic}")
+            )
+            eeModel.ddt[distribution] += (
+                normFull
+                * (mbData["logLee"] * mbData[f"IJdf_h{harmonic}"])
+                @ (v2 * ddvF0(distribution)).rename(f"lagIJdf_h={harmonic}")
+            )
+            continue
 
         # d2f0/dv2 terms
-        # C1*I_{l+2} term
-        C = (l + 1) * (l + 2) / ((2 * l + 1) * (2 * l + 3))  # C1
-
-        normConst = (
-            C
-            * gamma0norm
-            / 2
-            * norms["density"]
-            * norms["time"]
-            / norms["velGrid"] ** 3
-        )
-
         Il2 = stencils.ShkarofskyIStencil(harmonic, harmonic, l + 2)
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["ddf0"])
-            @ (v1 * Il2(distribution)).rename("C1Il+2_h=" + str(harmonic))
-        )
-
-        # C1*J_{-l-1} term
         Jl1 = stencils.ShkarofskyJStencil(harmonic, harmonic, -l - 1)
-
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["ddf0"])
-            @ (v1 * Jl1(distribution)).rename("C1J-l-1_h=" + str(harmonic))
-        )
-
-        # C2*I_l term
-        C = -(l - 1) * l / ((2 * l + 1) * (2 * l - 1))  # C2
-        normConst = (
-            C
-            * gamma0norm
-            / 2
-            * norms["density"]
-            * norms["time"]
-            / norms["velGrid"] ** 3
-        )
-
         Il = stencils.ShkarofskyIStencil(harmonic, harmonic, l)
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["ddf0"])
-            @ (v1 * Il(distribution)).rename("C2Il_h=" + str(harmonic))
-        )
-
-        # C2*J1-l term
         J1l = stencils.ShkarofskyJStencil(harmonic, harmonic, 1 - l)
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["ddf0"])
-            @ (v1 * J1l(distribution)).rename("C2J1-l_h=" + str(harmonic))
-        )
+
+        for coeff, stencilObj, termPrefix in (
+            (C1, Il2, "C1Il+2_h="),
+            (C1, Jl1, "C1J-l-1_h="),
+            (C2, Il, "C2Il_h="),
+            (C2, J1l, "C2J1-l_h="),
+        ):
+            normConst = (
+                coeff
+                * gamma0norm
+                / 2
+                * norms["density"]
+                * norms["time"]
+                / norms["velGrid"] ** 3
+            )
+            eeModel.ddt[distribution] += (
+                normConst
+                * (mbData["logLee"] * mbData["ddf0"])
+                @ (v1 * stencilObj(distribution)).rename(termPrefix + str(harmonic))
+            )
 
         # df0/dv terms
-
-        # C3*I_{l+2} term
-        C = -((l + 1) * l / 2 + l + 1) / ((2 * l + 1) * (2 * l + 3))  # C3
-        normConst = (
-            C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
-        )
-
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["df0"])
-            @ (v2 * Il2(distribution))
-            .rename("C3Il+2_h=" + str(harmonic))
-            .withSkippingPattern()
-        )
-
-        # C4*J_{-l-1} term
-        C = (-(l + 1) * l / 2 + l + 2) / ((2 * l + 1) * (2 * l + 3))  # C4
-        normConst = (
-            C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
-        )
-
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["df0"])
-            @ (v2 * Jl1(distribution))
-            .rename("C4J-l-1_h=" + str(harmonic))
-            .withSkippingPattern()
-        )
-
-        # C5*I_l term
-        C = ((l + 1) * l / 2 + l - 1) / ((2 * l + 1) * (2 * l - 1))  # C5
-        normConst = (
-            C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
-        )
-
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["df0"])
-            @ (v2 * Il(distribution))
-            .rename("C5Il_h=" + str(harmonic))
-            .withSkippingPattern()
-        )
-
-        # C6*J1-l term
-        C = -((l + 1) * l / 2 - l) / ((2 * l + 1) * (2 * l - 1))  # C6
-        normConst = (
-            C * gamma0norm * norms["density"] * norms["time"] / norms["velGrid"] ** 3
-        )
-
-        eeModel.ddt[distribution] += (
-            normConst
-            * (mbData["logLee"] * mbData["df0"])
-            @ (v2 * J1l(distribution))
-            .rename("C6J1-l_h=" + str(harmonic))
-            .withSkippingPattern()
-        )
+        for coeff, stencilObj, termPrefix in (
+            (C3, Il2, "C3Il+2_h="),
+            (C4, Jl1, "C4J-l-1_h="),
+            (C5, Il, "C5Il_h="),
+            (C6, J1l, "C6J1-l_h="),
+        ):
+            normConst = (
+                coeff
+                * gamma0norm
+                * norms["density"]
+                * norms["time"]
+                / norms["velGrid"] ** 3
+            )
+            eeModel.ddt[distribution] += (
+                normConst
+                * (mbData["logLee"] * mbData["df0"])
+                @ (v2 * stencilObj(distribution))
+                .rename(termPrefix + str(harmonic))
+                .withSkippingPattern()
+            )
 
     return eeModel
 
