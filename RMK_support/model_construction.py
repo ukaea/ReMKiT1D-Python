@@ -622,7 +622,7 @@ class MatrixTerm(Term):
 
         kwargs:
 
-            skipPattern (bool): If true, assumes that the same stencil acting on the same implicit variable and with the same evolved variable has been used elsewhere. This is an optimisation flag to speed up the setup of large kinetic stencils. Defaults to False.
+            skipPattern (bool): If true, assumes that the same stencil acting on the same implicit variable and with the same evolved variable has been used elsewhere. This is an optimisation flag to speed up the setup of large kinetic stencils. Defaults to False. NOTE: Deprecated for ReMKiT1D builds with COO PETSc assembly (ignored by the solver, as every implicit term must register its COO slots); retained for compatibility with older ReMKiT1D versions.
 
             fixedMatrix (bool): If true will assume that the matrix is constant and that it doesn't need to be updated during the run. This is an optimisation flag useful with large constant matrices. Defaults to False.
 
@@ -712,11 +712,11 @@ class MatrixTerm(Term):
 
     @property
     def skipPattern(self):
-        """Set to true if a term with the same evolved and implicit variables as well as the stencil has already been added and this term should be skipped when calculating the sparsity pattern. This is an optimisation option for large kinetic simulations."""
+        """Set to true if a term with the same evolved and implicit variables as well as the stencil has already been added and this term should be skipped when calculating the sparsity pattern. This is an optimisation option for large kinetic simulations. NOTE: Deprecated for ReMKiT1D builds with COO PETSc assembly (ignored by the solver); retained for backward compatibility."""
         return self.__skipPattern__
 
     def withSkippingPattern(self, skip=True):
-        """Return a copy of this term with the sparsity pattern addition skipped/included
+        """Return a copy of this term with the sparsity pattern addition skipped/included. NOTE: Deprecated for ReMKiT1D builds with COO PETSc assembly (ignored by the solver); retained for backward compatibility.
 
         Args:
             skip (bool, optional): True if the sparsity pattern addition should be skipped. Defaults to True.
