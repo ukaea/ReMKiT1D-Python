@@ -659,6 +659,8 @@ class BDEIntegrator(Integrator):
 
         relaxationWeight (float): Relaxation weight for the Picard iteration (relaxationWeight * newValues + (1-relaxationWeight)*oldValues). Defaults to 1.0.
 
+        andersonDepth (int): History depth m >= 0 for Type-II Anderson acceleration of Picard iterations (0 disables AA and omits the key from serialized JSON). When positive, accelerates nonlinear convergence using a distributed QR least-squares extrapolation over the last m residual differences, with automatic fallback to damped Picard if ill-conditioned or stalled. Defaults to 0.
+
         allowLazyEval (bool): Allow lazy evaluation in internal step control. This will cause the solver to stop evolving everything except for time when it detects that nonlinear iterations drop to 1 on a first integration attempt (signalling no change within tolerance). Defaults to False
         """
         super().__init__(name)
@@ -679,6 +681,8 @@ class BDEIntegrator(Integrator):
         self.__consolidationInterval__ = kwargs.get("consolidationInterval", 50)
         self.__maxBDERestarts__ = kwargs.get("maxBDERestarts", 5)
         self.__relaxationWeight__: float = kwargs.get("relaxationWeight", 1.0)
+        self.__andersonDepth__: int = kwargs.get("andersonDepth", 0)
+        assert self.__andersonDepth__ >= 0, "andersonDepth must be >= 0"
         self.__allowLazyEval__: bool = kwargs.get("allowLazyEval", False)
 
     @property
@@ -708,6 +712,8 @@ class BDEIntegrator(Integrator):
                 "BDEAllowLazyEval": self.__allowLazyEval__,
             },
         }
+        if self.__andersonDepth__ > 0:
+            integ["andersonDepth"] = self.__andersonDepth__
 
         return integ
 

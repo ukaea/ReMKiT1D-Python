@@ -53,6 +53,12 @@ def test_bde_reuse_preconditioner():
     assert integrator.dict()["reusePreconditioner"] is False
 
 
+def test_bde_anderson_depth():
+    assert "andersonDepth" not in it.BDEIntegrator("BDE").dict()
+    integrator = it.BDEIntegrator("BDE", andersonDepth=8)
+    assert integrator.dict()["andersonDepth"] == 8
+
+
 def test_steps(grid):
 
     integrator = it.BDEIntegrator(
