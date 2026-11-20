@@ -341,6 +341,34 @@ def test_json_dump(grid, vCont):
     assert expectedOutput == testCont.dict()
 
 
+def test_json_dump_omit_zero_derived_vals(grid, vCont):
+    vCont.setVar("imp_zero")
+    vCont.setVar("der_zero_fluid", isDerived=True)
+    vCont.setVar("der_zero_dist", isDerived=True, isDistribution=True)
+    vCont.setVar("der_nonzero_fluid", data=np.ones(grid.numX), isDerived=True)
+    vCont.setVar("der_zero_scalar", isDerived=True, isScalar=True)
+
+    d_default = vCont.dict()
+    assert "initVals" in d_default["variables"]["implicitVariables"]["imp_zero"]
+    assert (
+        "initVals" not in d_default["variables"]["derivedVariables"]["der_zero_fluid"]
+    )
+    assert "initVals" not in d_default["variables"]["derivedVariables"]["der_zero_dist"]
+    assert "initVals" in d_default["variables"]["derivedVariables"]["der_nonzero_fluid"]
+    assert "initVals" in d_default["variables"]["derivedVariables"]["der_zero_scalar"]
+    assert "initVals" in d_default["variables"]["derivedVariables"]["time"]
+
+    d_full = vCont.dict(omitZeroDerivedVals=False)
+    assert (
+        d_full["variables"]["derivedVariables"]["der_zero_fluid"]["initVals"]
+        == np.zeros(grid.numX).tolist()
+    )
+    assert (
+        d_full["variables"]["derivedVariables"]["der_zero_dist"]["initVals"]
+        == np.zeros(grid.numX * grid.numH * grid.numV).tolist()
+    )
+
+
 def test_mpi_context(grid, vCont):
 
     mpiCont = MPIContext(2, 2, 1)

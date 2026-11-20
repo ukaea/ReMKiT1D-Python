@@ -698,7 +698,7 @@ class RMKContext:
         self.__variables__["time"].unitsSI = "$s$"
         self.__variables__["time"].normSI = self.norms["time"]
 
-    def dict(self) -> dict:
+    def dict(self, omitZeroDerivedVals: bool = True) -> dict:
 
         self.checkAll()
 
@@ -715,7 +715,11 @@ class RMKContext:
         ).numGroups()
 
         configFile.update(cast(Grid, self.__gridObj__).dict())
-        configFile.update(cast(VariableContainer, self.__variables__).dict())
+        configFile.update(
+            cast(VariableContainer, self.__variables__).dict(
+                omitZeroDerivedVals=omitZeroDerivedVals
+            )
+        )
         self.__IOContext__.populateOutputVars(self.variables)
         configFile.update(self.__IOContext__.dict())
         configFile.update(
@@ -734,14 +738,21 @@ class RMKContext:
 
         return configFile
 
-    def writeConfigFile(self) -> None:
-        """Generate a config file based on the current state of the context"""
+    def writeConfigFile(self, omitZeroDerivedVals: bool = True) -> None:
+        """Generate a config file based on the current state of the context
+
+        Args:
+            omitZeroDerivedVals (bool, optional): True to omit all-zero non-scalar derived variable initVals from the config file. Defaults to True.
+        """
         try:
             os.remove(self.IOContext.jsonFilepath)
         except FileNotFoundError:
             pass
 
-        io.writeDictToJSON(self.dict(), filepath=self.IOContext.jsonFilepath)
+        io.writeDictToJSON(
+            self.dict(omitZeroDerivedVals=omitZeroDerivedVals),
+            filepath=self.IOContext.jsonFilepath,
+        )
 
     def generatePDF(
         self, latexFilename="ReMKiT1D", latexRemap: Dict[str, str] = {}, cleanTex=True

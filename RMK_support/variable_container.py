@@ -980,11 +980,12 @@ class VariableContainer:
 
         return self[varName].properties
 
-    def dict(self, outputVals=True) -> dict:
+    def dict(self, outputVals=True, omitZeroDerivedVals=True) -> dict:
         """Return dictionary form of variable container for json output
 
         Args:
             outputVals (bool, optional): True if initial values should be written to dictionary. Defaults to True.
+            omitZeroDerivedVals (bool, optional): True to omit all-zero non-scalar derived variable initVals from JSON output. Defaults to True.
 
         Returns:
             dict: ReMKiT1D-ready dictionary form of variable data
@@ -1030,7 +1031,13 @@ class VariableContainer:
                 "priority": ds.data_vars[var].attrs["priority"],
             }
             if outputVals:
-                varProps["initVals"] = ds.data_vars[var].data.flatten().tolist()
+                data = ds.data_vars[var].data
+                if (
+                    (not omitZeroDerivedVals)
+                    or ds.data_vars[var].attrs["isScalar"]
+                    or bool(np.any(data))
+                ):
+                    varProps["initVals"] = data.flatten().tolist()
 
             if ds.data_vars[var].attrs["derivationRule"] != "none":
                 varProps["derivationRule"] = ds.data_vars[var].attrs["derivationRule"]
