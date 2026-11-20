@@ -587,9 +587,13 @@ class RMKContext:
                 else []
             )
             if implicitVars and not any(var.isDistribution for var in implicitVars):
-                solverOpts["PETScCommandLineOpts"] = (
-                    "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_shift_type nonzero"
+                fluidCliOpts = (
+                    "-pc_type bjacobi -sub_pc_type lu "
+                    "-sub_pc_factor_mat_ordering_type rcm -sub_pc_factor_shift_type nonzero"
                 )
+                if solverOpts["kspSolverType"] == "gmres":
+                    fluidCliOpts += " -ksp_gmres_restart 100"
+                solverOpts["PETScCommandLineOpts"] = fluidCliOpts
             else:
                 solverOpts["PETScCommandLineOpts"] = (
                     "-pc_type bjacobi -sub_pc_type ilu -sub_pc_factor_shift_type nonzero -sub_pc_factor_levels 0"
@@ -654,9 +658,9 @@ class RMKContext:
             absTol (Optional[float], optional): Solver absolute tolerance. Defaults to None (initial context value 1.0e-20).
             divTol (Optional[float], optional): Solver divergence tolerance. Defaults to None (initial context value 0.1e+8).
             maxIters (Optional[int], optional): Maximum allowed number of KSP iterations. Defaults to None (initial context value 500).
-            kspSolverType (Optional[str], optional): Type of KSP solver used. Defaults to None (initial context value "gmres").
+            kspSolverType (Optional[str], optional): Type of KSP solver used. Defaults to None (initial context value "gmres"). For low core count kinetic simulations where restarted GMRES stalls, ``kspSolverType="bcgsl"`` (BiCGStab(2), PETSc default ``-ksp_bcgsl_ell 2``) is an effective short-recurrence alternative; ``"gmres"`` remains the default for robustness and lower global-reduction overhead at high MPI rank counts / multi-harmonic (``numProcsH > 1``) runs.
             hyprePC (Optional[str], optional): Type of Hypre preconditioner used. Defaults to None (initial context value "").
-            cliOpts (Optional[str], optional): Optional command line PETSc options. Defaults to None (auto bjacobi+lu for pure fluid, bjacobi+ilu(0) when distributions are present).
+            cliOpts (Optional[str], optional): Optional command line PETSc options. Defaults to None (auto ``bjacobi`` + ``lu`` with RCM ordering and ``-ksp_gmres_restart 100`` for GMRES on pure fluid contexts; ``bjacobi`` + ``ilu(0)`` when distributions are present). For low core count runs, ``-pc_type asm -pc_asm_overlap 2 -pc_asm_type restrict`` can further reduce iterations, but is left opt-in to avoid overlap growth at high rank counts or with ``numProcsH > 1``.
             objGroups (Optional[int], optional): Number of PETSc object groups to create. This is useful when different integrators need to be associated with different models/terms. Defaults to None (initial context value 1).
         """
         solverOpts = cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])

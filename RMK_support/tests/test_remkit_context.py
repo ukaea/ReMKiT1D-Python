@@ -175,11 +175,17 @@ def test_petsc_auto_options(grid: Grid):
     n = Variable("n", rk.grid)
     rk.variables.add(n)
 
-    # Pure fluid implicit variable -> bjacobi + lu
+    # Pure fluid implicit variable -> bjacobi + lu + rcm (+ gmres restart 100)
     assert (
         rk.optionsPETSc["solverOptions"]["PETScCommandLineOpts"]
-        == "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_shift_type nonzero"
+        == "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_mat_ordering_type rcm -sub_pc_factor_shift_type nonzero -ksp_gmres_restart 100"
     )
+    rk.setPETScOptions(kspSolverType="bcgsl")
+    assert (
+        rk.optionsPETSc["solverOptions"]["PETScCommandLineOpts"]
+        == "-pc_type bjacobi -sub_pc_type lu -sub_pc_factor_mat_ordering_type rcm -sub_pc_factor_shift_type nonzero"
+    )
+    rk.setPETScOptions(kspSolverType="gmres")
 
     # Auto relTol clamped to 1% of BDE nonlinTol within [1e-15, 1e-12]
     for nonlin_tol, expected_rel_tol in [
