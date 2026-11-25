@@ -1277,7 +1277,7 @@ def eeCollHigherL(
             isSingleHarmonic=True,
             derivation=derivations.shkarofskyIIntegralDeriv("I0", 0),
             derivationArgs=["f0"],
-        ).onDualGrid(elDensity.onDualGrid)
+        ).onDualGrid(elDensity.isOnDualGrid)
     )
     mbData.addVar(
         Variable(
@@ -1286,7 +1286,7 @@ def eeCollHigherL(
             isSingleHarmonic=True,
             derivation=derivations.shkarofskyIIntegralDeriv("I2", 2),
             derivationArgs=["f0"],
-        ).onDualGrid(elDensity.onDualGrid)
+        ).onDualGrid(elDensity.isOnDualGrid)
     )
     mbData.addVar(
         Variable(
@@ -1295,7 +1295,7 @@ def eeCollHigherL(
             isSingleHarmonic=True,
             derivation=derivations.shkarofskyJIntegralDeriv("J-1", -1),
             derivationArgs=["f0"],
-        ).onDualGrid(elDensity.onDualGrid)
+        ).onDualGrid(elDensity.isOnDualGrid)
     )
 
     polyDeriv1 = derivations.PolynomialDerivation(

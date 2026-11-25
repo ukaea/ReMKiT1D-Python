@@ -374,7 +374,6 @@ class UnaryTransform:
             for i in range(self.__numArgs__):
                 assert f"${i}" in latexTemplate, f"${i} not in latexTemplate"
         self.__latexTemplate__ = latexTemplate
-        self.__latexTemplate__ = latexTemplate
 
     def evaluate(self, array: np.ndarray) -> np.ndarray:
         """Evaluate the unary transform on given array if the callable is defined, otherwise throw error
@@ -415,7 +414,8 @@ class UnaryTransform:
                 )
             for i, param in enumerate(self.__logicalParams__):
                 expression = expression.replace(
-                    f"${i+1+len(self.__realParams__)}", str(param)
+                    f"${i+1+len(self.__realParams__)+len(self.__intParams__)}",
+                    str(param),
                 )
 
             return expression

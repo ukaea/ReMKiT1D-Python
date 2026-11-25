@@ -1141,7 +1141,7 @@ class TermGenerator(ABC):
         implicitGroups: Optional[List[int]] = None,
         generalGroups: Optional[List[int]] = None,
     ) -> None:
-        super().__init__
+        super().__init__()
         self.__name__ = name
         self.__implicitGroups__ = implicitGroups if implicitGroups is not None else [1]
         self.__generalGroups__ = generalGroups if generalGroups is not None else []
@@ -1728,7 +1728,7 @@ class LBCModelboundData(ModelboundData):
                 "staggeredVars": isinstance(densityDual, Variable),
                 "leftBoundary": leftBoundary,
             },
-            "\\text{DistExt}_" + "L" if leftBoundary else "R",
+            "\\text{DistExt}_" + ("L" if leftBoundary else "R"),
         )
         self.__reqVars__ = [distFun.name, density.name]
         if densityDual is not None:

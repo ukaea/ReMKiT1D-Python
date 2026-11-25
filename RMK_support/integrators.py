@@ -101,10 +101,8 @@ class IntegrationRule:
         expression += "\\newline Updated groups: " + ",".join(
             str(group) for group in self.updatedGroups
         )
-        expression += (
-            "\\newline Update modelbound data (if any): " + "Yes"
-            if self.updateModelData
-            else "No"
+        expression += "\\newline Update modelbound data (if any): " + (
+            "Yes" if self.updateModelData else "No"
         )
 
         return expression
@@ -455,7 +453,7 @@ class Timestep:
         for _, var in self.__timestep__.args.items():
             assert var.name in varCont.varNames, (
                 "Timestep scaling variable "
-                + var
+                + var.name
                 + " not found in used variable container"
             )
 
@@ -514,7 +512,7 @@ class IntegrationScheme:
         return self.__timestep__
 
     @timestep.setter
-    def timestep(self, dt=Union[Timestep, float]):
+    def timestep(self, dt: Union[Timestep, float]):
         self.__timestep__ = dt if isinstance(dt, Timestep) else Timestep(dt)
 
     @property

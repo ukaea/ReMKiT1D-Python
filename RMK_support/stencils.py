@@ -609,7 +609,7 @@ class LBCStencil(Stencil):
                 "staggeredVars": isinstance(densityVarDual, Variable),
                 "leftBoundary": leftBoundary,
             },
-            "\\text{DistExt}_" + "L" if leftBoundary else "R",
+            "\\text{DistExt}_" + ("L" if leftBoundary else "R"),
         )
         reqVars = [distFunVar.name, densityVar.name]
         if densityVarDual is not None:

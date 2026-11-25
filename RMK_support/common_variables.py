@@ -48,7 +48,7 @@ def timeDerivative(
         isOnDualGrid=variable.isOnDualGrid,
         isScalar=variable.isScalar,
         isDistribution=variable.isDistribution,
-        isSingleHarmonics=variable.isSingleHarmonic,
+        isSingleHarmonic=variable.isSingleHarmonic,
         subtype=variable.subtype + "_time_derivative",
     )
 
@@ -135,7 +135,7 @@ def flux(name: str, context: RMKContext, **kwargs) -> Variable:
         context.grid,
         **kwargs,
         units="norm. flux",
-        unitSI="$m^{-2}s{-1}$",
+        unitSI="$m^{-2}s^{-1}$",
         normSI=context.normDensity * context.norms["speed"],
     )
 
@@ -251,7 +251,7 @@ def electricField(name: str, context: RMKContext, **kwargs) -> Variable:
         context.grid,
         **kwargs,
         units="norm. el. field",
-        unitSI="$Vm{-1}$",
+        unitSI="$Vm^{-1}$",
         normSI=context.norms["EField"],
     )
 

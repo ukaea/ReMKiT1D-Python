@@ -667,6 +667,7 @@ class VariableECSTransition(Transition):
             for arg in self.__energyDeriv__.fillArgs()
         )
         equation += "\\newline Energy: $" + self.__energyDeriv__(*remappedArgs) + "$"
+        return equation
 
     def registerDerivs(self, container):
         for _, deriv in self.__csDerivs__.items():
@@ -1418,12 +1419,14 @@ class CRMElEnergyTermGenerator(TermGenerator):
         doc.append(
             tex.NoEscape(
                 "\\newline Evolved energy variable: $"
-                + latexRemap[self.__electronEnergyDens__.name]
+                + (
+                    latexRemap[self.__electronEnergyDens__.name]
+                    if self.__electronEnergyDens__.name in latexRemap
+                    else "\\text{"
+                    + self.__electronEnergyDens__.name.replace("_", r"\_")
+                    + "}"
+                )
                 + "$"
-                if self.__electronEnergyDens__.name in latexRemap
-                else "$\\text{"
-                + self.__electronEnergyDens__.name.replace("_", r"\_")
-                + "}$"
             )
         )
         doc.append(

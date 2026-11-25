@@ -1645,8 +1645,8 @@ class PolynomialDerivation(GenericDerivation):
                 "" if self.__polyCoeffs__[i] < 0 else (" + " if result != "" else "")
             )
             result += numToScientificTex(self.__polyCoeffs__[i], True)
-            powerRepr = numToScientificTex(self.__polyCoeffs__[i])
-            if powerRepr == "1.00":
+            powerRepr = numToScientificTex(self.__polyPowers__[i])
+            if powerRepr != "1":
                 result += "\\left(" + arg + "\\right)^{" + powerRepr + "}"
             else:
                 result += arg
@@ -2507,5 +2507,5 @@ class NDInterpolationDerivation(Derivation):
     def evaluate(self, *args: np.ndarray) -> np.ndarray:
 
         return RegularGridInterpolator(
-            tuple(self.__grids__), self.__data__, fill_value=0
+            tuple(self.__grids__), self.__data__, bounds_error=False, fill_value=0
         )(np.array(list(zip(*args))))
