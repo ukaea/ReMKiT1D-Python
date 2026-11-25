@@ -433,14 +433,14 @@ class ScalarMultiVariablePlot(DashboardElement):
                 title="",
             )
 
+        timeVals = self.__loader__[("time", self.run)].values
+        tStart = float(np.min(timeVals))
+        tEnd = float(np.max(timeVals))
         xlim = pn.widgets.EditableRangeSlider(
             name="x axis range",
-            start=0,
-            end=self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
-            value=(
-                0,
-                self.__loader__[(self.variables[0], self.run)].grid.xGridDual[-1],
-            ),
+            start=tStart,
+            end=tEnd if tEnd > tStart else tStart + 1.0,
+            value=(tStart, tEnd),
         )
 
         ylim = pn.widgets.EditableRangeSlider(
@@ -599,14 +599,19 @@ class ScalarMultiRunPlot(DashboardElement):
                 title="",
             )
 
+        timeStarts = [
+            float(np.min(self.__loader__[("time", run)].values)) for run in self.runs
+        ]
+        timeEnds = [
+            float(np.max(self.__loader__[("time", run)].values)) for run in self.runs
+        ]
+        tStart = min(timeStarts)
+        tEnd = max(timeEnds)
         xlim = pn.widgets.EditableRangeSlider(
             name="x axis range",
-            start=0,
-            end=self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
-            value=(
-                0,
-                self.__loader__[(self.variable, self.runs[0])].grid.xGridDual[-1],
-            ),
+            start=tStart,
+            end=tEnd if tEnd > tStart else tStart + 1.0,
+            value=(tStart, tEnd),
         )
 
         ylim = pn.widgets.EditableRangeSlider(
@@ -926,7 +931,7 @@ class ReMKiT1DDashboard:
         """Open up a distribution function explorer dashboard. Allows for exploring different distribution function variables in velocity space, with the remaining coordinate values selectable."""
 
         class DistExplorer(param.Parameterized):
-            variable = param.ObjectSelector(
+            variable = param.Selector(
                 default=self.__distNames__[0], objects=self.__distNames__
             )
             t = param.Integer(
@@ -951,12 +956,12 @@ class ReMKiT1DDashboard:
 
             @param.depends("variable", "t", "pos", "harmonic", "maxV", "energyGrid")
             def load_dist_curve(self):
-                assert self.__data__[self.variable].coords.dims == (
+                assert self.__data__[self.variable].dims == (
                     "t",
                     "x",
                     "h",
                     "v",
-                ) or self.__data__[self.variable].coords.dims == (
+                ) or self.__data__[self.variable].dims == (
                     "t",
                     "x_dual",
                     "h",

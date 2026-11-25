@@ -587,7 +587,7 @@ class Variable(DerivationArgument):
     def dataShape(self):
 
         if self.__isScalar__:
-            return [1]
+            return [self.__timeDimSize__] if self.__timeDimSize__ > 0 else [1]
 
         dataShape = [self.grid.numX]
 
@@ -845,11 +845,9 @@ def varAndDual(
     primaryName = name + dualSuffix if primaryOnDualGrid else name
     secondaryName = name if primaryOnDualGrid else name + dualSuffix
 
-    remap = kwargs.get("defaultRemap", None)
+    remap = kwargs.get("defaultLatex", None)
     if remap is not None and primaryOnDualGrid:
-        kwargs["defaultRemap"] = (
-            "\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix
-        )
+        kwargs["defaultLatex"] = "\\left(" + remap + "\\right)" + dualLatexSuffix
     isDistribution = kwargs.get("isDistribution", False)
 
     primary = Variable(
@@ -859,7 +857,7 @@ def varAndDual(
     if remap is not None and not primaryOnDualGrid:
         secondary = primary.makeDual(
             name=secondaryName,
-            latex="\\left(" + kwargs["defaultRemap"] + ")" + dualLatexSuffix,
+            latex="\\left(" + remap + "\\right)" + dualLatexSuffix,
         )
     else:
         secondary = primary.makeDual(name=secondaryName)
@@ -1175,7 +1173,7 @@ class MPIContext:
         """Return a list of process indices corresponding to the lowest harmonics/fluid variables"""
         return list(range(0, self.numProcs, self.numProcsH))
 
-    def addToComm(self, var: Variable, mpiComm=Dict[str, object]) -> None:
+    def addToComm(self, var: Variable, mpiComm: Dict[str, object]) -> None:
 
         if var.isDistribution:
             cast(

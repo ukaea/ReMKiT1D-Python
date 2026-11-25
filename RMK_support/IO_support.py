@@ -1,9 +1,7 @@
-# %%
 import json
 import h5py  # type: ignore
 from . import variable_container as vc
 from .grid import Grid
-import xarray as xr
 import numpy as np
 from os import path, listdir
 from os.path import isfile, join
@@ -23,7 +21,7 @@ def writeDictToJSON(
     """
     newFile = not path.exists(filepath)
     usedData = data
-    if prefixKey != None:
+    if prefixKey is not None:
         usedData = {prefixKey: data}
 
     if newFile:
@@ -35,6 +33,7 @@ def writeDictToJSON(
             fileData.update(usedData)
             file.seek(0)
             json.dump(fileData, file, indent=4)
+            file.truncate()
 
 
 def writeRMKHDF5(varCont: vc.VariableContainer, filepath="./ReMKiT1DVarInput.h5"):
@@ -71,7 +70,10 @@ def loadVariableFromHDF5(
         with h5py.File(filepath, "r") as f:
             dset = f[var.name]
             data = dset[:]
-            buffer[i, ...] = data.reshape(var.values.shape)
+            if var.isScalar:
+                buffer[i] = np.asarray(data).item()
+            else:
+                buffer[i, ...] = data.reshape(var.values.shape)
 
     result = copy(var)
     if len(filepaths) > 1:
@@ -107,16 +109,19 @@ def loadDummyVarFromHDF5(
             else:
                 buffers.append(data)
 
+    isScalar = buffers[0].shape == (1,) if grid.numX > 1 else False
+    isDistribution = len(buffers[0].shape) == 3
+
     if len(filepaths) == 1:
         buffer = buffers[0]
+    elif isScalar:
+        buffer = np.array([np.asarray(b).item() for b in buffers], dtype=float)
     else:
         buffer = np.zeros(tuple([len(filepaths)] + list(buffers[0].shape)))
 
         for i, _ in enumerate(filepaths):
             buffer[i, ...] = buffers[i]
 
-    isScalar = buffers[0].shape == (1,) if grid.numX > 1 else False
-    isDistribution = len(buffers[0].shape) == 3
     result = vc.Variable(
         varName,
         grid,
