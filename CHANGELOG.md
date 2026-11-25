@@ -1,26 +1,30 @@
 # CHANGELOG
 
-## v2.0.1, xxxx-xx-xx
+## v2.1.0, xxxx-xx-xx
 
-- Bug fixes
+- Support for ReMKiT1D v1.4.0 solver and performance features, updated PETSc/BDE defaults, and JSON startup reduction
+- Subsumes skipped v2.0.1 bugfixes
 
 ### Breaking Changes
 
-- N/A
+- Updated default `BDEIntegrator` and `RMKContext` PETSc solver options: `reusePreconditioner=True`, `kspSolverType="gmres"`, `maxIters=500`, auto-clamped `relTol` (1% of BDE `nonlinTol` within `[1e-15, 1e-12]`, fallback `1e-14`), and auto `PETScCommandLineOpts` (`bjacobi` + `lu` with RCM ordering and `-ksp_gmres_restart 100` for pure fluid contexts; `bjacobi` + `ilu(0)` when distributions are present)
 
 ### Deprecations
 
-- N/A
+- Deprecated `skipPattern` in `MatrixTerm` / `model_construction` (ignored/removed in PETSc COO-based ReMKiT1D v1.4.0 builds)
 
 ### New Features
 
-- N/A
+- Added `reusePreconditioner` and `andersonDepth` options to `BDEIntegrator`
+- Added opt-in `lagIJTerms` mode to `eeCollHigherL` and the kinetic SOL-KiT example (`examples/solkit_mijin_thesis_kin.py`) to lag higher-harmonic $I$/$J$ electron-electron collision integrals as modelbound data
+- Omitted all-zero non-scalar derived `initVals` from generated config JSON by default (`VariableContainer` / `RMKContext`) to reduce config size and startup parsing time
+- Documented `optionsPETSc` property as read-only and added guidance on opt-in `bcgsl` and `asm` PETSc options for low-core-count runs
 
 ### Bug Fixes
 
 - Fixed bug in common variables which lead to rebuilding of density and temperature variables
 
-### New Notebooks 
+### New Notebooks
 
 - N/A
 
