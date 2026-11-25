@@ -565,7 +565,7 @@ class RMKContext:
 
     @property
     def optionsPETSc(self):
-        """PETSc library options used by this context"""
+        """Read-only PETSc library options used by this context (configure via setPETScOptions)."""
         solverOpts = cast(Dict[str, object], self.__optionsPETSc__["solverOptions"])
         if self.__relTolPETSc__ is None:
             bdeTols = (
