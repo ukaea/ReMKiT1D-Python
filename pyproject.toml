@@ -1,36 +1,70 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "RMK_support"
-version = "2.0.0"
+version = "2.1.0"
 description = "Python modules and notebooks used to initialize and analyze ReMKiT1D runs"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "GPLv3" }
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.md"]
 authors = [
     { name = "UK Atomic Energy Authority" }
 ]
 maintainers = [
     { name = "Stefan Mijin", email = "stefan.mijin@ukaea.uk" }
 ]
-dependencies = [
-    "numpy",
-    "xarray",
-    "holoviews",
-    "panel",
-    "matplotlib",
-    "h5py",
-    "scipy",
-    "pylatex"
+keywords = ["plasma", "fusion", "scrape-off-layer", "multifluid", "kinetic", "ReMKiT1D"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
 ]
+dependencies = [
+    "numpy>=1.24",
+    "xarray>=2023.1",
+    "holoviews>=1.16",
+    "panel>=1.0",
+    "param>=2.0",
+    "matplotlib>=3.7",
+    "h5py>=3.8",
+    "scipy>=1.10",
+    "pylatex>=1.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.8",
+    "black>=24.0",
+]
+docs = [
+    "sphinx>=7.0",
+    "nbsphinx>=0.9",
+    "nbsphinx-link>=1.3",
+    "pydata-sphinx-theme>=0.15",
+    "pypandoc-binary>=1.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/ukaea/ReMKiT1D-Python"
+Repository = "https://github.com/ukaea/ReMKiT1D-Python"
+Documentation = "https://remkit1d-python.readthedocs.io/en/latest/"
+Changelog = "https://github.com/ukaea/ReMKiT1D-Python/blob/master/CHANGELOG.md"
+Issues = "https://github.com/ukaea/ReMKiT1D-Python/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["RMK_support"]
 
-[tool.uv.workspace]
-members = [
-    "rmk-support",
-]
+[tool.setuptools.package-data]
+RMK_support = ["py.typed"]

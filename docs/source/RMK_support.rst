@@ -5,6 +5,15 @@ RMK\_support package
    :members:
    :undoc-members:
    :show-inheritance:
+   :ignore-module-all:
+
+remkit\_context submodule
+-------------------------
+
+.. automodule:: RMK_support.remkit_context
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 grid submodule
 --------------

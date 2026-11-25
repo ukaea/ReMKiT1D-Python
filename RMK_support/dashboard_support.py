@@ -6,8 +6,7 @@ from .grid import Grid
 from .variable_container import VariableContainer, Variable
 from .remkit_context import RMKContext
 from . import IO_support as io
-from typing import List, Dict, Tuple, Type, ClassVar, Optional
-from typing_extensions import Self
+from typing import Any, List, Dict, Tuple, Type, TypeVar, ClassVar, Optional
 import param  # type: ignore
 from warnings import warn
 import matplotlib.pyplot as plt  # type: ignore
@@ -199,6 +198,9 @@ class LazyLoader:
         return self.__runs__[run].dataset
 
 
+_ElementT = TypeVar("_ElementT", bound="DashboardElement")
+
+
 class DashboardElement(param.Parameterized):
     """Base parameterised class used to extend dashboard element types.
 
@@ -206,7 +208,7 @@ class DashboardElement(param.Parameterized):
 
     Any extended element is automatically added to the registry under the class alias"""
 
-    __elementRegistry__: ClassVar[Dict[str, Type[Self]]] = {}
+    __elementRegistry__: ClassVar[Dict[str, Type["DashboardElement"]]] = {}
 
     def __init__(self, loader: LazyLoader, **params):
         self.__loader__ = loader
@@ -216,7 +218,7 @@ class DashboardElement(param.Parameterized):
     def register(cls, key: str):
         """Decorator to register a subclass with a given key."""
 
-        def decorator(subclass: Type[Self]):
+        def decorator(subclass: Type[_ElementT]) -> Type[_ElementT]:
             if key in cls.__elementRegistry__:
                 raise ValueError(f"Element '{key}' is already registered.")
             cls.__elementRegistry__[key] = subclass
@@ -225,7 +227,7 @@ class DashboardElement(param.Parameterized):
         return decorator
 
     def sidebar(self):
-        return pn.pane.Markdown("### " + self.name)
+        return pn.pane.Markdown("### " + (self.name or ""))
 
     def main(self):
         return pn.Row(pn.pane.Markdown("### Select a widget type"))
@@ -234,13 +236,13 @@ class DashboardElement(param.Parameterized):
         if showSidebar:
             return pn.Row(self.sidebar(), self.main())
         self.sidebar()  # handling corner case
-        return pn.Column(pn.pane.Markdown("### " + self.name), self.main())
+        return pn.Column(pn.pane.Markdown("### " + (self.name or "")), self.main())
 
 
 class ElementDisplay(param.Parameterized):
     """Element display used to switch between various dashboard elements. To use in making Panel applications, call the sidebar method to get the sidebar element and use the main property to get access to the auto-updating content of the element."""
 
-    widget = param.Selector(default="Selector", label="")
+    widget: Any = param.Selector(default="Selector", label="")
     element = param.Parameter(instantiate=False, precedence=-1)
     hide_widget_sidebar = param.Boolean()
 
@@ -283,8 +285,8 @@ class ElementDisplay(param.Parameterized):
 class FluidMultiVariablePlot(DashboardElement):
 
     variables = param.ListSelector(default=[])
-    run = param.Selector()
-    dim = param.Selector(objects=["Fixed time", "Fixed position"])
+    run: Any = param.Selector()
+    dim: Any = param.Selector(objects=["Fixed time", "Fixed position"])
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -385,7 +387,7 @@ class FluidMultiVariablePlot(DashboardElement):
 class ScalarMultiVariablePlot(DashboardElement):
 
     variables = param.ListSelector(default=[])
-    run = param.Selector()
+    run: Any = param.Selector()
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -453,9 +455,9 @@ class ScalarMultiVariablePlot(DashboardElement):
 @DashboardElement.register("Fluid Multi Run Plot")
 class FluidMultiRunPlot(DashboardElement):
 
-    variable = param.Selector()
+    variable: Any = param.Selector()
     runs = param.ListSelector([])
-    dim = param.Selector(objects=["Fixed time", "Fixed position"])
+    dim: Any = param.Selector(objects=["Fixed time", "Fixed position"])
 
     def __init__(self, loader: LazyLoader, **params):
         super().__init__(loader, **params)
@@ -554,7 +556,7 @@ class FluidMultiRunPlot(DashboardElement):
 @DashboardElement.register("Scalar Multi Run Plot")
 class ScalarMultiRunPlot(DashboardElement):
 
-    variable = param.Selector()
+    variable: Any = param.Selector()
     runs = param.ListSelector([])
 
     def __init__(self, loader: LazyLoader, **params):
@@ -620,7 +622,7 @@ class ScalarMultiRunPlot(DashboardElement):
 class DistExplorer(DashboardElement):
     logarithmic_y = param.Boolean(default=False)
     energy_grid = param.Boolean(default=False)
-    variable = param.Selector()
+    variable: Any = param.Selector()
     runs = param.ListSelector([])
 
     def __init__(self, loader: LazyLoader, **params):
@@ -743,7 +745,7 @@ def dashboard(context: RMKContext, **kwargs):
     theme = kwargs.get("theme", "default")
     if templateMode in ["FastGrid", "fg"]:
 
-        template = pn.template.FastGridTemplate(
+        fgTemplate = pn.template.FastGridTemplate(
             title="ReMKiT1D dashboard",
             sidebar=[element.sidebar() for element in elements],
             main=[element.main for element in elements],
@@ -751,20 +753,21 @@ def dashboard(context: RMKContext, **kwargs):
             theme=theme,
         )
 
-        return template
+        return fgTemplate
 
     if templateMode in ["Golden", "gold", "default"]:
 
         elementsPerTab = kwargs.get("elementsPerTab", 1)
-        template = pn.template.GoldenTemplate(
+        goldenTemplate = pn.template.GoldenTemplate(
             title="ReMKiT1D dashboard",
             sidebar=[element.sidebar() for element in elements],
             theme=theme,
             header_background="#0072B5",
         )
 
+        assert goldenTemplate.main is not None
         for i in range(0, numElements, elementsPerTab):
-            template.main.append(
+            goldenTemplate.main.append(
                 pn.Row(
                     *(
                         element.main
@@ -775,7 +778,7 @@ def dashboard(context: RMKContext, **kwargs):
                     name=f"Elements {i}+" if elementsPerTab > 1 else f"Element {i}",
                 )
             )
-        return template
+        return goldenTemplate
 
     raise NotImplementedError
 

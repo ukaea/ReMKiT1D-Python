@@ -6,15 +6,17 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = "ReMKiT1D Python Support"
-copyright = "2023, UKAEA"
-author = "Stefan Mijin"
-release = "2.0.0"
-
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../.."))
+
+from RMK_support import __version__
+
+project = "ReMKiT1D Python Support"
+copyright = "2023-2026, UKAEA"
+author = "Stefan Mijin"
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -1,5 +1,4 @@
-from typing import Union, List, Dict, cast, Tuple
-from typing_extensions import Self
+from typing import Union, List, Dict, cast, Tuple, Self
 import numpy as np
 from abc import ABC, abstractmethod
 from copy import deepcopy

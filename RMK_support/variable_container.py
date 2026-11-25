@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 from .grid import Grid
-from typing import Union, List, Dict, cast, Any, Type, Tuple, Optional
+from typing import Union, List, Dict, cast, Any, Type, Tuple, Optional, Self
 import warnings
 from .derivations import (
     DerivBase,
@@ -13,7 +13,6 @@ from .derivations import (
     Textbook,
 )
 from . import calculation_tree_support as ct
-from typing_extensions import Self
 from copy import copy, deepcopy
 from pylatex import Document, Section, Subsection, Itemize, NoEscape  # type: ignore
 from math import isclose

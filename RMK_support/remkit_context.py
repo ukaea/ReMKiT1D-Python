@@ -1,6 +1,5 @@
 from .grid import Grid
-from typing import Union, List, Dict, cast, Tuple, Optional
-from typing_extensions import Self
+from typing import Union, List, Dict, cast, Tuple, Optional, Self
 from .variable_container import VariableContainer, Variable, MPIContext
 from . import IO_support as io
 from . import derivations as dv
@@ -528,7 +527,7 @@ class RMKContext:
         return self.__textbook__
 
     @textbook.setter
-    def textbook(self, tb: dv.Textbook):
+    def textbook(self, tb: Optional[dv.Textbook]):
         self.__textbook__ = tb
 
     @property

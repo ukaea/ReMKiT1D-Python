@@ -1,5 +1,4 @@
-from typing import Union, List, Dict, cast, Optional
-from typing_extensions import Self
+from typing import Union, List, Dict, cast, Optional, Self
 import numpy as np
 import csv
 from typing import Tuple

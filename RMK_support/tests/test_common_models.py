@@ -8,7 +8,6 @@ import RMK_support.variable_container as vc
 import numpy as np
 import pytest
 
-
 elCharge = 1.60218e-19
 elMass = 9.10938e-31
 amu = 1.6605390666e-27  # atomic mass unit

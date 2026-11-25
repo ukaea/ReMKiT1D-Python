@@ -1,5 +1,4 @@
-from typing import Union, List, Dict, cast, Tuple, Type, Callable, Optional
-from typing_extensions import Self
+from typing import Union, List, Dict, cast, Tuple, Type, Callable, Optional, Self
 import numpy as np
 from abc import ABC, abstractmethod
 from . import calculation_tree_support as ct

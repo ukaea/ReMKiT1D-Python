@@ -1,7 +1,6 @@
-from typing import Union, List, Dict, cast, Tuple, Optional
+from typing import Union, List, Dict, cast, Tuple, Optional, Self
 from .variable_container import VariableContainer, Variable, MultiplicativeArgument
 from .derivations import Textbook, GenericDerivation, DerivationClosure
-from typing_extensions import Self
 from .grid import Profile, Grid
 import warnings
 from abc import ABC, abstractmethod
@@ -79,11 +78,11 @@ class Term(ABC):
     def evolvedVar(self, name: Variable):
         self.__evolvedVar__ = name
 
-    def withEvolvedVar(self, name: str) -> Self:
+    def withEvolvedVar(self, name: Variable) -> Self:
         """Change the evolved variable of this term and return the term
 
         Args:
-            name (str): New evolved variable name
+            name (Variable): New evolved variable
         """
         self.evolvedVar = name
         return self

@@ -1,3 +1,4 @@
+sphinx
 nbsphinx
 nbsphinx-link
 pydata_sphinx_theme
@@ -5,6 +6,8 @@ numpy
 h5py
 xarray
 holoviews
+panel
+param
 matplotlib
 pypandoc_binary
 scipy
