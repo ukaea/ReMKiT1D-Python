@@ -13,16 +13,16 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
 
     The following kwargs are available:
 
-    jsonFilepath (str): Config filepath. Defaults to ".config.json".
+    jsonFilepath (str): Config filepath. Defaults to "./config.json".
     hdf5Filepath (str): Input and output hdf5 folder path. Defaults to "./RMKOutput/RMK_SK_comp_staggered_thesis/".
     mpiProcs (int): Number of MPI processes in the spatial direction. Defaults to 8.
     dx0 (float): Largest spatial cell width in m. Defaults to 0.27.
     dxN (float): Smallest spatial cell width in m. Defaults to 0.0125.
     Nx (int): Number of spatial cells. Defaults to 128.
-    dv0 (float): Smallest velocity grid width in electron thermal velocity units (sqrt(2kTe/me)). Defaults to 0.0307.
+    dv0 (float): Smallest velocity grid width in electron thermal velocity units (sqrt(2kTe/me)). Defaults to 0.05.
     dvN (float): Largest velocity grid width. Defaults to 0.4.
     Nv (int): Number of velocity cells. Defaults to 80.
-    lmax (int): Highest resolved l-harmonic. Defaults to 1.
+    lmax (int): Highest resolved l-harmonic. Defaults to 0.
     Tn (float): Neutral temperature for the diffusion operator (in eV). Defaults to 3eV
     numNeutrals (int): Number of neutral states tracked. Should be set to 1 if using AMJUEL rates. Defaults to 1.
     Tu (float): Initial upstream temperature in eV. Defaults to 20.
@@ -34,11 +34,11 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     fixedKineticGamma (float): If present will be used instead of the loaded sheath energy transmission coefficient from the kinetic
                                simulation. Defaults to 5.0 (but is overwritten unless specifically supplied)
     fixedQRatio (np.array): Spatial vector representing the ratio of the kinetic conductive heat flux to the Braginskii value. If
-                            present will be used instead of the the loaded ratio from the kinetic simulation (useful if the kinetic simulation has negative ratios which could lead to instability). Defaults to all ones (but is overwritten unless specifically supplied)
+                            present will be used instead of the loaded ratio from the kinetic simulation (useful if the kinetic simulation has negative ratios which could lead to instability). Defaults to all ones (but is overwritten unless specifically supplied)
     hdf5InputFile (str): Path of hdf5 input file (without the extension!). Defaults to "ReMKiT1DVarInput".
     Nh (int): Number of upstream cells affected by the heating operator. Defaults to 17.
     heatingPower (float): Effective upstream heating in MW/m^2. Defaults to 1.0.
-    perturbationTimeSignal (sc.TimeSignal): Optional time signal for a periodic heating perturbation. Defaults to no perturbation.
+    perturbationTimeSignal (rmk.TimeSignalData): Optional time signal for a periodic heating perturbation. Defaults to no perturbation.
     pertHeatingPower (float): The heating perturbation amplitude in MW/m^2. Defaults to 10.
     amjuelCXRate (bool): If true uses the AMJUEL CX rate H.2 3.1.8 instead of the SOL-KiT model. This rate is then divided by
                          sqrt(2kTe/mi) to get the cross-section for neutral diffusion. Defaults to False.
@@ -49,6 +49,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
     includeSpontEmission: If true will include spontaneous emission in the SOL-KiT style CRM for up to n=20. Defaults to False.
     initialTimestep: Used timestep in shortest e-i collision times in the system. Defaults to 0.1.
     amjuelPath (str): Path to amjuel.tex file. Defaults to "../data/amjuel.tex".
+    akiPath (str): Path to NIST Aki.csv file. Defaults to "../data/Aki.csv".
     outputPoints (List[float]): List of used output points. Defaults to [1500,3000,4500,6000,7500,9000].
 
     Returns:
@@ -193,23 +194,6 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
 
         rk.variables.add(gamma,qRatio)
 
-        loadVars = [
-            ne,
-            ni,
-            Ge_dual,
-            Gi_dual,
-            We,
-            Te,
-            qe,
-            E_dual,
-        ] + neutralDensList
-        if "fixedQRatio" not in kwargs:
-            loadVars.append(qRatio)
-        if "fixedKineticGamma" not in kwargs:
-            loadVars.append(gamma)
-        rk.IOContext.setHDF5InputOptions(inputFile=kwargs.get("hdf5InputFile", "ReMKiT1DVarInput"),
-                                         inputVars=loadVars)
-
     else:
         gamma = rmk.Variable("gammaRight",rk.grid,isScalar=True,derivation=rk.textbook["rightElectronGamma"],derivationArgs=[Te.name,Te.name],scalarHostProcess=rk.mpiContext.fluidProcs[-1])
         rk.variables.add(gamma)
@@ -224,6 +208,26 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         neutralSpecies[i].associateVar(n)
         nn_dual.append(n_dual)
         rk.variables.add(n)
+
+    if kwargs.get("useKineticCorrections", False):
+        loadVars = [
+            ne,
+            ni,
+            Ge_dual,
+            Gi_dual,
+            We,
+            Te,
+            qe,
+            E_dual,
+        ] + nn
+        if "fixedQRatio" not in kwargs:
+            loadVars.append(qRatio)
+        if "fixedKineticGamma" not in kwargs:
+            loadVars.append(gamma)
+        rk.IOContext.setHDF5InputOptions(
+            inputFile=kwargs.get("hdf5InputFile", "ReMKiT1DVarInput"),
+            inputVars=loadVars,
+        )
 
     # We need a distribution function to calculate rates from cross-sections built into the code
     fInit = np.zeros([rk.grid.numX, rk.grid.numH, rk.grid.numV])
@@ -414,7 +418,7 @@ def generatorSKThesis(**kwargs) -> rmk.RMKContext:
         )
 
         if kwargs.get("includeSpontEmission", False):
-            spontTransDict = crm.readNISTAkiCSV("Aki.csv")
+            spontTransDict = crm.readNISTAkiCSV(kwargs.get("akiPath", "../data/Aki.csv"))
             crm.addHSpontaneousEmissionToCRMData(
                 mbData,
                 spontTransDict,

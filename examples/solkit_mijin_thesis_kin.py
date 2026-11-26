@@ -14,14 +14,14 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     The following kwargs are available:
 
-    jsonFilepath (str): Config filepath. Defaults to ".config.json".
+    jsonFilepath (str): Config filepath. Defaults to "./config.json".
     hdf5Filepath (str): Input and output hdf5 folder path. Defaults to "./RMKOutput/RMK_SK_comp_staggered_kin/".
-    mpiProcsX (int): Number of MPI processes in the spatial direction. Defaults to 16.
+    mpiProcsX (int): Number of MPI processes in the spatial direction. Defaults to 8.
     mpiProcsH (int): Number of MPI processes in the harmonic direction. Defaults to 1.
     dx0 (float): Largest spatial cell width in m. Defaults to 0.27.
     dxN (float): Smallest spatial cell width in m. Defaults to 0.0125.
     Nx (int): Number of spatial cells. Defaults to 128.
-    dv0 (float): Smallest velocity grid width in electron thermal velocity units (sqrt(2kTe/me)). Defaults to 0.0307.
+    dv0 (float): Smallest velocity grid width in electron thermal velocity units (sqrt(2kTe/me)). Defaults to 0.05.
     dvN (float): Largest velocity grid width. Defaults to 0.4.
     Nv (int): Number of velocity cells. Defaults to 80.
     lmax (int): Highest resolved l-harmonic. Defaults to 1.
@@ -32,7 +32,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     nu (float): Initial upstream density in normalized units. Automatically determines the downstream density using a constant pressure assumption. Defaults to 0.8.
     Nh (int): Number of upstream cells affected by the heating operator. Defaults to 17.
     heatingPower (float): Effective upstream heating in MW/m^2. Defaults to 1.0.
-    perturbationTimeSignal (sc.TimeSignal): Optional time signal for a periodic heating perturbation. Defaults to no perturbation.
+    perturbationTimeSignal (rmk.TimeSignalData): Optional time signal for a periodic heating perturbation. Defaults to no perturbation.
     pertHeatingPower (float): The heating perturbation amplitude in MW/m^2. Defaults to 10.
     amjuelCXRate (bool): If true uses the AMJUEL CX rate H.2 3.1.8 instead of the SOL-KiT model. This rate is then divided by sqrt(2kTe/mi) to get the cross-section for neutral diffusion. Defaults to False.
     amjuelRates (bool): If true uses AMJUEL ionization and recombination particle and energy rates instead of the SOL-KiT atomic state resolved CRM. Defaults to False.
@@ -42,6 +42,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
     initFromFluidRun: If true will initialize from given hdf5 file assuming it is a fluid run. Defaults to False.
     hdf5InputFile (str): Path of hdf5 input file (without the extension!). Defaults to "ReMKiT1DVarInput".
     amjuelPath (str): Path to amjuel.tex file. Defaults to "../data/amjuel.tex".
+    akiPath (str): Path to NIST Aki.csv file. Defaults to "../data/Aki.csv".
     lagEEIJTerms (bool): If true, lag the higher-l e-e Shkarofsky I/J(f_l) field-particle C[f_0, f_l] integral terms in modelbound data with implicit f_0 velocity derivatives. Defaults to False.
 
     Returns:
@@ -115,8 +116,8 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
 
     # Two-point model initialization
 
-    Tu = 20 / tempNorm  # upstream temperature
-    Td = 5 / tempNorm  # downstream temperature
+    Tu = kwargs.get("Tu", 20) / tempNorm  # upstream temperature
+    Td = kwargs.get("Td", 5) / tempNorm  # downstream temperature
 
     TInit = (Tu ** (7 / 2) - (Tu ** (7 / 2) - Td ** (7 / 2)) * rk.grid.xGrid / L) ** (2 / 7)
 
@@ -375,7 +376,7 @@ def generatorSKThesisKin(**kwargs) -> rmk.RMKContext:
         )
 
         if kwargs.get("includeSpontEmission", False):
-            spontTransDict = crm.readNISTAkiCSV("../data/Aki.csv")
+            spontTransDict = crm.readNISTAkiCSV(kwargs.get("akiPath", "../data/Aki.csv"))
             crm.addHSpontaneousEmissionToCRMData(
                 mbData,
                 spontTransDict,

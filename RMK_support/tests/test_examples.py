@@ -33,11 +33,6 @@ def test_es(tmp_path, monkeypatch):
             Nt=Nt,
         )
 
-        rk.setPETScOptions(
-            cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero",
-            kspSolverType="gmres",
-        )
-
         rk.generatePDF("Epperlein-Short Test")
 
         rk.writeConfigFile()
@@ -70,11 +65,6 @@ def test_solkit_fluid_janev(tmp_path, monkeypatch):
             includedJanevTransitions=["ex", "deex", "ion", "recomb3b"],
             numNeutrals=10,
         )
-
-    rk.setPETScOptions(
-        cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero",
-        kspSolverType="gmres",
-    )
 
     rk.generatePDF("SOL-KiT Fluid Test")
 
@@ -114,3 +104,30 @@ def test_solkit_kinetic_janev(tmp_path, monkeypatch):
 
     assert (tmp_path / "SOL-KiT_Kinetic_Test.pdf").is_file()
     assert (tmp_path / "config.json").is_file()
+
+
+def test_example_generator_regressions():
+    with pytest.warns(UserWarning):
+        es = epperlein_short_test.esTestGenerator(Nx=8, Nv=10, Nt=300, mpiProcsX=2)
+        es_cfg = es.dict()
+    assert isinstance(es_cfg["timeloop"]["fixedSaveInterval"], int)
+    assert es_cfg["timeloop"]["fixedSaveInterval"] == 10
+
+    with pytest.warns(UserWarning):
+        sk_fluid = solkit_mijin_thesis.generatorSKThesis(
+            Nx=8, Nv=10, Nh=2, mpiProcs=2, numNeutrals=2, useKineticCorrections=True
+        )
+        fluid_cfg = sk_fluid.dict()
+    assert "n1" in fluid_cfg["HDF5"]["inputVars"]
+    assert "n2" in fluid_cfg["HDF5"]["inputVars"]
+
+    with pytest.warns(UserWarning):
+        sk_kin_default = solkit_mijin_thesis_kin.generatorSKThesisKin(
+            Nx=8, Nv=10, Nh=2, mpiProcsX=2
+        )
+        sk_kin_hot = solkit_mijin_thesis_kin.generatorSKThesisKin(
+            Nx=8, Nv=10, Nh=2, mpiProcsX=2, Tu=40.0, Td=10.0
+        )
+    assert np.all(
+        sk_kin_hot.variables["Te"].values > sk_kin_default.variables["Te"].values
+    )

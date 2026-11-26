@@ -13,7 +13,7 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
 
     The following kwargs are available:
 
-    jsonFilepath (str): Config filepath. Defaults to ".config.json".
+    jsonFilepath (str): Config filepath. Defaults to "./config.json".
     hdf5Filepath (str): Input and output hdf5 folder path. Defaults to "./RMKOutput/RMK_ES_test/".
     mpiProcsX (int): Number of MPI processes in the spatial direction. Defaults to 4.
     mpiProcsH (int): Number of MPI processes in the harmonic direction. Defaults to 1. 
@@ -29,7 +29,7 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
     includeDiagnosticVars (bool): If true will include all distribution evaluation terms as communicated variables. Defaults to False.
 
     Returns:
-        RKWrapper: ReMKiT1D wrapper containing initialization data for this run.
+        RMKContext: ReMKiT1D context containing initialization data for this run.
     """
     
     elCharge = 1.60218e-19
@@ -140,12 +140,10 @@ def esTestGenerator(**kwargs) -> rmk.RMKContext:
     integrationStep.add(rk.models) 
     rk.integrationScheme = rmk.IntegrationScheme(dt=kwargs.get("initialTimestep",0.1),steps=integrationStep) 
     Nt = kwargs.get("Nt",300)
-    rk.integrationScheme.setFixedNumTimesteps(Nt,Nt/30) 
+    rk.integrationScheme.setFixedNumTimesteps(Nt,Nt//30) 
 
     if kwargs.get("includeDiagnosticVars",False):
 
         rk.addTermDiagnostics(f)
 
-    rk.setPETScOptions(cliOpts="-pc_type bjacobi -sub_pc_factor_shift_type nonzero",kspSolverType="gmres")
-    
     return rk
