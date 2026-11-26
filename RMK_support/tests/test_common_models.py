@@ -1756,7 +1756,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C2Il_h=2": {
@@ -1793,7 +1793,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C2J1-l_h=2": {
@@ -1830,7 +1830,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C3Il+2_h=2": {
@@ -1867,7 +1867,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C4J-l-1_h=2": {
@@ -1904,7 +1904,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C5Il_h=2": {
@@ -1941,7 +1941,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C6J1-l_h=2": {
@@ -1978,7 +1978,7 @@ def test_flowingIonEIColl(grid: Grid, norms: dict):
                 "evolvedHarmonics": [2],
                 "evolvedVCells": [],
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
     }
@@ -3039,7 +3039,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
                 "colHarmonic": 2,
                 "integralIndex": 3,
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C4J-l-1_h=2": {
@@ -3076,7 +3076,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
                 "colHarmonic": 2,
                 "integralIndex": -2,
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C5Il_h=2": {
@@ -3113,7 +3113,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
                 "colHarmonic": 2,
                 "integralIndex": 1,
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
         "C6J1-l_h=2": {
@@ -3150,7 +3150,7 @@ def test_eeCollHigherL(grid: Grid, norms: dict):
                 "colHarmonic": 2,
                 "integralIndex": 0,
             },
-            "skipPattern": True,
+            "skipPattern": False,
             "fixedMatrix": False,
         },
     }

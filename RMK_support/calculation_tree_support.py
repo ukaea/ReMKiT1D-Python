@@ -899,3 +899,33 @@ def contract(
         unaryCallable=contFun,
     )
     return newNode
+
+
+def filterWithin(node: Node, lowerBound: float, upperBound: float) -> Node:
+    """Filter node values to [lowerBound, upperBound), zeroing values outside the interval.
+
+    Matches ReMKiT1D's ``filterWithin`` unary transform (``unaryFilter``): returns the
+    input where ``lowerBound <= x < upperBound`` and ``0`` otherwise.
+
+    Args:
+        node (Node): Node argument
+        lowerBound (float): Inclusive lower bound
+        upperBound (float): Exclusive upper bound (must be strictly greater than lowerBound)
+
+    Returns:
+        Node: Filtered result node
+    """
+    assert (
+        lowerBound < upperBound
+    ), "lowerBound must be strictly less than upperBound in filterWithin"
+    func: Callable[[List[float], List[int], List[bool], np.ndarray], np.ndarray] = (
+        lambda floats, ints, bools, arg: np.where(
+            (arg >= floats[1]) | (arg < floats[0]), 0.0, arg
+        )
+    )
+    transform = UnaryTransform(
+        "filterWithin",
+        realParams=[lowerBound, upperBound],
+        unaryCallable=func,
+    )
+    return transform(node)

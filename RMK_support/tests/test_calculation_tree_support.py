@@ -490,3 +490,35 @@ def test_unary_transform_latex_logical_param():
         latexTemplate="f($0, $1, $2, $3)",
     )
     assert ut.latex("x") == "f(x, 1.50, 2, True)"
+
+
+def test_filter_within():
+    import RMK_support as rmk
+
+    assert rmk.filterWithin is ct.filterWithin
+
+    a = ct.Node("a")
+    filtered = ct.filterWithin(a, 1.0, 3.0)
+    vals = np.array([-1.0, 0.99, 1.0, 2.5, 3.0, 5.0])
+    np.testing.assert_allclose(
+        filtered.evaluate({"a": vals}), np.array([0.0, 0.0, 1.0, 2.5, 0.0, 0.0])
+    )
+    assert filtered.dict() == {
+        "isAdditiveNode": False,
+        "leafVariable": "a",
+        "unaryTransform": "filterWithin",
+        "unaryRealParams": [1.0, 3.0],
+        "unaryIntegerParams": [],
+        "unaryLogicalParams": [],
+    }
+
+    chained = ct.filterWithin(ct.abs(a), 0.5, 2.0)
+    np.testing.assert_allclose(
+        chained.evaluate({"a": np.array([-3.0, -1.0, -0.2, 1.5, 2.0])}),
+        np.array([0.0, 1.0, 0.0, 1.5, 0.0]),
+    )
+
+    with pytest.raises(AssertionError, match="strictly less"):
+        ct.filterWithin(a, 2.0, 2.0)
+    with pytest.raises(AssertionError, match="strictly less"):
+        ct.filterWithin(a, 3.0, 1.0)

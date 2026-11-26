@@ -1103,10 +1103,7 @@ def flowingIonEIColl(
         MBVars = mbData["logLei"] * mbData["ddf0"] * mbData["CIJ" + str(-1 - l)]
 
         eiColl.ddt[distribution] += normConst * (
-            MBVars
-            @ (v1 * diag(ionDensity))
-            .rename("C1J-l-1_h=" + str(harmonic))
-            .withSkippingPattern()
+            MBVars @ (v1 * diag(ionDensity)).rename("C1J-l-1_h=" + str(harmonic))
         )
 
         # C2*I_l term
@@ -1122,21 +1119,15 @@ def flowingIonEIColl(
         MBVars = mbData["logLei"] * mbData["ddf0"] * mbData["CII" + str(l)]
 
         eiColl.ddt[distribution] += normConst * (
-            MBVars
-            @ (v1 * diag(ionDensity))
-            .rename("C2Il_h=" + str(harmonic))
-            .withSkippingPattern()
+            MBVars @ (v1 * diag(ionDensity)).rename("C2Il_h=" + str(harmonic))
         )
 
         # C2*J1-l term
         MBVars = mbData["logLei"] * mbData["ddf0"] * mbData["CIJ" + str(1 - l)]
 
-        eiColl.ddt[distribution] += (
-            normConst
-            * (MBVars @ (v1 * diag(ionDensity)))
-            .rename("C2J1-l_h=" + str(harmonic))
-            .withSkippingPattern()
-        )
+        eiColl.ddt[distribution] += normConst * (
+            MBVars @ (v1 * diag(ionDensity))
+        ).rename("C2J1-l_h=" + str(harmonic))
 
         # df0/dv terms
 
@@ -1150,9 +1141,7 @@ def flowingIonEIColl(
         eiColl.ddt[distribution] += (
             normConst
             * MBVars
-            @ (v2 * diag(ionDensity))
-            .rename("C3Il+2_h=" + str(harmonic))
-            .withSkippingPattern()
+            @ (v2 * diag(ionDensity)).rename("C3Il+2_h=" + str(harmonic))
         )
 
         # C4*J_{-l-1} term
@@ -1167,9 +1156,7 @@ def flowingIonEIColl(
         eiColl.ddt[distribution] += (
             normConst
             * MBVars
-            @ (v2 * diag(ionDensity))
-            .rename("C4J-l-1_h=" + str(harmonic))
-            .withSkippingPattern()
+            @ (v2 * diag(ionDensity)).rename("C4J-l-1_h=" + str(harmonic))
         )
 
         # C5*I_l term
@@ -1184,9 +1171,7 @@ def flowingIonEIColl(
         eiColl.ddt[distribution] += (
             normConst
             * MBVars
-            @ (v2 * diag(ionDensity))
-            .rename("C5Il_h=" + str(harmonic))
-            .withSkippingPattern()
+            @ (v2 * diag(ionDensity)).rename("C5Il_h=" + str(harmonic))
         )
 
         # # C6*J1-l term
@@ -1199,9 +1184,7 @@ def flowingIonEIColl(
         eiColl.ddt[distribution] += (
             normConst
             * MBVars
-            @ (v2 * diag(ionDensity))
-            .rename("C6J1-l_h=" + str(harmonic))
-            .withSkippingPattern()
+            @ (v2 * diag(ionDensity)).rename("C6J1-l_h=" + str(harmonic))
         )
 
     # Add ion friction terms if ionFlux is passed
@@ -1539,9 +1522,7 @@ def eeCollHigherL(
             eeModel.ddt[distribution] += (
                 normConst
                 * (mbData["logLee"] * mbData["df0"])
-                @ (v2 * stencilObj(distribution))
-                .rename(termPrefix + str(harmonic))
-                .withSkippingPattern()
+                @ (v2 * stencilObj(distribution)).rename(termPrefix + str(harmonic))
             )
 
     return eeModel

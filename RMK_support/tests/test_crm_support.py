@@ -667,3 +667,24 @@ def test_kin_transitions(grid: Grid):
         "maxCrossSectionL": maxResolvedCSHarmonic,
         "crossSectionUpdatePriority": kwargs["csUpdatePriority"],
     }
+
+
+def test_crm_mbdata_energy_interpolation_grid(grid: Grid):
+    interpGrid = np.array([0.5, 1.0, 2.5])
+    mbData = crm.CRMModelboundData(grid, energyInterpolationGrid=interpGrid)
+
+    np.testing.assert_array_equal(mbData.energyInterpolationGrid, interpGrid)
+    assert mbData.dict()["inelasticGridData"] == {
+        "active": True,
+        "fixedTransitionEnergies": [],
+        "energyInterpolationGrid": [0.5, 1.0, 2.5],
+    }
+
+    with pytest.raises(AssertionError, match="length > 1"):
+        crm.CRMModelboundData(grid, energyInterpolationGrid=np.array([1.0]))
+
+    with pytest.raises(AssertionError, match="strictly monotonically increasing"):
+        crm.CRMModelboundData(grid, energyInterpolationGrid=np.array([1.0, 1.0, 2.0]))
+
+    with pytest.raises(AssertionError, match="cannot contain zero energy"):
+        crm.CRMModelboundData(grid, energyInterpolationGrid=np.array([-1.0, 0.0, 1.0]))

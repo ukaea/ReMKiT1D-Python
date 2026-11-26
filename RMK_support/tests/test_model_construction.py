@@ -24,10 +24,11 @@ def test_matrix_term_arithmetic(grid):
 
     a, b, c, d, e = (Variable(name, grid) for name in "abcde")
 
-    term = 5 * (
-        mc.TimeSignalData()
-        * (grid.profile(np.ones(grid.numX)) * (a * b * (c @ diag(d * e, c))))
-    ).withEvolvedVar(a).withFixedMatrix().withSkippingPattern().regroup([1, 2], [1])
+    with pytest.warns(DeprecationWarning, match="withSkippingPattern"):
+        term = 5 * (
+            mc.TimeSignalData()
+            * (grid.profile(np.ones(grid.numX)) * (a * b * (c @ diag(d * e, c))))
+        ).withEvolvedVar(a).withFixedMatrix().withSkippingPattern().regroup([1, 2], [1])
 
     term.evaluatedTermGroup = 1
     term.copyTermName = "dummy"
@@ -69,6 +70,10 @@ def test_matrix_term_arithmetic(grid):
         "fixedMatrix": True,
         "multCopyTermName": "dummy",
     }
+
+    with pytest.warns(DeprecationWarning, match="skipPattern"):
+        kwargTerm = mc.MatrixTerm("kw", a, diag, skipPattern=True)
+    assert kwargTerm.skipPattern
 
 
 def test_term_collection(grid):

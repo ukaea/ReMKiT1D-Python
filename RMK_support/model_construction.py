@@ -657,6 +657,12 @@ class MatrixTerm(Term):
             modelboundC if modelboundC is not None else MultiplicativeArgument()
         )
         self.__T__: Union[TimeSignalData, None] = T
+        if "skipPattern" in kwargs:
+            warnings.warn(
+                "skipPattern is deprecated and ignored by ReMKiT1D >= v1.4.0 (PETSc COO assembly).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.__skipPattern__ = kwargs.get("skipPattern", False)
         self.__fixedMatrix__ = kwargs.get("fixedMatrix", False)
         self.__copyTermName__: Optional[str] = kwargs.get("copyTermName", None)
@@ -720,6 +726,11 @@ class MatrixTerm(Term):
         Args:
             skip (bool, optional): True if the sparsity pattern addition should be skipped. Defaults to True.
         """
+        warnings.warn(
+            "MatrixTerm.withSkippingPattern() is deprecated and ignored by ReMKiT1D >= v1.4.0 (PETSc COO assembly).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         newTerm = deepcopy(self)
         newTerm.__skipPattern__ = skip
         return newTerm

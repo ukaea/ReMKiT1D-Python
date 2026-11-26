@@ -105,34 +105,62 @@ class CRMModelboundData(ModelboundData):
     def __init__(
         self,
         grid: Grid,
-        fixedTransitionEnergies=np.array([]),
+        fixedTransitionEnergies: Optional[np.ndarray] = None,
         energyResolution: float = 1e-16,
         elState: int = 0,
         staggeredFirstMoment=True,
+        energyInterpolationGrid: Optional[np.ndarray] = None,
     ) -> None:
         """ModelboundCRMData constructor
 
         Args:
             grid (Grid): Grid object used in constructing modelbound variables
-            fixedTransitionEnergies (np.ndarray, optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to []. This gets automatically filled when adding transitions.
+            fixedTransitionEnergies (Optional[np.ndarray], optional): Allowed fixed transition energies for construction of data for inelastic transitions on velocity grid. Defaults to None (empty). This gets automatically filled when adding transitions.
             energyResolution (float, optional): Minimum allowed absolute difference between elements of fixedTransitionEnergies. Defaults to 1e-16.
             elState (int, optional): State ID to treat as the electrons. Defaults to 0.
             staggeredFirstMoment (bool, optional): If true, will treat all rate1* variables as if they are on the dual grid. Defaults to True.
+            energyInterpolationGrid (Optional[np.ndarray], optional): Strictly monotonically increasing non-zero energy grid (length > 1) used for interpolating variable-energy inelastic transitions (ReMKiT1D >= v1.4.0). Defaults to None (omitted from JSON).
         """
 
         self.__grid__ = grid
+        fixedEnergies = (
+            np.asarray(fixedTransitionEnergies, dtype=float)
+            if fixedTransitionEnergies is not None
+            else np.array([], dtype=float)
+        )
         uniqueTransitionEnergies: List[float] = []
-        for energy in fixedTransitionEnergies:
+        for energy in fixedEnergies:
             assert all(
-                abs(uniqueTransitionEnergies - energy) > energyResolution
+                abs(np.array(uniqueTransitionEnergies) - energy) > energyResolution
             ), "fixedTransitionEnergies in ModelboundCRMData contain elements closer than allowed energy resolution"
-            uniqueTransitionEnergies.append(energy)
+            uniqueTransitionEnergies.append(float(energy))
 
-        self.__fixedTransitionEnergies__ = fixedTransitionEnergies
-        self.__inelGridData__ = {
-            "active": len(fixedTransitionEnergies) > 0,
-            "fixedTransitionEnergies": fixedTransitionEnergies.tolist(),
+        self.__fixedTransitionEnergies__ = fixedEnergies
+
+        interpGrid = (
+            np.asarray(energyInterpolationGrid, dtype=float)
+            if energyInterpolationGrid is not None
+            else np.array([], dtype=float)
+        )
+        if len(interpGrid) > 0:
+            assert (
+                len(interpGrid) > 1
+            ), "energyInterpolationGrid in CRMModelboundData must have length > 1"
+            assert np.all(
+                np.diff(interpGrid) > 0
+            ), "energyInterpolationGrid in CRMModelboundData must be strictly monotonically increasing"
+            assert np.all(
+                interpGrid != 0
+            ), "energyInterpolationGrid in CRMModelboundData cannot contain zero energy"
+        self.__energyInterpolationGrid__ = interpGrid
+
+        self.__inelGridData__: Dict[str, object] = {
+            "active": len(fixedEnergies) > 0 or len(interpGrid) > 0,
+            "fixedTransitionEnergies": fixedEnergies.tolist(),
         }
+        if len(interpGrid) > 0:
+            self.__inelGridData__["energyInterpolationGrid"] = interpGrid.tolist()
+
         self.__transitions__: List[Transition] = []
         self.__energyResolution__ = energyResolution
         self.__elStateID__ = elState
@@ -181,6 +209,10 @@ class CRMModelboundData(ModelboundData):
     @property
     def fixedTransitionEnergies(self):
         return self.__fixedTransitionEnergies__
+
+    @property
+    def energyInterpolationGrid(self):
+        return self.__energyInterpolationGrid__
 
     @property
     def transitionTags(self):

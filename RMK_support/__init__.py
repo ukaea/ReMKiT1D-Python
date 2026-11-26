@@ -65,6 +65,7 @@ from .calculation_tree_support import (
     absFloor,
     expand,
     contract,
+    filterWithin,
 )
 
 try:
@@ -132,4 +133,5 @@ __all__ = [
     "absFloor",
     "expand",
     "contract",
+    "filterWithin",
 ]
