@@ -40,13 +40,13 @@ jobs:
         
     - name: Test with custom pytest runner
       run: |
-        bash ./test.sh --cov=RMK_support --cov-config=.coveragerc . --cov-report xml
+        bash ./test.sh --cov=RMK_support --cov-report=xml:coverage.xml
 
     - name: Upload code coverage
       uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        files: ${{ github.workspace }}/RMK_support/tests/coverage.xml
+        files: ${{ github.workspace }}/coverage.xml
         fail_ci_if_error: true # optional (default = false)
         verbose: true # optional (default = false)
 

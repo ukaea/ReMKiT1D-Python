@@ -398,3 +398,15 @@ def test_mpi_context(grid, vCont):
             "scalarBroadcastRoots": [12],
         },
     }
+
+
+def test_var_and_dual_default_latex(grid):
+    p, s = varAndDual("n", grid, defaultLatex="n_e")
+    assert p.defaultLatex == "n_e"
+    assert s.defaultLatex == "\\left(n_e\\right)_{dual}"
+
+    p_dual, s_reg = varAndDual(
+        "G", grid, primaryOnDualGrid=True, defaultLatex="\\Gamma"
+    )
+    assert p_dual.defaultLatex == "\\left(\\Gamma\\right)_{dual}"
+    assert s_reg.defaultLatex is not None

@@ -303,7 +303,7 @@ def test_closure_arithmetic(grid):
     assert all(mul.evaluate() == 12 * 4 * 12)
     assert mul.fillArgs() == ["a", "b", "a", "a", "b"]
     assert mul.name == "dXd1"
-    mul.enclosedArgs == 5
+    assert mul.enclosedArgs == 5
     assert mul.__deriv__.dict() == {
         "type": "multiplicativeDerivation",
         "innerDerivation": "d",
@@ -599,3 +599,14 @@ def test_nd_deriv():
     interpVals2 = interp2(np.array(list(zip(var1, var2))))
 
     assert np.all(interpVals2 == deriv2(var1, var2))
+    assert np.all(deriv2(np.array([0.0, 100.0]), np.array([0.0, 500.0])) == 0.0)
+
+
+def test_polynomial_deriv_latex():
+    deriv = dv.PolynomialDerivation(
+        "p", 0.0, np.array([1.0, 2.0]), np.array([2.0, 1.0])
+    )
+    tex = deriv.latex("x", "y")
+    assert "\\left(x\\right)^{2}" in tex
+    assert "\\left(y\\right)" not in tex
+    assert "2y" in tex

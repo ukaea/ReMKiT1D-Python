@@ -68,3 +68,13 @@ include = ["RMK_support"]
 
 [tool.setuptools.package-data]
 RMK_support = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["RMK_support/tests"]
+pythonpath = [".", "examples"]
+markers = [
+    "latex: mark test as containing calls to latex features",
+]
+
+[tool.coverage.run]
+omit = ["RMK_support/tests/*"]

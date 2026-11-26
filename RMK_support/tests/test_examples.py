@@ -1,16 +1,14 @@
-import sys
-
-sys.path.append("./example_sources")
-import epperlein_short_test  # type: ignore
-import solkit_mijin_thesis  # type: ignore
-import solkit_mijin_thesis_kin  # type: ignore
-import os
 import numpy as np
 import pytest
 
+import epperlein_short_test  # type: ignore
+import solkit_mijin_thesis  # type: ignore
+import solkit_mijin_thesis_kin  # type: ignore
+
 
 @pytest.mark.latex
-def test_es():
+def test_es(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
     kLambda = 2.0  # Braginskii k * mfp - To reproduce points in Figure 17 in the paper use values from np.geomspace(0.5e-2,2,8)
     k = kLambda / (3 * np.sqrt(np.pi) / (4 * np.sqrt(2)))
@@ -44,12 +42,13 @@ def test_es():
 
         rk.writeConfigFile()
 
-    os.remove(os.path.curdir + "/Epperlein-Short_Test.pdf")
-    os.remove(os.path.curdir + "/config.json")
+    assert (tmp_path / "Epperlein-Short_Test.pdf").is_file()
+    assert (tmp_path / "config.json").is_file()
 
 
 @pytest.mark.latex
-def test_solkit_fluid_janev():
+def test_solkit_fluid_janev(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
     dx0 = 0.13542325129584085e0 * 8.5 / 2.5 * 10.18 / 9.881556569543156
     dxN = 0.13542325129584085e0 * 0.5 / 2.5 * 10.18 / 9.881556569543156
@@ -81,12 +80,13 @@ def test_solkit_fluid_janev():
 
     rk.writeConfigFile()
 
-    os.remove(os.path.curdir + "/SOL-KiT_Fluid_Test.pdf")
-    os.remove(os.path.curdir + "/config.json")
+    assert (tmp_path / "SOL-KiT_Fluid_Test.pdf").is_file()
+    assert (tmp_path / "config.json").is_file()
 
 
 @pytest.mark.latex
-def test_solkit_kinetic_janev():
+def test_solkit_kinetic_janev(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
 
     dx0 = 0.13542325129584085e0 * 8.5 / 2.5 * 10.18 / 9.881556569543156
     dxN = 0.13542325129584085e0 * 0.5 / 2.5 * 10.18 / 9.881556569543156
@@ -112,5 +112,5 @@ def test_solkit_kinetic_janev():
 
         rk.writeConfigFile()
 
-    os.remove(os.path.curdir + "/SOL-KiT_Kinetic_Test.pdf")
-    os.remove(os.path.curdir + "/config.json")
+    assert (tmp_path / "SOL-KiT_Kinetic_Test.pdf").is_file()
+    assert (tmp_path / "config.json").is_file()

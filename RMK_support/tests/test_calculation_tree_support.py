@@ -479,3 +479,14 @@ def testAddLeafVars():
     leafVars = ct.getLeafVars(c)
 
     assert leafVars == ["a", "b"]
+
+
+def test_unary_transform_latex_logical_param():
+    ut = ct.UnaryTransform(
+        "custom",
+        realParams=[1.5],
+        intParams=[2],
+        logicalParams=[True],
+        latexTemplate="f($0, $1, $2, $3)",
+    )
+    assert ut.latex("x") == "f(x, 1.50, 2, True)"

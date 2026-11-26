@@ -48,9 +48,6 @@ def test_standard_variable_factory(
 
     rk = context
 
-    associateOnCreation = False
-    addOnCreation = False
-
     factory = cv.StandardFluidVariables(
         rk, rk.species["e"], associateOnCreation, addOnCreation
     )

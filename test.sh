@@ -1,10 +1,4 @@
-#!bin/bash
-set -e
-cd $PWD/RMK_support/tests
-rm -rf example_sources
-mkdir example_sources 
-touch example_sources/__init__.py
-cp ../../examples/epperlein_short_test.py ./example_sources
-cp ../../examples/solkit_mijin_thesis.py ./example_sources
-cp ../../examples/solkit_mijin_thesis_kin.py ./example_sources
-python3 runner.py -rs $@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec pytest -rs "${SCRIPT_DIR}/RMK_support/tests" "$@"
