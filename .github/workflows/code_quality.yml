@@ -1,38 +1,42 @@
-# This workflow will install Python dependencies, run black and lint with a single version of Python
 name: black/mypy
 
-on: [push]
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  build:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
-    strategy:
-      matrix:
-        python-version: ["3.8"]
-        os: [ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+jobs:
+  lint:
+    name: mypy & black
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install mypy 
-        pip install black
-        pip install pytest 
-        pip install .
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    - name: Run mypy
-      run: |
-        mypy ./RMK_support
-        
-    - name: Run black
-      run: |
-        black ./RMK_support --check
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run mypy
+        run: mypy ./RMK_support
+
+      - name: Run black
+        run: black ./RMK_support --check

@@ -1,57 +1,70 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
-
 name: pytest
 
-on: [push]
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  build:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
-    strategy:
-      matrix:
-        python-version: ["3.8"]
-        os: [ubuntu-latest]
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest 
-        pip install pytest-cov
-        pip install sphinx
-        pip install nbsphinx
-        pip install nbsphinx-link
-        pip install pydata_sphinx_theme
-        pip install .
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-        sudo apt-get update
-        sudo apt-get install --no-install-recommends pandoc
-        sudo apt-get install texlive-latex-recommended texlive-latex-extra latexmk
-        
-    - name: Test with custom pytest runner
-      run: |
-        bash ./test.sh --cov=RMK_support --cov-report=xml:coverage.xml
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
-    - name: Upload code coverage
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        files: ${{ github.workspace }}/coverage.xml
-        fail_ci_if_error: true # optional (default = false)
-        verbose: true # optional (default = false)
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            pip install -e ".[dev,docs]"
+          else
+            pip install -e ".[dev]"
+          fi
 
-    - name: Test documentation build
-      run: |
-        sphinx-apidoc -f -o docs/source/ RMK_support/
-        cd docs/
-        make html
+      - name: Install LaTeX (and pandoc for docs) system packages
+        run: |
+          sudo apt-get update
+          APT_PKGS="texlive-latex-recommended texlive-latex-extra latexmk lmodern"
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            APT_PKGS="${APT_PKGS} pandoc"
+          fi
+          sudo apt-get install -y --no-install-recommends ${APT_PKGS}
+
+      - name: Run pytest with coverage
+        run: pytest --cov=RMK_support --cov-report=xml:coverage.xml
+
+      - name: Upload code coverage
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ github.workspace }}/coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Build Sphinx documentation (warnings as errors)
+        if: matrix.python-version == '3.12'
+        run: sphinx-build -W -b html docs/source docs/build/html
