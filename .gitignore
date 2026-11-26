@@ -1,25 +1,43 @@
-.vscode
-__pycache__
-*config.json
-*.h5
+# Python / packaging / caches
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+build/
+dist/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Test coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Documentation builds
+/docs/build/
+
+# Notebooks and editor tooling
+.vscode/
+.ipynb_checkpoints/
 *loc.ipynb
-.ipynb_checkpoints
+
+# Simulation configs, outputs, and generated LaTeX/archive artifacts
+*config.json
+*.json
+*.h5
 *.out
 *.err
 *.pkl
 *.pdf
 *.gif
 *.zip
-*.csv
-*.xml
 *.tar*
-/docs/build
-RMK_support/tests/example_sources/*
-.venv
-build
-*.egg-info*
 *.tex
-*.json
+*.xml
+*.csv
+!data/Aki.csv
 *.old*
-ignore
-*coverage
+ignore/

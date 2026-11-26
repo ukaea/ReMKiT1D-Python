@@ -43,5 +43,5 @@ At a high level, ReMKiT1D uses the Modeller-Model-Manipulator pattern (described
 
 In short, one can think of a Model containing sets of Terms, corresponding to RHS terms in the equations above, as well as associated model-bound data. Those Term objects can then be evaluated or updated from the level of the Modeller, which can contain any number of Models. Finally, the Modeller has a strategy pattern relationship with various Manipulators, such as the Integrator, responsible for integrating equations represented by the Models and Terms in the Modeller. Variable data are kept in a VariableContainer object in the Modeller, and are passed to any other component that requires them.
 
-These components work together at a high level to provide a flexible and easily extensible interface which can be accessed through the construction of JSON files using the the RMK_support package.
+These components work together at a high level to provide a flexible and easily extensible interface which can be accessed through the construction of JSON files using the RMK_support package.
 
