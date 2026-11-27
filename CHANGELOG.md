@@ -3,26 +3,37 @@
 ## v2.1.0, xxxx-xx-xx
 
 - Support for ReMKiT1D v1.4.0 solver and performance features, updated PETSc/BDE defaults, and JSON startup reduction
+- Python 3.11+ packaging, documentation, and CI modernization, plus bug fixes across I/O, dashboard, models, LaTeX rendering, and examples
 - Subsumes skipped v2.0.1 bugfixes
 
 ### Breaking Changes
 
+- Raised minimum Python version to `>= 3.11` (from `>= 3.8`) and build requirement to `setuptools >= 77.0`, removed `setup.py`, and set explicit minimum dependency versions (including `param >= 2.0`)
 - Updated default `BDEIntegrator` and `RMKContext` PETSc solver options: `reusePreconditioner=True`, `kspSolverType="gmres"`, `maxIters=500`, auto-clamped `relTol` (1% of BDE `nonlinTol` within `[1e-15, 1e-12]`, fallback `1e-14`), and auto `PETScCommandLineOpts` (`bjacobi` + `lu` with RCM ordering and `-ksp_gmres_restart 100` for pure fluid contexts; `bjacobi` + `ilu(0)` when distributions are present)
 
 ### Deprecations
 
-- Deprecated `skipPattern` in `MatrixTerm` / `model_construction` (ignored/removed in PETSc COO-based ReMKiT1D v1.4.0 builds)
+- Deprecated `skipPattern` and `MatrixTerm.withSkippingPattern()` (now emitting `DeprecationWarning` and ignored in PETSc COO-based ReMKiT1D v1.4.0 builds); removed internal `skipPattern=True` usage in `flowingIonEIColl` and `eeCollHigherL`
 
 ### New Features
 
 - Added `reusePreconditioner` and `andersonDepth` options to `BDEIntegrator`
 - Added opt-in `lagIJTerms` mode to `eeCollHigherL` and the kinetic SOL-KiT example (`examples/solkit_mijin_thesis_kin.py`) to lag higher-harmonic $I$/$J$ electron-electron collision integrals as modelbound data
+- Exposed and validated `energyInterpolationGrid` in `CRMModelboundData` for ReMKiT1D v1.4.0 variable-energy inelastic transitions (and replaced mutable default `fixedTransitionEnergies=np.array([])` with `None`)
+- Added and exported `filterWithin` in `calculation_tree_support` / `RMK_support`
 - Omitted all-zero non-scalar derived `initVals` from generated config JSON by default (`VariableContainer` / `RMKContext`) to reduce config size and startup parsing time
 - Documented `optionsPETSc` property as read-only and added guidance on opt-in `bcgsl` and `asm` PETSc options for low-core-count runs
+- Added `RMK_support.__version__`, explicit `__all__`, PEP 561 `py.typed`, `CITATION.cff`, and `[dev]`/`[docs]` optional extras; modernized Sphinx/ReadTheDocs config, pytest/coverage configuration, and GitHub Actions workflows
 
 ### Bug Fixes
 
 - Fixed bug in common variables which lead to rebuilding of density and temperature variables
+- Fixed `writeDictToJSON` not truncating trailing bytes when overwriting longer files, and fixed NumPy 2.x scalar HDF5 loading in `loadVariableFromHDF5` and `loadDummyVarFromHDF5`
+- Fixed `Variable.dataShape` for time-series scalar variables, `varAndDual` reading `defaultRemap` instead of `defaultLatex` (and missing `\right)`), and `MPIContext.addToComm` type annotation
+- Fixed `ScalarMultiVariablePlot` / `ScalarMultiRunPlot` x-axis sliders using spatial `xGridDual` bounds instead of simulation time bounds, and updated `ReMKiT1DDashboard` for `param >= 2` (`param.Selector`) and `xarray` (`.dims`)
+- Fixed `eeCollHigherL` passing bound method `elDensity.onDualGrid` instead of `elDensity.isOnDualGrid`, `timeDerivative` `isSingleHarmonics` keyword typo, `NDInterpolationDerivation` missing `bounds_error=False`, `TermGenerator` missing `super().__init__()` call, and `Timestep.check` / `IntegrationScheme.timestep` assertion formatting and setter annotation
+- Fixed LaTeX rendering bugs in `UnaryTransform`, `PolynomialDerivation`, `VariableECSTransition`, `CRMElEnergyTermGenerator`, `IntegrationRule`, `LBCModelboundData`, `LBCStencil`, and `flux`/`electricField` SI units
+- Fixed Bohm boundary condition ion speed (`u_i` -> `c_s`) in `solkit_mijin_thesis.py` and `solkit_mijin_thesis_kin.py`, fixed `epperlein_short_test.py` (`Nt // 30`), `solkit_mijin_thesis.py` (`loadVars` ordering and `akiPath`), and `solkit_mijin_thesis_kin.py` (`Tu`/`Td`/`akiPath`), removed obsolete manual PETSc overrides from examples/notebooks, and stripped saved outputs from `gaussian_advection_outflow.ipynb`
 
 ### New Notebooks
 
